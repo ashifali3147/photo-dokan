@@ -5,8 +5,11 @@ import com.tlw.photodokan.core.imaging.CropGeometry
 import com.tlw.photodokan.core.library.StudioDate
 import com.tlw.photodokan.core.model.CropConfig
 import com.tlw.photodokan.core.model.PhotoSizePreset
+import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.ui.editor.Adjustment
 import com.tlw.photodokan.ui.photo.PhotoSource
+import com.tlw.photodokan.ui.print.InMemoryPrintQueueStore
+import com.tlw.photodokan.ui.print.PrintOrders
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -29,6 +32,8 @@ import kotlin.test.assertTrue
 class CustomersViewModelTest {
 
     private val library = InMemoryPhotoLibrary()
+    private val store = InMemoryPrintQueueStore()
+    private val orders = PrintOrders(store)
     private var now = StudioDate(2026, 10, 22)
     private lateinit var vm: CustomersViewModel
 
@@ -43,7 +48,7 @@ class CustomersViewModelTest {
     fun setUp() {
         // Everything runs immediately on the test thread.
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        vm = CustomersViewModel(library, { now }, work = Dispatchers.Unconfined)
+        vm = CustomersViewModel(library, { now }, orders, SheetTemplate.STUDIO_A4_5X8, work = Dispatchers.Unconfined)
     }
 
     @AfterTest
@@ -269,5 +274,48 @@ class CustomersViewModelTest {
         vm.updateCrop { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 3.0) }
         vm.resetCrop()
         assertEquals(CropConfig(), state.edit?.recipe?.crop)
+    }
+
+    @Test
+    fun savedCustomerGoesIntoThePrintQueue() {
+        vm.import(photo())
+        vm.saveDraft()
+        vm.addToPrint(5)
+
+        val order = orders.queue.value.orders.single()
+        assertEquals(state.selected, order.customer)
+        assertEquals(5, order.copies)
+        assertEquals(orders.queue.value, store.saved, "the queue is saved straight away")
+        assertEquals("Customer 0001: 5 copies in the print queue.", state.message)
+
+        vm.addToPrint(10)
+        assertEquals(listOf(10), orders.queue.value.orders.map { it.copies }, "adding again changes the copies")
+
+        vm.removeFromPrint()
+        assertTrue(orders.queue.value.orders.isEmpty())
+    }
+
+    @Test
+    fun unsavedChangesMustBeSavedBeforePrinting() {
+        vm.import(photo())
+        vm.saveDraft()
+        vm.adjust(Adjustment.Brightness, 0.4)
+        vm.commit()
+        vm.addToPrint(5)
+
+        assertTrue(orders.queue.value.orders.isEmpty())
+        assertTrue(state.messageIsError)
+    }
+
+    @Test
+    fun onlyPhotosCroppedToTheSlotSizeFitTheSheet() {
+        vm.import(photo())
+        vm.setPreset(PhotoSizePreset.PASSPORT_35X45)
+        vm.saveDraft()
+        vm.addToPrint(5)
+
+        assertTrue(orders.queue.value.orders.isEmpty())
+        assertTrue(state.messageIsError)
+        assertTrue(state.message!!.contains("Passport 35 × 45 mm"))
     }
 }

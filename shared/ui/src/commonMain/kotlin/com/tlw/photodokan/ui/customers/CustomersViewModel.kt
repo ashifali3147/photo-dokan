@@ -12,11 +12,13 @@ import com.tlw.photodokan.core.model.CropConfig
 import com.tlw.photodokan.core.model.EditHistory
 import com.tlw.photodokan.core.model.EditRecipe
 import com.tlw.photodokan.core.model.PhotoSizePreset
+import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.ui.editor.Adjustment
 import com.tlw.photodokan.ui.editor.renderCrop
 import com.tlw.photodokan.ui.photo.PhotoPreview
 import com.tlw.photodokan.ui.photo.PhotoSource
 import com.tlw.photodokan.ui.photo.decodePreview
+import com.tlw.photodokan.ui.print.PrintOrders
 import com.tlw.photodokan.ui.platform.encodeJpeg
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -83,12 +85,14 @@ data class CustomersState(
 
 /**
  * The Customers screen: import a photo, crop it to a photo size, file it as the day's next
- * customer, and find and re-edit customers by day or by number, name or phone. Library and image
- * work runs off the UI thread on [work].
+ * customer, find and re-edit customers by day or by number, name or phone, and add them to the
+ * print queue. Library and image work runs off the UI thread on [work].
  */
 class CustomersViewModel(
     private val library: PhotoLibrary,
     private val clock: () -> StudioDate,
+    private val orders: PrintOrders,
+    private val template: SheetTemplate,
     val presets: List<PhotoSizePreset> = PhotoSizePreset.DEFAULTS,
     private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
@@ -191,6 +195,34 @@ class CustomersViewModel(
         s.copy(edit = s.edit?.let { if (it.canRedo) it.history.redo().let { h -> it.copy(history = h, live = h.present) } else it })
     }
 
+    /**
+     * Queues the open customer for [copies] prints, or changes their copies if already queued.
+     * The sheet prints what was saved, so unsaved changes must be saved first, and only photos
+     * cropped to the sheet's slot size fit its slots.
+     */
+    fun addToPrint(copies: Int) {
+        val customer = _state.value.selected ?: return
+        val edit = _state.value.edit ?: return
+        val preset = presetOf(edit.live)
+        when {
+            edit.changed -> error("Save the changes first, so the sheet prints the photo as it looks now.")
+            preset.size != template.photo -> error(
+                "Customer ${customer.label} is cropped for ${preset.name}, but the sheet prints ${sizeOf(template)} photos. " +
+                    "Choose that size, save, then add to print.",
+            )
+            else -> {
+                orders.update { it.add(customer, copies) }
+                _state.update { it.copy(message = "Customer ${customer.label}: ${copiesText(copies)} in the print queue.", messageIsError = false) }
+            }
+        }
+    }
+
+    fun removeFromPrint() {
+        val customer = _state.value.selected ?: return
+        orders.update { it.remove(customer) }
+        _state.update { it.copy(message = "Customer ${customer.label} taken out of the print queue.", messageIsError = false) }
+    }
+
     private fun preview(change: (EditSession) -> EditRecipe) =
         _state.update { s -> s.copy(edit = s.edit?.let { it.copy(live = change(it)) }) }
 
@@ -273,5 +305,11 @@ class CustomersViewModel(
 
     companion object {
         const val FINAL_DPI = 300.0
+
+        private fun copiesText(n: Int) = if (n == 1) "1 copy" else "$n copies"
+
+        private fun sizeOf(t: SheetTemplate) = "${t.photo.width.fmt()} × ${t.photo.height.fmt()} mm"
+
+        private fun Double.fmt() = if (this % 1.0 == 0.0) toInt().toString() else toString()
     }
 }

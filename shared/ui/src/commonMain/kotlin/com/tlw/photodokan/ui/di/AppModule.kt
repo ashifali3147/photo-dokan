@@ -26,7 +26,7 @@ val appModule = module {
     single { LibraryLayout() }
     single { IncomingPhotos() }
     single { PrintOrders(get()) }
-    viewModel { CustomersViewModel(get(), ::today, presets = get()) }
+    viewModel { CustomersViewModel(get(), ::today, orders = get(), template = get(), presets = get()) }
     viewModel { PrintViewModel(get(), get(), get()) }
 }
 

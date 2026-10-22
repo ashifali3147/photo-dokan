@@ -49,6 +49,7 @@ import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.photo.canDropPhotos
 import com.tlw.photodokan.ui.photo.photoDropTarget
 import com.tlw.photodokan.ui.photo.rememberPhotoPicker
+import com.tlw.photodokan.ui.print.PrintOrders
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -229,8 +230,40 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
                 Button(onClick = viewModel::saveChanges, enabled = edit.changed && !state.busy) { Text("Save changes") }
                 TextButton(onClick = pickPhoto, enabled = !state.busy) { Text("New customer photo") }
             }
+            PrintRow(selected, edit, state.busy, viewModel)
         }
         else -> Button(onClick = pickPhoto, enabled = !state.busy) { Text("Choose photo") }
+    }
+}
+
+/** Copies to print: orders are usually 5 or 10, sometimes 4; the Print screen takes any number. */
+private val CommonCopies = listOf(4, 5, 10)
+
+@Composable
+private fun PrintRow(customer: Customer, edit: EditSession, busy: Boolean, viewModel: CustomersViewModel) {
+    val queue by koinInject<PrintOrders>().queue.collectAsState()
+    val queued = queue.orderFor(customer)
+    var copies by remember(customer) { mutableStateOf(5) }
+    val shown = queued?.copies ?: copies
+
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+        Text("Copies")
+        SingleChoiceSegmentedButtonRow {
+            CommonCopies.forEachIndexed { i, n ->
+                SegmentedButton(
+                    selected = shown == n,
+                    // Once queued, picking a number changes the queued copies straight away.
+                    onClick = { if (queued != null) viewModel.addToPrint(n) else copies = n },
+                    enabled = !busy,
+                    shape = SegmentedButtonDefaults.itemShape(i, CommonCopies.size),
+                ) { Text("$n") }
+            }
+        }
+        if (queued == null) {
+            Button(onClick = { viewModel.addToPrint(copies) }, enabled = !busy && !edit.changed) { Text("Add to print") }
+        } else {
+            TextButton(onClick = viewModel::removeFromPrint, enabled = !busy) { Text("Remove from print") }
+        }
     }
 }
 
