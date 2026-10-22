@@ -18,7 +18,8 @@ import org.koin.dsl.module
 /**
  * Shared definitions used by both apps. Each app adds its platform services through [initKoin]'s
  * platform modules, including the [com.tlw.photodokan.core.library.PhotoLibrary] at its own folder
- * and the [com.tlw.photodokan.core.model.PrintQueueStore] in its app data.
+ * and the [com.tlw.photodokan.core.model.PrintQueueStore] in its app data. A platform that can
+ * print directly also adds a [com.tlw.photodokan.print.SheetPrinter].
  */
 val appModule = module {
     single { SheetTemplate.STUDIO_A4_5X8 }
@@ -27,7 +28,7 @@ val appModule = module {
     single { IncomingPhotos() }
     single { PrintOrders(get()) }
     viewModel { CustomersViewModel(get(), ::today, orders = get(), template = get(), presets = get()) }
-    viewModel { PrintViewModel(get(), get(), get()) }
+    viewModel { PrintViewModel(get(), get(), get(), printer = getOrNull()) }
 }
 
 /** Starts Koin once per process: from `main` on desktop, from the Application on Android. */

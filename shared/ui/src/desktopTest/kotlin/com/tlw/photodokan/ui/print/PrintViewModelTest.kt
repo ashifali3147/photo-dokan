@@ -6,6 +6,10 @@ import com.tlw.photodokan.core.model.EditRecipe
 import com.tlw.photodokan.core.model.PrintQueue
 import com.tlw.photodokan.core.model.SheetState
 import com.tlw.photodokan.core.model.SheetTemplate
+import com.tlw.photodokan.print.PageItem
+import com.tlw.photodokan.print.PrintDocument
+import com.tlw.photodokan.print.PrintException
+import com.tlw.photodokan.print.SheetPrinter
 import com.tlw.photodokan.ui.customers.InMemoryPhotoLibrary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -13,6 +17,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 import kotlin.test.AfterTest
@@ -20,6 +25,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -39,11 +45,42 @@ class PrintViewModelTest {
         library.saveEdit(it, EditRecipe(presetId = "studio-slot"), jpeg)
     }
 
-    private fun start(saved: PrintQueue = PrintQueue()) {
+    /** Records what it is asked to print, or fails with [failure]. */
+    private class FakePrinter(val dpi: Double = 100.0, var failure: String? = null) : SheetPrinter {
+        val jobs = mutableListOf<Pair<PrintDocument, String>>()
+        override fun printerName() = "EPSON L3360 Series"
+        override fun photoDpi() = dpi
+        override fun print(document: PrintDocument, jobName: String) {
+            failure?.let { throw PrintException(it) }
+            jobs += document to jobName
+        }
+    }
+
+    private val printer = FakePrinter()
+
+    private fun start(saved: PrintQueue = PrintQueue(), withPrinter: Boolean = true) {
         store.saved = saved
         orders = PrintOrders(store)
-        vm = PrintViewModel(orders, library, template, work = Dispatchers.Unconfined)
+        vm = PrintViewModel(orders, library, template, printer.takeIf { withPrinter }, work = Dispatchers.Unconfined)
     }
+
+    /** A saved customer whose original is a 720 × 680 photo, red on the left half and blue on the right. */
+    private fun halfRedHalfBlue(): Customer {
+        val photo = BufferedImage(720, 680, BufferedImage.TYPE_INT_RGB).apply {
+            createGraphics().apply {
+                color = java.awt.Color.RED; fillRect(0, 0, 360, 680)
+                color = java.awt.Color.BLUE; fillRect(360, 0, 360, 680)
+                dispose()
+            }
+        }
+        val original = ByteArrayOutputStream().also { ImageIO.write(photo, "jpg", it) }.toByteArray()
+        return library.create(today, null, null, original).also {
+            // final.jpg is deliberately a tiny black image: printing must not use it.
+            library.saveEdit(it, EditRecipe(presetId = "studio-slot"), jpeg)
+        }
+    }
+
+    private fun images(document: PrintDocument) = document.pages.flatMap { p -> p.items.filterIsInstance<PageItem.Image>() }
 
     @BeforeTest
     fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -140,5 +177,98 @@ class PrintViewModelTest {
         start(PrintQueue().add(bare, 5))
         assertEquals(5, state.pack.copiesPlaced)
         assertTrue(state.photos.isEmpty())
+    }
+
+    @Test
+    fun printingRendersEveryPhotoFromTheOriginalAtThePrinterResolution() {
+        start(PrintQueue().add(halfRedHalfBlue(), 4).add(customer(), 5))
+        vm.print()
+
+        val (document, jobName) = printer.jobs.single()
+        assertEquals("Photo Dokan 0001, 0002", jobName)
+        assertEquals(1, document.pages.size)
+        val photos = images(document)
+        assertEquals(9, photos.size)
+        assertEquals((0..8).map { template.slotRect(it) }, photos.map { it.rect })
+
+        // 36 × 34 mm at 100 dpi, rendered from the 720 × 680 original rather than the black final.jpg.
+        val printed = ImageIO.read(ByteArrayInputStream(photos.first().jpeg))
+        assertEquals(142, printed.width)
+        assertEquals(134, printed.height)
+        val left = java.awt.Color(printed.getRGB(20, 67))
+        val right = java.awt.Color(printed.getRGB(121, 67))
+        assertTrue(left.red > 200 && left.blue < 60, "left half is red, was $left")
+        assertTrue(right.blue > 200 && right.red < 60, "right half is blue, was $right")
+    }
+
+    @Test
+    fun aPrintedJobLeavesTheQueueAndUsesItsSlots() {
+        start(PrintQueue().add(customer(), 4).add(customer(), 5))
+        vm.print()
+
+        assertTrue(state.queue.orders.isEmpty())
+        assertEquals((0..8).toSet(), store.saved.sheet.usedSlots)
+        assertEquals("Printed 9 photos. 31 slots are left on this sheet.", state.message)
+        assertFalse(state.messageIsError)
+        assertFalse(state.printing)
+    }
+
+    @Test
+    fun aFreshSheetGetsCutLinesButAPartUsedOneDoesNot() {
+        start(PrintQueue().add(customer(), 5))
+        vm.print()
+        assertTrue(printer.jobs.last().first.pages.single().items.any { it is PageItem.Line })
+
+        orders.update { it.add(customer(), 5) }
+        vm.print()
+        assertTrue(printer.jobs.last().first.pages.single().items.none { it is PageItem.Line })
+        assertEquals((5..9).map { template.slotRect(it) }, images(printer.jobs.last().first).map { it.rect })
+    }
+
+    @Test
+    fun anOverflowingQueuePrintsOnePagePerSheet() {
+        start(PrintQueue(sheet = SheetState((0 until 35).toSet())).add(customer(), 10))
+        vm.print()
+        assertEquals(2, printer.jobs.single().first.pages.size)
+        assertEquals((0..4).toSet(), store.saved.sheet.usedSlots)
+    }
+
+    @Test
+    fun aPrinterProblemKeepsTheQueueAndSaysWhy() {
+        start(PrintQueue().add(customer(), 5))
+        val before = store.saved
+        printer.failure = "The printer is set to 216 × 279 mm paper, but this sheet needs 210 × 297 mm."
+        vm.print()
+
+        assertEquals(before, store.saved)
+        assertEquals(1, state.queue.orders.size)
+        assertTrue(state.messageIsError)
+        assertEquals(printer.failure, state.message)
+        assertFalse(state.printing)
+    }
+
+    @Test
+    fun theScreenKnowsThePrinterByName() {
+        start()
+        assertTrue(vm.hasPrinter)
+        vm.refresh()
+        assertEquals("EPSON L3360 Series", state.printerName)
+    }
+
+    @Test
+    fun withoutAPrinterSheetsAreMarkedByHand() {
+        start(PrintQueue().add(customer(), 5), withPrinter = false)
+        assertFalse(vm.hasPrinter)
+        vm.print()
+        assertTrue(printer.jobs.isEmpty())
+        assertEquals(1, state.queue.orders.size)
+        vm.refresh()
+        assertNull(state.printerName)
+    }
+
+    @Test
+    fun longJobNamesAreShortened() {
+        val queue = (1..7).fold(PrintQueue()) { q, n -> q.add(Customer(today, n), 5) }
+        assertEquals("Photo Dokan 0001, 0002, 0003, 0004, 0005 …", PrintViewModel.jobName(queue))
     }
 }

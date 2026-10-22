@@ -14,15 +14,21 @@ import com.tlw.photodokan.core.library.PhotoLibrary
 import com.tlw.photodokan.core.model.PrintQueueStore
 import com.tlw.photodokan.library.FilePhotoLibrary
 import com.tlw.photodokan.library.FilePrintQueueStore
+import com.tlw.photodokan.print.PdfFilePrinter
+import com.tlw.photodokan.print.SheetPrinter
+import com.tlw.photodokan.print.WindowsGdiPrinter
 import com.tlw.photodokan.ui.App
 import com.tlw.photodokan.ui.di.initKoin
 import kotlinx.io.files.Path
 import org.koin.dsl.module
+import java.io.File
 
 // TODO(settings): let the operator pick the library folder, e.g. D:\PhotoDokan\Photos on the studio PC.
 private val desktopModule = module {
     single<PhotoLibrary> { FilePhotoLibrary(Path(System.getProperty("user.home"), "Pictures", "Photo Dokan")) }
     single<PrintQueueStore> { FilePrintQueueStore(Path(appDataDir(), "print-queue.json")) }
+    // Away from Windows (developing on a Mac) Print saves an actual-size PDF instead.
+    single<SheetPrinter> { if (WindowsGdiPrinter.isAvailable) WindowsGdiPrinter() else PdfFilePrinter(File(appDataDir().toString(), "prints")) }
 }
 
 /** The app's own files: %APPDATA%\Photo Dokan on Windows, ~/.photo-dokan when developing elsewhere. */
