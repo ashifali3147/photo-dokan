@@ -12,8 +12,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import com.tlw.photodokan.core.library.PhotoLibrary
+import com.tlw.photodokan.ui.customers.InMemoryPhotoLibrary
 import com.tlw.photodokan.ui.di.appModule
 import org.koin.compose.KoinApplication
+import org.koin.dsl.module
 import kotlin.test.Test
 
 @OptIn(ExperimentalTestApi::class)
@@ -24,7 +27,7 @@ class AppNavigationTest {
 
     private fun launch(width: Int, height: Int) = runComposeUiTest {
         setContent {
-            KoinApplication(application = { modules(appModule) }) {
+            KoinApplication(application = { modules(appModule, module { single<PhotoLibrary> { InMemoryPhotoLibrary() } }) }) {
                 Box(Modifier.size(width.dp, height.dp)) { App() }
             }
         }

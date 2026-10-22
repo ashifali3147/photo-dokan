@@ -25,13 +25,22 @@ kotlin {
             implementation(libs.material.icons.core)
             api(libs.koin.core)
             implementation(libs.koin.compose)
+            implementation(libs.koin.compose.viewmodel)
+            implementation(libs.lifecycle.viewmodel.compose)
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
         }
+        val desktopMain by getting {
+            dependencies {
+                // Dispatchers.Main on desktop, needed by viewModelScope.
+                implementation(libs.kotlinx.coroutines.swing)
+            }
+        }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.koin.test)
+            implementation(libs.kotlinx.coroutines.test)
         }
         val desktopTest by getting {
             dependencies {

@@ -18,6 +18,7 @@ java {
 
 dependencies {
     implementation(project(":shared:ui"))
+    implementation(project(":shared:library"))
     implementation(compose.desktop.currentOs)
 }
 

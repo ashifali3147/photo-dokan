@@ -17,17 +17,23 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.tlw.photodokan.ui.navigation.Destination
 import com.tlw.photodokan.ui.photo.IncomingPhotos
-import com.tlw.photodokan.ui.screens.CustomersScreen
+import com.tlw.photodokan.ui.customers.CustomersScreen
 import com.tlw.photodokan.ui.screens.PrintScreen
 import com.tlw.photodokan.ui.screens.SettingsScreen
 import org.koin.compose.koinInject
@@ -35,6 +41,18 @@ import org.koin.compose.koinInject
 /** Root of the app on both platforms: a side rail on wide windows, a bottom bar on phones. */
 @Composable
 fun App() {
+    // Screens keep their ViewModels across tabs. Android's activity provides the store; where the
+    // host doesn't (desktop window, UI tests), the app keeps its own for as long as it is shown.
+    val owner = LocalViewModelStoreOwner.current ?: remember {
+        object : ViewModelStoreOwner {
+            override val viewModelStore = ViewModelStore()
+        }
+    }.also { DisposableEffect(it) { onDispose { it.viewModelStore.clear() } } }
+    CompositionLocalProvider(LocalViewModelStoreOwner provides owner) { AppContent() }
+}
+
+@Composable
+private fun AppContent() {
     var current by rememberSaveable { mutableStateOf(Destination.Customers) }
 
     // A photo shared from another app opens on the Customers screen, which imports it.
