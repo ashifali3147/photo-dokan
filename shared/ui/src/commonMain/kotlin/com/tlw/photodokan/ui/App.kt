@@ -15,12 +15,13 @@ import com.tlw.photodokan.core.model.Order
 import com.tlw.photodokan.core.model.SheetState
 import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.core.packing.PackingEngine
+import org.koin.compose.koinInject
 
 /** Root of the app on both platforms. For now it shows an example packed sheet. */
 @Composable
 fun App() {
-    val template = SheetTemplate.STUDIO_A4_5X8
-    val example = remember {
+    val template = koinInject<SheetTemplate>()
+    val example = remember(template) {
         PackingEngine.pack(
             template,
             SheetState.FRESH,
