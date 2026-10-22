@@ -23,6 +23,8 @@ kotlin {
         val desktopMain by getting {
             dependencies {
                 implementation(libs.pdfbox)
+                // Windows printing through GDI; loaded only when running on Windows.
+                implementation(libs.jna)
             }
         }
     }
