@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.HorizontalDivider
@@ -52,8 +53,8 @@ import org.koin.compose.viewmodel.koinViewModel
 fun PrintScreen(modifier: Modifier = Modifier, viewModel: PrintViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsState()
 
-    // A customer's crop may have changed since their photo was last shown.
-    LaunchedEffect(viewModel) { viewModel.refreshPhotos() }
+    // A customer's crop, or the default printer, may have changed since this screen was last shown.
+    LaunchedEffect(viewModel) { viewModel.refresh() }
 
     BoxWithConstraints(modifier.fillMaxSize().padding(24.dp)) {
         if (maxWidth >= 720.dp) {
@@ -91,15 +92,36 @@ private fun ColumnScope.Queue(state: PrintState, viewModel: PrintViewModel) {
         }
     }
 
-    state.message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+    if (state.printing) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            Text("Printing on ${state.printerName ?: "the printer"}…")
+        }
+    }
+    state.message?.let { Text(it, color = if (state.messageIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
 
     var confirm by remember { mutableStateOf<Confirm?>(null) }
+    val idle = !state.printing
     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Button(onClick = { confirm = Confirm.Printed }, enabled = queue.orders.isNotEmpty()) { Text("Mark as printed") }
-        OutlinedButton(onClick = { confirm = Confirm.NewSheet }, enabled = queue.sheet.usedSlots.isNotEmpty()) { Text("New sheet") }
+        if (viewModel.hasPrinter) {
+            Button(onClick = { confirm = Confirm.Print }, enabled = idle && queue.orders.isNotEmpty()) { Text("Print") }
+            OutlinedButton(onClick = { confirm = Confirm.NewSheet }, enabled = idle && queue.sheet.usedSlots.isNotEmpty()) { Text("New sheet") }
+            // For a sheet printed some other way, e.g. from a saved PDF.
+            TextButton(onClick = { confirm = Confirm.Printed }, enabled = idle && queue.orders.isNotEmpty()) { Text("Mark as printed") }
+        } else {
+            Button(onClick = { confirm = Confirm.Printed }, enabled = queue.orders.isNotEmpty()) { Text("Mark as printed") }
+            OutlinedButton(onClick = { confirm = Confirm.NewSheet }, enabled = queue.sheet.usedSlots.isNotEmpty()) { Text("New sheet") }
+        }
     }
 
     when (confirm) {
+        Confirm.Print -> ConfirmDialog(
+            title = "Print ${count(queue.copies, "photo")}?",
+            text = printInstructions(state, viewModel.template.capacity),
+            action = "Print",
+            onConfirm = viewModel::print,
+            onDismiss = { confirm = null },
+        )
         Confirm.Printed -> ConfirmDialog(
             title = "Mark ${count(queue.copies, "photo")} as printed?",
             text = "Do this once the sheet has come out of the printer. The queue empties and the used slots are remembered for the next customers.",
@@ -192,7 +214,21 @@ private fun ConfirmDialog(title: String, text: String, action: String, onConfirm
     dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
 )
 
-private enum class Confirm { Printed, NewSheet }
+private enum class Confirm { Print, Printed, NewSheet }
+
+/** Which sheet goes into the printer first, and how many blank ones follow. */
+private fun printInstructions(state: PrintState, capacity: Int): String = buildString {
+    append("On ${state.printerName ?: "the default printer"}. ")
+    val sheets = state.pack.sheets
+    if (sheets.firstOrNull()?.reusesPartialSheet == true) {
+        val used = state.queue.sheet.usedSlots.size
+        append("Put the part-used sheet ($used of $capacity slots used) in the printer first, the same way round as last time.")
+    } else {
+        append("Put a blank photo sheet in the printer.")
+    }
+    val more = sheets.size - 1
+    if (more > 0) append(if (more == 1) " It needs 1 more blank sheet after that." else " It needs $more more blank sheets after that.")
+}
 
 private fun count(n: Int, noun: String) = if (n == 1) "1 $noun" else "$n ${noun}s"
 

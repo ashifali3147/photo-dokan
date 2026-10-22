@@ -46,7 +46,14 @@ data class PrintQueue(
     fun pack(template: SheetTemplate): PackResult = PackingEngine.pack(template, sheet, orders.map { it.toOrder() })
 
     /** After printing: the queue is empty and the sheet in the printer has the printed slots used. */
-    fun printed(template: SheetTemplate): PrintQueue = PrintQueue(sheet = pack(template).newState)
+    fun printed(template: SheetTemplate): PrintQueue = afterPrinting(this, template)
+
+    /**
+     * This queue once [job], an earlier copy of it, has printed: the sheet is as [job] left it, and
+     * only [job]'s orders leave the queue. Orders added or changed while it printed stay queued.
+     */
+    fun afterPrinting(job: PrintQueue, template: SheetTemplate): PrintQueue =
+        PrintQueue(orders = orders.filterNot { it in job.orders }, sheet = job.pack(template).newState)
 
     /** A blank sheet went into the printer. The queue stays as it is. */
     fun newSheet(): PrintQueue = copy(sheet = SheetState.FRESH)

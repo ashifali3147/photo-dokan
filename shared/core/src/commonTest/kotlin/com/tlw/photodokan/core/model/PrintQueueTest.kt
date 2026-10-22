@@ -67,6 +67,17 @@ class PrintQueueTest {
     }
 
     @Test
+    fun ordersChangedWhilePrintingStayQueued() {
+        val job = PrintQueue().add(c1, 5).add(c2, 5)
+        // While the job printed, c2 went up to 10 copies and c3 was added.
+        val now = job.add(c2, 10).add(c3, 4)
+
+        val after = now.afterPrinting(job, template)
+        assertEquals(listOf(c2 to 10, c3 to 4), after.orders.map { it.customer to it.copies })
+        assertEquals((0..9).toSet(), after.sheet.usedSlots)
+    }
+
+    @Test
     fun aSheetThatComesOutFullLeavesAFreshOne() {
         val queue = PrintQueue(sheet = SheetState((0 until 35).toSet())).add(c1, 5).printed(template)
         assertEquals(SheetState.FRESH, queue.sheet)

@@ -18,6 +18,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(project(":shared:core"))
+            implementation(project(":shared:print"))
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)
