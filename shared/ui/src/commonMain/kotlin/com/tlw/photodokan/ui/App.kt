@@ -1,56 +1,82 @@
 package com.tlw.photodokan.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.tlw.photodokan.core.model.Order
-import com.tlw.photodokan.core.model.SheetState
-import com.tlw.photodokan.core.model.SheetTemplate
-import com.tlw.photodokan.core.packing.PackingEngine
-import org.koin.compose.koinInject
+import com.tlw.photodokan.ui.navigation.Destination
+import com.tlw.photodokan.ui.screens.CustomersScreen
+import com.tlw.photodokan.ui.screens.PrintScreen
+import com.tlw.photodokan.ui.screens.SettingsScreen
 
-/** Root of the app on both platforms. For now it shows an example packed sheet. */
+/** Root of the app on both platforms: a side rail on wide windows, a bottom bar on phones. */
 @Composable
 fun App() {
-    val template = koinInject<SheetTemplate>()
-    val example = remember(template) {
-        PackingEngine.pack(
-            template,
-            SheetState.FRESH,
-            listOf(
-                Order("0001", "Customer 0001", 5),
-                Order("0002", "Customer 0002", 10),
-                Order("0003", "Customer 0003", 4),
-                Order("0004", "Customer 0004", 5),
-            ),
-        )
-    }
+    var current by rememberSaveable { mutableStateOf(Destination.Customers) }
 
     MaterialTheme {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text("Photo Dokan", style = MaterialTheme.typography.headlineMedium)
-                Text(
-                    "Example: ${example.copiesPlaced} photos for 4 customers on one ${template.name} sheet",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                SheetPreview(
-                    template = template,
-                    sheet = example.sheets.first(),
-                    modifier = Modifier.weight(1f),
-                )
+        Surface(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+            BoxWithConstraints {
+                if (maxWidth >= 600.dp) {
+                    Row {
+                        NavigationRail {
+                            for (destination in Destination.entries) {
+                                NavigationRailItem(
+                                    selected = destination == current,
+                                    onClick = { current = destination },
+                                    icon = { Icon(destination.icon, contentDescription = null) },
+                                    label = { Text(destination.label) },
+                                )
+                            }
+                        }
+                        DestinationScreen(current, Modifier.weight(1f))
+                    }
+                } else {
+                    Scaffold(
+                        contentWindowInsets = WindowInsets(0),
+                        bottomBar = {
+                            NavigationBar(windowInsets = WindowInsets(0)) {
+                                for (destination in Destination.entries) {
+                                    NavigationBarItem(
+                                        selected = destination == current,
+                                        onClick = { current = destination },
+                                        icon = { Icon(destination.icon, contentDescription = null) },
+                                        label = { Text(destination.label) },
+                                    )
+                                }
+                            }
+                        },
+                    ) { padding ->
+                        DestinationScreen(current, Modifier.padding(padding))
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun DestinationScreen(destination: Destination, modifier: Modifier) = when (destination) {
+    Destination.Customers -> CustomersScreen(modifier)
+    Destination.Print -> PrintScreen(modifier)
+    Destination.Settings -> SettingsScreen(modifier)
 }
