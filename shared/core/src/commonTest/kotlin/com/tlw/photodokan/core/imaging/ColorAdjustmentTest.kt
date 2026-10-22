@@ -1,0 +1,85 @@
+package com.tlw.photodokan.core.imaging
+
+import com.tlw.photodokan.core.model.EditRecipe
+import kotlin.math.abs
+import kotlin.test.Test
+import kotlin.test.assertContentEquals
+import kotlin.test.assertTrue
+
+class ColorAdjustmentTest {
+
+    private val neutral = EditRecipe(presetId = "studio-slot")
+
+    /** Applies a colour matrix to one pixel, clamped like a real renderer. */
+    private fun FloatArray.apply(r: Double, g: Double, b: Double): List<Double> = (0 until 3).map { row ->
+        (this[row * 5] * r + this[row * 5 + 1] * g + this[row * 5 + 2] * b + this[row * 5 + 4]).coerceIn(0.0, 255.0)
+    }
+
+    private fun close(expected: Double, actual: Double, tolerance: Double = 0.01) =
+        assertTrue(abs(expected - actual) < tolerance, "expected $expected, was $actual")
+
+    @Test
+    fun noAdjustmentLeavesColoursAlone() {
+        assertContentEquals(ColorAdjustment.IDENTITY, ColorAdjustment.matrix(neutral))
+        assertTrue(ColorAdjustment.isNeutral(neutral))
+    }
+
+    @Test
+    fun exposureIsOneStopAtTheEnds() {
+        val brighter = ColorAdjustment.matrix(neutral.copy(exposure = 1.0)).apply(50.0, 60.0, 70.0)
+        close(100.0, brighter[0]); close(120.0, brighter[1]); close(140.0, brighter[2])
+        val darker = ColorAdjustment.matrix(neutral.copy(exposure = -1.0)).apply(50.0, 60.0, 70.0)
+        close(25.0, darker[0]); close(35.0, darker[2])
+    }
+
+    @Test
+    fun contrastPivotsOnMidGrey() {
+        for (c in listOf(-1.0, -0.3, 0.5, 1.0)) {
+            val m = ColorAdjustment.matrix(neutral.copy(contrast = c))
+            m.apply(128.0, 128.0, 128.0).forEach { close(128.0, it) }
+        }
+        val more = ColorAdjustment.matrix(neutral.copy(contrast = 1.0))
+        close(128.0 - 1.5 * 28, more.apply(100.0, 100.0, 100.0)[0])
+    }
+
+    @Test
+    fun noColourMakesEveryPixelGrey() {
+        val grey = ColorAdjustment.matrix(neutral.copy(saturation = -1.0))
+        for ((r, g, b) in listOf(Triple(200.0, 30.0, 40.0), Triple(10.0, 220.0, 90.0), Triple(255.0, 255.0, 0.0))) {
+            val out = grey.apply(r, g, b)
+            close(out[0], out[1]); close(out[1], out[2])
+        }
+    }
+
+    @Test
+    fun colourAdjustmentKeepsGreysGrey() {
+        // Skin and the backdrop shift only when they have colour; neutral greys never pick up a tint.
+        for (s in listOf(-0.5, 0.5, 1.0)) {
+            val out = ColorAdjustment.matrix(neutral.copy(saturation = s)).apply(90.0, 90.0, 90.0)
+            out.forEach { close(90.0, it) }
+        }
+    }
+
+    @Test
+    fun warmthRaisesRedAndLowersBlue() {
+        val warm = ColorAdjustment.matrix(neutral.copy(warmth = 1.0)).apply(100.0, 100.0, 100.0)
+        assertTrue(warm[0] > 100 && warm[2] < 100)
+        close(100.0, warm[1])
+        val cool = ColorAdjustment.matrix(neutral.copy(warmth = -1.0)).apply(100.0, 100.0, 100.0)
+        assertTrue(cool[0] < 100 && cool[2] > 100)
+    }
+
+    @Test
+    fun alphaIsNeverTouched() {
+        val m = ColorAdjustment.matrix(EditRecipe("studio-slot", exposure = 1.0, contrast = -1.0, warmth = 1.0, saturation = 1.0))
+        assertContentEquals(floatArrayOf(0f, 0f, 0f, 1f, 0f), m.copyOfRange(15, 20))
+        assertTrue(m.all { it.isFinite() })
+    }
+
+    @Test
+    fun adjustmentsCombineInOrder() {
+        // Exposure then contrast: brighten 64 → 128 (mid-grey), which contrast then leaves alone.
+        val m = ColorAdjustment.matrix(neutral.copy(exposure = 1.0, contrast = 1.0))
+        close(128.0, m.apply(64.0, 64.0, 64.0)[0])
+    }
+}
