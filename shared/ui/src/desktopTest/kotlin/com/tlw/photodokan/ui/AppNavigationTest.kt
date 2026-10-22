@@ -30,7 +30,7 @@ class AppNavigationTest {
         }
 
         nav("Customers").assertIsSelected()
-        onNodeWithText("Today's customers will appear here.").assertExists()
+        onNodeWithText("Drop a photo here", substring = true).assertExists()
 
         nav("Print").performClick()
         nav("Print").assertIsSelected()
@@ -40,7 +40,7 @@ class AppNavigationTest {
         onNodeWithText("Printer, photo sizes", substring = true).assertExists()
 
         nav("Customers").performClick()
-        onNodeWithText("Today's customers will appear here.").assertExists()
+        onNodeWithText("Drop a photo here", substring = true).assertExists()
     }
 
     @Test
