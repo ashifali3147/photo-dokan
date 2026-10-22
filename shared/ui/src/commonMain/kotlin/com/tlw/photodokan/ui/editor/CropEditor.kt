@@ -1,6 +1,8 @@
 package com.tlw.photodokan.ui.editor
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,11 +29,13 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropGeometry
 import com.tlw.photodokan.core.model.CropConfig
 import com.tlw.photodokan.core.model.FaceGuide
@@ -45,6 +49,8 @@ typealias CropChange = (imageWidth: Int, imageHeight: Int, aspect: Double, crop:
 /**
  * A fixed frame in the photo size's shape with the photo underneath: drag to move the photo,
  * pinch or scroll to zoom. What shows in the frame is exactly what is saved and printed.
+ * Changes show live through [onCropChange]; [onCommit] marks the end of a drag or pinch, so each
+ * gesture is one undo step.
  */
 @Composable
 fun CropEditor(
@@ -52,9 +58,12 @@ fun CropEditor(
     preset: PhotoSizePreset,
     crop: CropConfig,
     onCropChange: (CropChange) -> Unit,
+    onCommit: () -> Unit,
     modifier: Modifier = Modifier,
+    colorMatrix: FloatArray = ColorAdjustment.IDENTITY,
 ) {
     val change by rememberUpdatedState(onCropChange)
+    val commit by rememberUpdatedState(onCommit)
     Box(modifier, contentAlignment = Alignment.Center) {
         Canvas(
             Modifier
@@ -70,20 +79,31 @@ fun CropEditor(
                     }
                 }
                 .pointerInput(image) {
-                    // Mouse wheel zoom on the desktop.
+                    // When every finger or button is up, the gesture is over.
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Final)
+                        } while (event.changes.any { it.pressed })
+                        commit()
+                    }
+                }
+                .pointerInput(image) {
+                    // Mouse wheel zoom on the desktop: each notch is its own undo step.
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent()
                             if (event.type == PointerEventType.Scroll) {
                                 val scroll = event.changes.first().scrollDelta.y
                                 change { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1.1.pow(-scroll.toDouble())) }
+                                commit()
                                 event.changes.forEach { it.consume() }
                             }
                         }
                     }
                 },
         ) {
-            drawCrop(image, CropGeometry.rect(image.width, image.height, preset.aspect, crop))
+            drawCrop(image, CropGeometry.rect(image.width, image.height, preset.aspect, crop), colorMatrix)
             drawFaceGuide(preset.guide)
         }
     }
@@ -111,8 +131,13 @@ fun CropControls(
     crop: CropConfig,
     onPreset: (PhotoSizePreset) -> Unit,
     onCropChange: (CropChange) -> Unit,
+    onCommit: () -> Unit,
     onReset: () -> Unit,
 ) {
+    fun step(change: CropChange) {
+        onCropChange(change)
+        onCommit()
+    }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (p in presets) {
             FilterChip(selected = p.id == preset.id, onClick = { onPreset(p) }, label = { Text(p.name) })
@@ -120,8 +145,8 @@ fun CropControls(
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("Zoom")
-        OutlinedButton(onClick = { onCropChange { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1 / 1.2) } }) { Text("−") }
-        OutlinedButton(onClick = { onCropChange { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1.2) } }) { Text("+") }
+        OutlinedButton(onClick = { step { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1 / 1.2) } }) { Text("−") }
+        OutlinedButton(onClick = { step { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1.2) } }) { Text("+") }
         TextButton(onClick = onReset) { Text("Reset") }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -129,6 +154,7 @@ fun CropControls(
         Slider(
             value = crop.rotationDegrees.toFloat(),
             onValueChange = { degrees -> onCropChange { w, h, a, c -> CropGeometry.rotate(w, h, a, c, (degrees * 2).roundToInt() / 2.0) } },
+            onValueChangeFinished = onCommit,
             valueRange = -CropGeometry.MAX_ROTATION.toFloat()..CropGeometry.MAX_ROTATION.toFloat(),
             modifier = Modifier.weight(1f),
         )

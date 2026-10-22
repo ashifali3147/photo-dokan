@@ -1,9 +1,11 @@
 package com.tlw.photodokan.ui.customers
 
+import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropGeometry
 import com.tlw.photodokan.core.library.StudioDate
 import com.tlw.photodokan.core.model.CropConfig
 import com.tlw.photodokan.core.model.PhotoSizePreset
+import com.tlw.photodokan.ui.editor.Adjustment
 import com.tlw.photodokan.ui.photo.PhotoSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,7 +32,11 @@ class CustomersViewModelTest {
     private var now = StudioDate(2026, 10, 22)
     private lateinit var vm: CustomersViewModel
 
-    private val jpeg = ByteArrayOutputStream().also { ImageIO.write(BufferedImage(40, 20, BufferedImage.TYPE_INT_RGB), "jpg", it) }.toByteArray()
+    /** A plain mid-grey photo, so light and colour changes are easy to measure. */
+    private val jpeg = ByteArrayOutputStream().also {
+        val grey = BufferedImage(40, 20, BufferedImage.TYPE_INT_RGB).apply { createGraphics().apply { color = java.awt.Color(128, 128, 128); fillRect(0, 0, 40, 20); dispose() } }
+        ImageIO.write(grey, "jpg", it)
+    }.toByteArray()
     private fun photo(name: String = "IMG_1.jpg") = PhotoSource(name) { jpeg }
 
     @BeforeTest
@@ -184,6 +190,77 @@ class CustomersViewModelTest {
         val image = edit.preview.image
         val clamped = CropGeometry.clamp(image.width, image.height, vm.presetOf(edit.recipe).aspect, edit.recipe.crop)
         assertEquals(clamped, edit.recipe.crop, "every change leaves an already-fitting crop")
+    }
+
+    @Test
+    fun brightnessIsSavedAndLightensTheFinal() {
+        vm.import(photo())
+        vm.adjust(Adjustment.Brightness, 0.4)
+        vm.adjust(Adjustment.Brightness, 1.0)
+        vm.commit()
+        vm.saveDraft()
+
+        val customer = library.customersOn(now).single()
+        assertEquals(1.0, library.readRecipe(customer)?.exposure)
+        val final = ImageIO.read(ByteArrayInputStream(library.readFinal(customer)!!))
+        val red = java.awt.Color(final.getRGB(200, 200)).red
+        assertTrue(red in 240..255, "one stop up doubles mid-grey 128 to white, was $red")
+        assertContentEquals(jpeg, library.readOriginal(customer), "the original is never touched")
+    }
+
+    @Test
+    fun aWholeSliderDragIsOneUndoStep() {
+        vm.import(photo())
+        for (v in listOf(0.1, 0.2, 0.3, 0.45)) vm.adjust(Adjustment.Warmth, v)
+        vm.commit()
+        vm.adjust(Adjustment.Contrast, 0.5)
+        vm.commit()
+
+        vm.undo()
+        assertEquals(0.0, state.edit!!.recipe.contrast)
+        assertEquals(0.45, state.edit!!.recipe.warmth)
+        vm.undo()
+        assertEquals(0.0, state.edit!!.recipe.warmth)
+        assertEquals(false, state.edit!!.canUndo)
+
+        vm.redo()
+        vm.redo()
+        assertEquals(0.45, state.edit!!.recipe.warmth)
+        assertEquals(0.5, state.edit!!.recipe.contrast)
+        assertEquals(false, state.edit!!.canRedo)
+    }
+
+    @Test
+    fun undoFirstDropsAChangeStillBeingDragged() {
+        vm.import(photo())
+        vm.adjust(Adjustment.Colour, 0.3)
+        vm.commit()
+        vm.adjust(Adjustment.Colour, 0.9) // still dragging
+        assertEquals(false, state.edit!!.canRedo)
+        vm.undo()
+        assertEquals(0.3, state.edit!!.recipe.saturation)
+    }
+
+    @Test
+    fun undoingBackToTheSavedEditMeansNothingToSave() {
+        vm.import(photo())
+        vm.saveDraft()
+        vm.adjust(Adjustment.Brightness, 0.2)
+        vm.commit()
+        assertEquals(true, state.edit!!.changed)
+        vm.undo()
+        assertEquals(false, state.edit!!.changed)
+    }
+
+    @Test
+    fun resetLightAndColourIsOneStep() {
+        vm.import(photo())
+        vm.adjust(Adjustment.Brightness, 0.5); vm.commit()
+        vm.adjust(Adjustment.Colour, -0.5); vm.commit()
+        vm.resetAdjustments()
+        assertTrue(ColorAdjustment.isNeutral(state.edit!!.recipe))
+        vm.undo()
+        assertEquals(-0.5, state.edit!!.recipe.saturation)
     }
 
     @Test
