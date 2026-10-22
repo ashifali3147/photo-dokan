@@ -26,6 +26,9 @@ kotlin {
             api(libs.koin.core)
             implementation(libs.koin.compose)
         }
+        androidMain.dependencies {
+            implementation(libs.androidx.activity.compose)
+        }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.koin.test)
