@@ -5,6 +5,7 @@ compose-multiplatform = "1.9.0"
 kotlinx-serialization = "1.9.0"
 androidx-activity = "1.10.1"
 koin = "4.1.1"
+pdfbox = "3.0.8"
 
 android-compileSdk = "36"
 android-targetSdk = "36"
@@ -17,6 +18,7 @@ androidx-activity-compose = { module = "androidx.activity:activity-compose", ver
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
 koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
 koin-test = { module = "io.insert-koin:koin-test", version.ref = "koin" }
+pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
