@@ -16,6 +16,7 @@ dependencyResolutionManagement {
 }
 
 include(":shared:core")
+include(":shared:library")
 include(":shared:print")
 include(":shared:ui")
 include(":app-android")

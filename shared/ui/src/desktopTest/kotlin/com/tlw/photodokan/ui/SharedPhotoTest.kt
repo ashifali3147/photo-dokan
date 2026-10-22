@@ -7,11 +7,14 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
+import com.tlw.photodokan.core.library.PhotoLibrary
+import com.tlw.photodokan.ui.customers.InMemoryPhotoLibrary
 import com.tlw.photodokan.ui.di.appModule
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.photo.PhotoSource
 import org.koin.compose.KoinIsolatedContext
 import org.koin.dsl.koinApplication
+import org.koin.dsl.module
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
@@ -22,7 +25,7 @@ class SharedPhotoTest {
 
     @Test
     fun sharedPhotoOpensOnCustomersAndIsImported() = runComposeUiTest {
-        val koin = koinApplication { modules(appModule) }
+        val koin = koinApplication { modules(appModule, module { single<PhotoLibrary> { InMemoryPhotoLibrary() } }) }
         setContent { KoinIsolatedContext(context = koin) { App() } }
 
         onNode(hasText("Print") and hasClickAction()).performClick()
@@ -31,7 +34,7 @@ class SharedPhotoTest {
         koin.koin.get<IncomingPhotos>().send(PhotoSource("shared.jpg") { jpeg })
 
         // Decoding runs off the UI thread, so wait for the result.
-        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("shared.jpg · 40 × 20 px").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("shared.jpg · 40 × 20 px", substring = true).fetchSemanticsNodes().isNotEmpty() }
         onNode(hasText("Customers") and hasClickAction()).assertIsSelected()
     }
 }

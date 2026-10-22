@@ -3,6 +3,8 @@ package com.tlw.photodokan.core.library
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class PhotoLibraryTest {
 
@@ -42,5 +44,76 @@ class PhotoLibraryTest {
     fun rejectsImpossibleDates() {
         assertFailsWith<IllegalArgumentException> { StudioDate(2026, 2, 29) }
         StudioDate(2028, 2, 29)
+    }
+}
+
+class CustomerSearchTest {
+
+    private val ramesh = Customer(StudioDate(2026, 10, 22), 7, "Ramesh Kumar", "+91 98765 43210")
+    private val anonymous = Customer(StudioDate(2026, 10, 22), 12)
+
+    @Test
+    fun numberMatchesWithOrWithoutLeadingZeros() {
+        assertTrue(ramesh.matches("7"))
+        assertTrue(ramesh.matches("0007"))
+        assertFalse(ramesh.matches("8"))
+    }
+
+    @Test
+    fun fourOrMoreDigitsAlsoMatchPartOfThePhoneIgnoringSpaces() {
+        assertTrue(ramesh.matches("3210"))
+        assertTrue(ramesh.matches("6543"))
+        assertFalse(ramesh.matches("654"))
+        assertTrue(ramesh.matches("9876543210"))
+        assertFalse(anonymous.matches("6543"))
+    }
+
+    @Test
+    fun textMatchesPartOfTheNameIgnoringCase() {
+        assertTrue(ramesh.matches("ramesh"))
+        assertTrue(ramesh.matches(" KUMAR "))
+        assertFalse(ramesh.matches("suresh"))
+        assertFalse(anonymous.matches("ramesh"))
+    }
+
+    @Test
+    fun blankQueryMatchesEveryone() {
+        assertTrue(anonymous.matches(""))
+        assertTrue(anonymous.matches("   "))
+    }
+
+    @Test
+    fun labelIsFourDigits() {
+        assertEquals("0007", ramesh.label)
+    }
+}
+
+class StudioDateTest {
+
+    @Test
+    fun ordersByYearThenMonthThenDay() {
+        val dates = listOf(StudioDate(2026, 10, 22), StudioDate(2025, 12, 31), StudioDate(2026, 1, 5), StudioDate(2026, 10, 3))
+        assertEquals(
+            listOf(StudioDate(2025, 12, 31), StudioDate(2026, 1, 5), StudioDate(2026, 10, 3), StudioDate(2026, 10, 22)),
+            dates.sorted(),
+        )
+    }
+
+    @Test
+    fun stepsAcrossMonthsYearsAndLeapDays() {
+        assertEquals(StudioDate(2026, 10, 23), StudioDate(2026, 10, 22).next())
+        assertEquals(StudioDate(2026, 11, 1), StudioDate(2026, 10, 31).next())
+        assertEquals(StudioDate(2027, 1, 1), StudioDate(2026, 12, 31).next())
+        assertEquals(StudioDate(2028, 2, 29), StudioDate(2028, 2, 28).next())
+        assertEquals(StudioDate(2026, 2, 28), StudioDate(2026, 3, 1).previous())
+        assertEquals(StudioDate(2025, 12, 31), StudioDate(2026, 1, 1).previous())
+        var d = StudioDate(2026, 1, 1)
+        repeat(365) { d = d.next() }
+        assertEquals(StudioDate(2027, 1, 1), d)
+    }
+
+    @Test
+    fun printsTheWayTheStudioWritesDates() {
+        assertEquals("05/03/2026", StudioDate(2026, 3, 5).toString())
     }
 }

@@ -10,11 +10,20 @@ import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.tlw.photodokan.core.library.PhotoLibrary
+import com.tlw.photodokan.library.FilePhotoLibrary
 import com.tlw.photodokan.ui.App
 import com.tlw.photodokan.ui.di.initKoin
+import kotlinx.io.files.Path
+import org.koin.dsl.module
+
+// TODO(settings): let the operator pick the library folder, e.g. D:\PhotoDokan\Photos on the studio PC.
+private val desktopModule = module {
+    single<PhotoLibrary> { FilePhotoLibrary(Path(System.getProperty("user.home"), "Pictures", "Photo Dokan")) }
+}
 
 fun main() {
-    initKoin()
+    initKoin(listOf(desktopModule))
     application {
         val windowState = rememberWindowState(width = 1100.dp, height = 820.dp)
         var showRequests by remember { mutableIntStateOf(0) }
