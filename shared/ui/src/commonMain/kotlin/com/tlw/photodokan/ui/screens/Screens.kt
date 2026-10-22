@@ -15,6 +15,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +31,7 @@ import com.tlw.photodokan.core.model.SheetState
 import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.core.packing.PackingEngine
 import com.tlw.photodokan.ui.SheetPreview
+import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.photo.PhotoPreview
 import com.tlw.photodokan.ui.photo.PhotoSource
 import com.tlw.photodokan.ui.photo.canDropPhotos
@@ -74,6 +77,12 @@ fun CustomersScreen(modifier: Modifier = Modifier) = Screen("Customers", modifie
         }
     }
     val pickPhoto = rememberPhotoPicker(::import)
+
+    val incomingPhotos = koinInject<IncomingPhotos>()
+    val incoming by incomingPhotos.pending.collectAsState()
+    LaunchedEffect(incoming) {
+        incomingPhotos.take()?.let(::import)
+    }
 
     val borderColor = if (hovering) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
     Box(

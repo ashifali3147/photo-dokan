@@ -1,5 +1,6 @@
 package com.tlw.photodokan.ui.photo
 
+import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -17,13 +18,16 @@ actual fun rememberPhotoPicker(onPicked: (PhotoSource) -> Unit): () -> Unit {
     val resolver = LocalContext.current.contentResolver
     val callback by rememberUpdatedState(onPicked)
     val launcher = rememberLauncherForActivityResult(PickVisualMedia()) { uri: Uri? ->
-        if (uri != null) {
-            val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-                ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "photo"
-            callback(PhotoSource(name) { resolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0) })
-        }
+        if (uri != null) callback(resolver.photoSource(uri))
     }
     return { launcher.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) }
+}
+
+/** A photo behind a content URI, from the Photo Picker or shared by another app. */
+fun ContentResolver.photoSource(uri: Uri): PhotoSource {
+    val name = query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "photo"
+    return PhotoSource(name) { openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0) }
 }
 
 actual val canDropPhotos: Boolean = false

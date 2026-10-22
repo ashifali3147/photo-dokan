@@ -3,6 +3,7 @@ package com.tlw.photodokan.ui.di
 import com.tlw.photodokan.core.library.LibraryLayout
 import com.tlw.photodokan.core.model.PhotoSizePreset
 import com.tlw.photodokan.core.model.SheetTemplate
+import com.tlw.photodokan.ui.photo.IncomingPhotos
 import org.koin.dsl.koinApplication
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,5 +23,6 @@ class AppModuleTest {
     @Test
     fun singlesAreShared() {
         assertSame(koin.get<LibraryLayout>(), koin.get<LibraryLayout>())
+        assertSame(koin.get<IncomingPhotos>(), koin.get<IncomingPhotos>())
     }
 }
