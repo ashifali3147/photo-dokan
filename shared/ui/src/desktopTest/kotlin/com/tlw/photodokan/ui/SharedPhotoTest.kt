@@ -8,10 +8,12 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import com.tlw.photodokan.core.library.PhotoLibrary
+import com.tlw.photodokan.core.model.PrintQueueStore
 import com.tlw.photodokan.ui.customers.InMemoryPhotoLibrary
 import com.tlw.photodokan.ui.di.appModule
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.photo.PhotoSource
+import com.tlw.photodokan.ui.print.InMemoryPrintQueueStore
 import org.koin.compose.KoinIsolatedContext
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
@@ -25,7 +27,10 @@ class SharedPhotoTest {
 
     @Test
     fun sharedPhotoOpensOnCustomersAndIsImported() = runComposeUiTest {
-        val koin = koinApplication { modules(appModule, module { single<PhotoLibrary> { InMemoryPhotoLibrary() } }) }
+        val koin = koinApplication { modules(appModule, module {
+                single<PhotoLibrary> { InMemoryPhotoLibrary() }
+                single<PrintQueueStore> { InMemoryPrintQueueStore() }
+            }) }
         setContent { KoinIsolatedContext(context = koin) { App() } }
 
         onNode(hasText("Print") and hasClickAction()).performClick()

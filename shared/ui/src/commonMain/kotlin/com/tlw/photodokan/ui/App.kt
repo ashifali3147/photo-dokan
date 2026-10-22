@@ -34,7 +34,7 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.tlw.photodokan.ui.navigation.Destination
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.customers.CustomersScreen
-import com.tlw.photodokan.ui.screens.PrintScreen
+import com.tlw.photodokan.ui.print.PrintScreen
 import com.tlw.photodokan.ui.screens.SettingsScreen
 import org.koin.compose.koinInject
 
