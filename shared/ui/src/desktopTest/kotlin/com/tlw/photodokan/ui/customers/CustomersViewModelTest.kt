@@ -1,6 +1,8 @@
 package com.tlw.photodokan.ui.customers
 
+import com.tlw.photodokan.core.imaging.CropGeometry
 import com.tlw.photodokan.core.library.StudioDate
+import com.tlw.photodokan.core.model.CropConfig
 import com.tlw.photodokan.core.model.PhotoSizePreset
 import com.tlw.photodokan.ui.photo.PhotoSource
 import kotlinx.coroutines.Dispatchers
@@ -55,8 +57,10 @@ class CustomersViewModelTest {
         assertEquals("Ramesh", customer.name)
         assertContentEquals(jpeg, library.readOriginal(customer))
         assertEquals(PhotoSizePreset.STUDIO_SLOT.id, library.readRecipe(customer)?.presetId)
-        val final = assertNotNull(library.readFinal(customer))
-        assertEquals(40, ImageIO.read(ByteArrayInputStream(final)).width, "final.jpg is a readable JPEG")
+        val final = ImageIO.read(ByteArrayInputStream(assertNotNull(library.readFinal(customer))))
+        // final.jpg is the crop at 300 dpi of the studio slot, 36 × 34 mm.
+        assertEquals(425, final.width)
+        assertEquals(402, final.height)
 
         assertNull(state.draft)
         assertEquals(customer, state.selected)
@@ -133,13 +137,60 @@ class CustomersViewModelTest {
     }
 
     @Test
-    fun selectingACustomerShowsTheirFinalImage() {
+    fun photoSizeAndCropAreSavedAndShapeTheFinal() {
         vm.import(photo())
+        vm.setPreset(PhotoSizePreset.PASSPORT_35X45)
+        vm.updateCrop { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 2.0) }
+        vm.saveDraft()
+
+        val customer = library.customersOn(now).single()
+        val recipe = assertNotNull(library.readRecipe(customer))
+        assertEquals(PhotoSizePreset.PASSPORT_35X45.id, recipe.presetId)
+        assertEquals(2.0, recipe.crop.scale)
+        val final = ImageIO.read(ByteArrayInputStream(library.readFinal(customer)!!))
+        assertEquals(413 to 531, final.width to final.height, "35 × 45 mm at 300 dpi")
+    }
+
+    @Test
+    fun reopeningACustomerRestoresTheirEditAndSavesChanges() {
+        vm.import(photo())
+        vm.updateCrop { w, h, a, c -> CropGeometry.rotate(w, h, a, c, 4.0) }
         vm.saveDraft()
         val customer = state.selected!!
         vm.showToday()
-        assertNull(state.selectedImage)
+        assertNull(state.edit)
+
         vm.select(customer)
-        assertEquals(40, state.selectedImage?.width)
+        assertEquals(4.0, state.edit?.recipe?.crop?.rotationDegrees)
+        assertEquals(false, state.edit?.changed)
+
+        vm.updateCrop { w, h, a, c -> CropGeometry.rotate(w, h, a, c, -2.5) }
+        assertEquals(true, state.edit?.changed)
+        vm.saveChanges()
+
+        assertEquals(-2.5, library.readRecipe(customer)?.crop?.rotationDegrees)
+        assertEquals(false, state.edit?.changed)
+        assertEquals("Saved changes for customer 0001.", state.message)
+        assertContentEquals(jpeg, library.readOriginal(customer), "the original is never touched")
+    }
+
+    @Test
+    fun cropEditsStayInsideThePhoto() {
+        vm.import(photo())
+        repeat(20) { vm.updateCrop { w, h, a, c -> CropGeometry.pan(w, h, a, c, 3.0, -3.0) } }
+        vm.updateCrop { w, h, a, c -> CropGeometry.rotate(w, h, a, c, 30.0) }
+        vm.setPreset(PhotoSizePreset.STAMP_20X25)
+        val edit = state.edit!!
+        val image = edit.preview.image
+        val clamped = CropGeometry.clamp(image.width, image.height, vm.presetOf(edit.recipe).aspect, edit.recipe.crop)
+        assertEquals(clamped, edit.recipe.crop, "every change leaves an already-fitting crop")
+    }
+
+    @Test
+    fun resetGoesBackToTheFullFrame() {
+        vm.import(photo())
+        vm.updateCrop { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 3.0) }
+        vm.resetCrop()
+        assertEquals(CropConfig(), state.edit?.recipe?.crop)
     }
 }

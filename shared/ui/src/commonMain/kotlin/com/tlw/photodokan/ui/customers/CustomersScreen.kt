@@ -1,6 +1,5 @@
 package com.tlw.photodokan.ui.customers
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -8,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,12 +34,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.library.Customer
+import com.tlw.photodokan.ui.editor.CropControls
+import com.tlw.photodokan.ui.editor.CropEditor
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.photo.canDropPhotos
 import com.tlw.photodokan.ui.photo.photoDropTarget
@@ -71,9 +71,15 @@ fun CustomersScreen(modifier: Modifier = Modifier, viewModel: CustomersViewModel
                 }
             }
         } else {
+            // On a phone the editor needs the whole screen; the list comes back when it closes.
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { CustomerList(state, viewModel) }
-                Column(Modifier.weight(1.3f), verticalArrangement = Arrangement.spacedBy(12.dp)) { Detail(state, viewModel, pickPhoto) }
+                if (state.edit == null) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { CustomerList(state, viewModel) }
+                    Button(onClick = pickPhoto, enabled = !state.busy) { Text("Choose photo") }
+                } else {
+                    if (state.draft == null) TextButton(onClick = viewModel::closeCustomer) { Text("◀ Customers") }
+                    Detail(state, viewModel, pickPhoto)
+                }
             }
         }
     }
@@ -124,6 +130,7 @@ private fun ColumnScope.CustomerList(state: CustomersState, viewModel: Customers
 private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewModel, pickPhoto: () -> Unit) {
     var hovering by remember { mutableStateOf(false) }
     val borderColor = if (hovering) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+    val edit = state.edit
     Box(
         modifier = Modifier
             .weight(1f)
@@ -133,17 +140,31 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
             .padding(12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        val draft = state.draft
-        val shown: ImageBitmap? = draft?.preview?.image ?: state.selectedImage
         when {
-            state.busy && shown == null -> CircularProgressIndicator()
-            shown != null -> Image(shown, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-            state.selected != null -> Text("No result image for this customer yet.")
+            edit != null -> CropEditor(
+                image = edit.preview.image,
+                preset = viewModel.presetOf(edit.recipe),
+                crop = edit.recipe.crop,
+                onCropChange = viewModel::updateCrop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            state.busy -> CircularProgressIndicator()
             else -> Text(
                 if (canDropPhotos) "Drop a photo here, or choose one below." else "Choose a photo to start.",
                 style = MaterialTheme.typography.bodyLarge,
             )
         }
+    }
+
+    if (edit != null) {
+        CropControls(
+            presets = viewModel.presets,
+            preset = viewModel.presetOf(edit.recipe),
+            crop = edit.recipe.crop,
+            onPreset = viewModel::setPreset,
+            onCropChange = viewModel::updateCrop,
+            onReset = viewModel::resetCrop,
+        )
     }
 
     state.message?.let {
@@ -152,31 +173,36 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
 
     val draft = state.draft
     val selected = state.selected
-    if (draft != null) {
-        Text("New customer · ${draft.fileName} · ${draft.preview.originalWidth} × ${draft.preview.originalHeight} px")
-        // Busy days run on numbers alone, so name and phone stay tucked away unless asked for.
-        var showDetails by remember(draft.fileName) { mutableStateOf(false) }
-        if (showDetails || draft.name.isNotEmpty() || draft.phone.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(draft.name, { viewModel.editDraft(name = it) }, label = { Text("Name (optional)") }, singleLine = true, modifier = Modifier.weight(1f))
-                OutlinedTextField(
-                    draft.phone, { viewModel.editDraft(phone = it) }, label = { Text("Phone (optional)") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.weight(1f),
-                )
+    when {
+        draft != null && edit != null -> {
+            Text("New customer · ${draft.fileName} · ${edit.preview.originalWidth} × ${edit.preview.originalHeight} px")
+            // Busy days run on numbers alone, so name and phone stay tucked away unless asked for.
+            var showDetails by remember(draft.fileName) { mutableStateOf(false) }
+            if (showDetails || draft.name.isNotEmpty() || draft.phone.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(draft.name, { viewModel.editDraft(name = it) }, label = { Text("Name (optional)") }, singleLine = true, modifier = Modifier.weight(1f))
+                    OutlinedTextField(
+                        draft.phone, { viewModel.editDraft(phone = it) }, label = { Text("Phone (optional)") }, singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Button(onClick = viewModel::saveDraft, enabled = !state.busy) { Text("Save as customer ${draft.numberLabel}") }
+                TextButton(onClick = viewModel::discardDraft, enabled = !state.busy) { Text("Discard") }
+                if (!showDetails && draft.name.isEmpty() && draft.phone.isEmpty()) {
+                    TextButton(onClick = { showDetails = true }) { Text("Add name or phone (optional)") }
+                }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = viewModel::saveDraft, enabled = !state.busy) { Text("Save as customer ${draft.numberLabel}") }
-            TextButton(onClick = viewModel::discardDraft, enabled = !state.busy) { Text("Discard") }
-            if (!showDetails && draft.name.isEmpty() && draft.phone.isEmpty()) {
-                TextButton(onClick = { showDetails = true }) { Text("Add name or phone (optional)") }
-            }
-        }
-    } else {
-        if (selected != null) {
+        selected != null && edit != null -> {
             Text(customerLine(selected), style = MaterialTheme.typography.titleMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = viewModel::saveChanges, enabled = edit.changed && !state.busy) { Text("Save changes") }
+                TextButton(onClick = pickPhoto, enabled = !state.busy) { Text("New customer photo") }
+            }
         }
-        Button(onClick = pickPhoto, enabled = !state.busy) { Text(if (selected == null) "Choose photo" else "New customer photo") }
+        else -> Button(onClick = pickPhoto, enabled = !state.busy) { Text("Choose photo") }
     }
 }
 
