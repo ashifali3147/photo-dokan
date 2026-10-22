@@ -31,15 +31,17 @@ class CropEditorTest {
     @Test
     fun zoomButtonsAndDraggingChangeTheCrop() = runComposeUiTest {
         var crop by mutableStateOf(CropConfig())
+        var commits = 0
         setContent {
             Column {
                 CropControls(
                     presets = PhotoSizePreset.DEFAULTS, preset = preset, crop = crop,
-                    onPreset = {}, onCropChange = { crop = it(photo.width, photo.height, preset.aspect, crop) }, onReset = {},
+                    onPreset = {}, onCropChange = { crop = it(photo.width, photo.height, preset.aspect, crop) }, onCommit = { commits++ }, onReset = {},
                 )
                 CropEditor(
                     photo, preset, crop,
                     onCropChange = { crop = it(photo.width, photo.height, preset.aspect, crop) },
+                    onCommit = { commits++ },
                     modifier = Modifier.size(350.dp, 450.dp),
                 )
             }
@@ -47,14 +49,23 @@ class CropEditorTest {
 
         onNodeWithText("+").performClick()
         assertEquals(1.2, crop.scale, 1e-9)
+        assertEquals(1, commits, "a button press is one undo step")
 
         val before = crop.centerX
         onNodeWithContentDescription("Crop frame").performTouchInput { swipeRight() }
         assertTrue(crop.centerX < before, "dragging right moves the photo right, so the frame sits further left")
+        assertEquals(2, commits, "a whole drag is one undo step")
 
         onNodeWithText("−").performClick()
         onNodeWithText("−").performClick()
         assertEquals(1.0, crop.scale, 1e-9, "never zooms out past the full frame")
+    }
+
+    @Test
+    fun amountsShowAsPlusOrMinusHundred() {
+        assertEquals("0", formatAmount(0.0))
+        assertEquals("+25", formatAmount(0.25))
+        assertEquals("−100", formatAmount(-1.0))
     }
 
     @Test

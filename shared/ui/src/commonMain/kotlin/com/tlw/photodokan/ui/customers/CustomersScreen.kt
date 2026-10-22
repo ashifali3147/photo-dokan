@@ -23,6 +23,9 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,6 +41,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.library.Customer
+import com.tlw.photodokan.core.imaging.ColorAdjustment
+import com.tlw.photodokan.ui.editor.AdjustControls
 import com.tlw.photodokan.ui.editor.CropControls
 import com.tlw.photodokan.ui.editor.CropEditor
 import com.tlw.photodokan.ui.photo.IncomingPhotos
@@ -146,7 +151,9 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
                 preset = viewModel.presetOf(edit.recipe),
                 crop = edit.recipe.crop,
                 onCropChange = viewModel::updateCrop,
+                onCommit = viewModel::commit,
                 modifier = Modifier.fillMaxSize(),
+                colorMatrix = ColorAdjustment.matrix(edit.recipe),
             )
             state.busy -> CircularProgressIndicator()
             else -> Text(
@@ -157,14 +164,35 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
     }
 
     if (edit != null) {
-        CropControls(
-            presets = viewModel.presets,
-            preset = viewModel.presetOf(edit.recipe),
-            crop = edit.recipe.crop,
-            onPreset = viewModel::setPreset,
-            onCropChange = viewModel::updateCrop,
-            onReset = viewModel::resetCrop,
-        )
+        var tab by remember { mutableStateOf(EditorTab.Crop) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            SingleChoiceSegmentedButtonRow {
+                EditorTab.entries.forEachIndexed { i, t ->
+                    SegmentedButton(selected = tab == t, onClick = { tab = t }, shape = SegmentedButtonDefaults.itemShape(i, EditorTab.entries.size)) {
+                        Text(t.label)
+                    }
+                }
+            }
+            TextButton(onClick = viewModel::undo, enabled = edit.canUndo) { Text("Undo") }
+            TextButton(onClick = viewModel::redo, enabled = edit.canRedo) { Text("Redo") }
+        }
+        when (tab) {
+            EditorTab.Crop -> CropControls(
+                presets = viewModel.presets,
+                preset = viewModel.presetOf(edit.recipe),
+                crop = edit.recipe.crop,
+                onPreset = viewModel::setPreset,
+                onCropChange = viewModel::updateCrop,
+                onCommit = viewModel::commit,
+                onReset = viewModel::resetCrop,
+            )
+            EditorTab.Adjust -> AdjustControls(
+                recipe = edit.recipe,
+                onPreview = viewModel::adjust,
+                onCommit = viewModel::commit,
+                onReset = viewModel::resetAdjustments,
+            )
+        }
     }
 
     state.message?.let {
@@ -205,5 +233,7 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
         else -> Button(onClick = pickPhoto, enabled = !state.busy) { Text("Choose photo") }
     }
 }
+
+private enum class EditorTab(val label: String) { Crop("Crop"), Adjust("Adjust") }
 
 private fun customerLine(c: Customer) = listOfNotNull("Customer ${c.label}", c.name, c.phone, c.date.toString()).joinToString(" · ")

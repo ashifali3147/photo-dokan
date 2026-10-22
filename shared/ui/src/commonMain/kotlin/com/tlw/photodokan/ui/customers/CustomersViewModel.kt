@@ -3,13 +3,16 @@ package com.tlw.photodokan.ui.customers
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tlw.photodokan.core.geometry.mmToPixels
+import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropGeometry
 import com.tlw.photodokan.core.library.Customer
 import com.tlw.photodokan.core.library.PhotoLibrary
 import com.tlw.photodokan.core.library.StudioDate
 import com.tlw.photodokan.core.model.CropConfig
+import com.tlw.photodokan.core.model.EditHistory
 import com.tlw.photodokan.core.model.EditRecipe
 import com.tlw.photodokan.core.model.PhotoSizePreset
+import com.tlw.photodokan.ui.editor.Adjustment
 import com.tlw.photodokan.ui.editor.renderCrop
 import com.tlw.photodokan.ui.photo.PhotoPreview
 import com.tlw.photodokan.ui.photo.PhotoSource
@@ -40,8 +43,26 @@ class Draft(
     val numberLabel: String get() = number.toString().padStart(4, '0')
 }
 
-/** The photo open in the editor: a reduced upright copy of the original and the edits to it. */
-data class EditSession(val preview: PhotoPreview, val recipe: EditRecipe, val changed: Boolean = false)
+/**
+ * The photo open in the editor: a reduced upright copy of the original and its edits. [live] is
+ * what the screen shows, including a drag in progress; [history] holds finished steps for undo.
+ */
+data class EditSession(
+    val preview: PhotoPreview,
+    val history: EditHistory<EditRecipe>,
+    val live: EditRecipe = history.present,
+    /** The recipe as last saved; null for a new photo not yet saved. */
+    val saved: EditRecipe? = null,
+) {
+    val recipe: EditRecipe get() = live
+    val changed: Boolean get() = live != saved
+    val canUndo: Boolean get() = history.canUndo || live != history.present
+    val canRedo: Boolean get() = history.canRedo && live == history.present
+
+    companion object {
+        fun start(preview: PhotoPreview, recipe: EditRecipe, saved: EditRecipe?) = EditSession(preview, EditHistory.start(recipe), saved = saved)
+    }
+}
 
 data class CustomersState(
     val today: StudioDate,
@@ -108,7 +129,7 @@ class CustomersViewModel(
             error("The photo of customer ${customer.label} could not be opened.")
         } else {
             val recipe = library.readRecipe(customer) ?: EditRecipe(presetId = presets.first().id)
-            _state.update { it.copy(selected = customer, draft = null, edit = EditSession(preview, recipe), message = null) }
+            _state.update { it.copy(selected = customer, draft = null, edit = EditSession.start(preview, recipe, saved = recipe), message = null) }
         }
     }
 
@@ -119,7 +140,7 @@ class CustomersViewModel(
             error("\"${source.name}\" is not a photo Photo Dokan can open. Choose a JPEG or PNG photo.")
         } else {
             val draft = Draft(source.name, original, number = library.nextNumber(clock()))
-            val edit = EditSession(preview, EditRecipe(presetId = presets.first().id))
+            val edit = EditSession.start(preview, EditRecipe(presetId = presets.first().id), saved = null)
             _state.update { it.copy(draft = draft, selected = null, edit = edit, message = null) }
         }
     }
@@ -133,26 +154,55 @@ class CustomersViewModel(
     /** Back to the list from a saved customer. Unsaved changes to them are dropped. */
     fun closeCustomer() = _state.update { it.copy(selected = null, edit = null, message = null) }
 
-    /** Changes the crop through [CropGeometry], so it always fits the photo and the photo size. */
-    fun updateCrop(change: (imageWidth: Int, imageHeight: Int, aspect: Double, crop: CropConfig) -> CropConfig) = updateEdit { edit ->
+    /**
+     * Changes the crop through [CropGeometry], so it always fits the photo and the photo size.
+     * Shows live; call [commit] when the drag or slider is let go.
+     */
+    fun updateCrop(change: (imageWidth: Int, imageHeight: Int, aspect: Double, crop: CropConfig) -> CropConfig) = preview { edit ->
         val image = edit.preview.image
-        edit.recipe.copy(crop = change(image.width, image.height, presetOf(edit.recipe).aspect, edit.recipe.crop))
+        edit.live.copy(crop = change(image.width, image.height, presetOf(edit.live).aspect, edit.live.crop))
     }
+
+    /** Shows a light or colour change live; call [commit] when the slider is let go. */
+    fun adjust(adjustment: Adjustment, value: Double) = preview { adjustment.setIn(it.live, value) }
 
     /** Switches photo size: the frame keeps its centre, zoom and angle, then refits. */
-    fun setPreset(preset: PhotoSizePreset) = updateEdit { edit ->
+    fun setPreset(preset: PhotoSizePreset) = step { edit ->
         val image = edit.preview.image
-        edit.recipe.copy(presetId = preset.id, crop = CropGeometry.clamp(image.width, image.height, preset.aspect, edit.recipe.crop))
+        edit.live.copy(presetId = preset.id, crop = CropGeometry.clamp(image.width, image.height, preset.aspect, edit.live.crop))
     }
 
-    fun resetCrop() = updateEdit { it.recipe.copy(crop = CropConfig()) }
+    fun resetCrop() = step { it.live.copy(crop = CropConfig()) }
 
-    private fun updateEdit(change: (EditSession) -> EditRecipe) =
-        _state.update { s -> s.copy(edit = s.edit?.let { it.copy(recipe = change(it), changed = true) }) }
+    fun resetAdjustments() = step { it.live.copy(exposure = 0.0, contrast = 0.0, warmth = 0.0, saturation = 0.0) }
+
+    /** Ends a live change: it becomes one undo step. */
+    fun commit() = _state.update { s -> s.copy(edit = s.edit?.let { it.copy(history = it.history.apply(it.live)) }) }
+
+    /** Drops a change still being dragged, or steps back one finished change. */
+    fun undo() = _state.update { s ->
+        s.copy(edit = s.edit?.let {
+            if (it.live != it.history.present) it.copy(live = it.history.present)
+            else it.history.undo().let { h -> it.copy(history = h, live = h.present) }
+        })
+    }
+
+    fun redo() = _state.update { s ->
+        s.copy(edit = s.edit?.let { if (it.canRedo) it.history.redo().let { h -> it.copy(history = h, live = h.present) } else it })
+    }
+
+    private fun preview(change: (EditSession) -> EditRecipe) =
+        _state.update { s -> s.copy(edit = s.edit?.let { it.copy(live = change(it)) }) }
+
+    private fun step(change: (EditSession) -> EditRecipe) {
+        preview(change)
+        commit()
+    }
 
     /** Files the draft as today's next customer: original, recipe and the cropped final image. */
     fun saveDraft() {
         val draft = _state.value.draft ?: return
+        commit()
         val edit = _state.value.edit ?: return
         val date = clock()
         launchWork {
@@ -161,7 +211,7 @@ class CustomersViewModel(
             _state.update {
                 it.copy(
                     today = date, date = date, query = "", draft = null,
-                    selected = customer, edit = edit.copy(changed = false),
+                    selected = customer, edit = edit.copy(saved = edit.live),
                     message = "Saved as customer ${customer.label}.", messageIsError = false,
                 )
             }
@@ -172,10 +222,13 @@ class CustomersViewModel(
     /** Saves the edit of the open customer. The original is never touched. */
     fun saveChanges() {
         val customer = _state.value.selected ?: return
+        commit()
         val edit = _state.value.edit ?: return
         launchWork {
-            library.saveEdit(customer, edit.recipe, renderFinal(edit))
-            _state.update { it.copy(edit = edit.copy(changed = false), message = "Saved changes for customer ${customer.label}.", messageIsError = false) }
+            library.saveEdit(customer, edit.live, renderFinal(edit))
+            _state.update { s ->
+                s.copy(edit = s.edit?.copy(saved = edit.live), message = "Saved changes for customer ${customer.label}.", messageIsError = false)
+            }
         }
     }
 
@@ -184,12 +237,12 @@ class CustomersViewModel(
      * renders again from the full-resolution original.
      */
     private fun renderFinal(edit: EditSession): ByteArray {
-        val preset = presetOf(edit.recipe)
+        val preset = presetOf(edit.live)
         val image = edit.preview.image
-        val rect = CropGeometry.rect(image.width, image.height, preset.aspect, edit.recipe.crop)
+        val rect = CropGeometry.rect(image.width, image.height, preset.aspect, edit.live.crop)
         val width = mmToPixels(preset.size.width, FINAL_DPI).roundToInt()
         val height = mmToPixels(preset.size.height, FINAL_DPI).roundToInt()
-        return encodeJpeg(renderCrop(image, rect, width, height))
+        return encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(edit.live)))
     }
 
     private fun refresh() = launchWork { loadList() }
