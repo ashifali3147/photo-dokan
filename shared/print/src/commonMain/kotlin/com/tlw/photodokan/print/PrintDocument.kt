@@ -32,6 +32,25 @@ sealed interface PageItem {
             require(gray in 0.0..1.0) { "Gray must be in 0..1, was $gray" }
         }
     }
+
+    /** An unfilled rectangle. The stroke is centred on [rect]'s edges, so the outline measures exactly [rect]. */
+    data class Box(val rect: RectMm, val widthMm: Double = 0.2, val gray: Double = 0.0) : PageItem {
+        init {
+            require(widthMm > 0) { "Box line width must be positive, was $widthMm" }
+            require(gray in 0.0..1.0) { "Gray must be in 0..1, was $gray" }
+        }
+    }
+
+    /**
+     * One line of text in Helvetica, starting at ([x], [baselineY]). Stick to Latin-1 characters
+     * (× and ± are fine): the built-in PDF font cannot draw other scripts.
+     */
+    data class Text(val x: Double, val baselineY: Double, val sizeMm: Double, val text: String, val gray: Double = 0.0) : PageItem {
+        init {
+            require(sizeMm > 0) { "Text size must be positive, was $sizeMm" }
+            require(gray in 0.0..1.0) { "Gray must be in 0..1, was $gray" }
+        }
+    }
 }
 
 /** Turns a [PrintDocument] into PDF bytes. One implementation per platform. */
