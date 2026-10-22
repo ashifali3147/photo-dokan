@@ -6,11 +6,9 @@ import com.tlw.photodokan.core.library.PhotoLibrary
 import com.tlw.photodokan.core.library.StudioDate
 import com.tlw.photodokan.core.model.EditRecipe
 import kotlinx.io.IOException
-import kotlinx.io.buffered
 import kotlinx.io.files.FileSystem
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
-import kotlinx.io.readByteArray
 import kotlinx.serialization.json.Json
 
 /**
@@ -98,14 +96,9 @@ class FilePhotoLibrary(
         return runCatching { json.decodeFromString<Customer>(read(file).decodeToString()) }.getOrNull()
     }
 
-    private fun read(path: Path): ByteArray = fs.source(path).buffered().use { it.readByteArray() }
+    private fun read(path: Path): ByteArray = fs.readBytes(path)
 
-    /** Writes to a temporary file first, so a crash or power cut never leaves a half-written file. */
-    private fun write(path: Path, bytes: ByteArray) {
-        val temp = Path(path.parent!!, ".${path.name}.tmp")
-        fs.sink(temp).buffered().use { it.write(bytes) }
-        fs.atomicMove(temp, path)
-    }
+    private fun write(path: Path, bytes: ByteArray) = fs.writeAtomically(path, bytes)
 
     companion object {
         private val ORIGINAL_NAMES = listOf(LibraryLayout.ORIGINAL_FILE, "original.png")
