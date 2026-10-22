@@ -22,7 +22,7 @@ val appModule = module {
     single { PhotoSizePreset.DEFAULTS }
     single { LibraryLayout() }
     single { IncomingPhotos() }
-    viewModel { CustomersViewModel(get(), ::today) }
+    viewModel { CustomersViewModel(get(), ::today, presets = get()) }
 }
 
 /** Starts Koin once per process: from `main` on desktop, from the Application on Android. */
