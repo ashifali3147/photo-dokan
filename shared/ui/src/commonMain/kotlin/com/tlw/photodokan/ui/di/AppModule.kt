@@ -5,6 +5,8 @@ import com.tlw.photodokan.core.model.PhotoSizePreset
 import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.ui.customers.CustomersViewModel
 import com.tlw.photodokan.ui.photo.IncomingPhotos
+import com.tlw.photodokan.ui.print.PrintOrders
+import com.tlw.photodokan.ui.print.PrintViewModel
 import com.tlw.photodokan.ui.platform.today
 import org.koin.core.KoinApplication
 import org.koin.core.context.startKoin
@@ -15,14 +17,17 @@ import org.koin.dsl.module
 
 /**
  * Shared definitions used by both apps. Each app adds its platform services through [initKoin]'s
- * platform modules, including the [com.tlw.photodokan.core.library.PhotoLibrary] at its own folder.
+ * platform modules, including the [com.tlw.photodokan.core.library.PhotoLibrary] at its own folder
+ * and the [com.tlw.photodokan.core.model.PrintQueueStore] in its app data.
  */
 val appModule = module {
     single { SheetTemplate.STUDIO_A4_5X8 }
     single { PhotoSizePreset.DEFAULTS }
     single { LibraryLayout() }
     single { IncomingPhotos() }
-    viewModel { CustomersViewModel(get(), ::today, presets = get()) }
+    single { PrintOrders(get()) }
+    viewModel { CustomersViewModel(get(), ::today, orders = get(), template = get(), presets = get()) }
+    viewModel { PrintViewModel(get(), get(), get()) }
 }
 
 /** Starts Koin once per process: from `main` on desktop, from the Application on Android. */

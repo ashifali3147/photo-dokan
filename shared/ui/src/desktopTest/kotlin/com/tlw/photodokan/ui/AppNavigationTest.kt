@@ -13,8 +13,10 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.library.PhotoLibrary
+import com.tlw.photodokan.core.model.PrintQueueStore
 import com.tlw.photodokan.ui.customers.InMemoryPhotoLibrary
 import com.tlw.photodokan.ui.di.appModule
+import com.tlw.photodokan.ui.print.InMemoryPrintQueueStore
 import org.koin.compose.KoinApplication
 import org.koin.dsl.module
 import kotlin.test.Test
@@ -27,7 +29,10 @@ class AppNavigationTest {
 
     private fun launch(width: Int, height: Int) = runComposeUiTest {
         setContent {
-            KoinApplication(application = { modules(appModule, module { single<PhotoLibrary> { InMemoryPhotoLibrary() } }) }) {
+            KoinApplication(application = { modules(appModule, module {
+                single<PhotoLibrary> { InMemoryPhotoLibrary() }
+                single<PrintQueueStore> { InMemoryPrintQueueStore() }
+            }) }) {
                 Box(Modifier.size(width.dp, height.dp)) { App() }
             }
         }
@@ -37,7 +42,7 @@ class AppNavigationTest {
 
         nav("Print").performClick()
         nav("Print").assertIsSelected()
-        onNodeWithText("Example:", substring = true).assertExists()
+        onNodeWithText("Nothing to print", substring = true).assertExists()
 
         nav("Settings").performClick()
         onNodeWithText("Printer, photo sizes", substring = true).assertExists()
