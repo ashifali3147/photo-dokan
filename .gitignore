@@ -1,0 +1,65 @@
+# ---- Gradle / Kotlin ----
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+.kotlin/
+*.class
+*.log
+local.properties
+
+# ---- Android ----
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+.externalNativeBuild/
+.cxx/
+*.jks
+*.keystore
+google-services.json
+
+# ---- IDE ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.fleet/
+out/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- AI assistant files (keep out of the repo) ----
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+.mcp.json
+AGENTS.md
+GEMINI.md
+.gemini/
+.cursor/
+.cursorrules
+.cursorignore
+.windsurf/
+.windsurfrules
+.clinerules
+.cline/
+.roo/
+.roomodes
+.aider*
+.continue/
+.codeium/
+.tabnine/
+.github/copilot-instructions.md
+.github/instructions/
+.junie/
+.ai/
+
+# ---- Local data (never commit customer photos or models) ----
+/photos/
+/test-photos/
+*.onnx

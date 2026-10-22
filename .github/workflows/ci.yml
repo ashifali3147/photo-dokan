@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Core tests
+        run: ./gradlew :shared:core:desktopTest --stacktrace
+      - name: Build desktop and Android
+        run: ./gradlew :app-desktop:compileKotlin :app-android:assembleDebug --stacktrace
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: photo-dokan-debug-apk
+          path: app-android/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+  windows-installer:
+    name: Windows installer (MSI)
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Package MSI
+        run: ./gradlew :app-desktop:packageMsi --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: photo-dokan-msi
+          path: app-desktop/build/compose/binaries/main/msi/*.msi
+          if-no-files-found: error
