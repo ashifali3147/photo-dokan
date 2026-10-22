@@ -1,5 +1,6 @@
 package com.tlw.photodokan.print
 
+import com.tlw.photodokan.core.geometry.RectMm
 import com.tlw.photodokan.core.geometry.mmToPoints
 import com.tlw.photodokan.core.model.Order
 import com.tlw.photodokan.core.model.SheetState
@@ -11,6 +12,8 @@ import org.apache.pdfbox.cos.COSName
 import org.apache.pdfbox.pdmodel.PDPage
 import org.apache.pdfbox.pdmodel.graphics.image.PDImage
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject
+import org.apache.pdfbox.text.PDFTextStripper
+import org.apache.pdfbox.text.TextPosition
 import java.awt.Color
 import java.awt.geom.Point2D
 import java.awt.image.BufferedImage
@@ -86,6 +89,36 @@ class PdfBoxRendererTest {
     }
 
     @Test
+    fun boxOutlineMeasuresExactlyItsRect() {
+        val square = RectMm(40.0, 50.0, 100.0, 100.0)
+        val pdf = renderer.render(PrintDocument(listOf(PrintPage(template.paper, listOf(PageItem.Box(square))))))
+        val box = Loader.loadPDF(pdf).use { Recorder(it.getPage(0)).also(Recorder::run).rects }.single()
+
+        close(mmToPoints(40.0), box.x)
+        close(mmToPoints(template.paper.height) - mmToPoints(150.0), box.y)
+        close(283.4646, box.width)
+        close(283.4646, box.height)
+    }
+
+    @Test
+    fun textAppearsAtItsBaseline() {
+        val text = PageItem.Text(x = 20.0, baselineY = 30.0, sizeMm = 4.0, text = "100 × 100 mm ±0.5")
+        val pdf = renderer.render(PrintDocument(listOf(PrintPage(template.paper, listOf(text)))))
+        val positions = mutableListOf<TextPosition>()
+        val stripper = object : PDFTextStripper() {
+            override fun writeString(string: String, textPositions: List<TextPosition>) {
+                positions += textPositions
+                super.writeString(string, textPositions)
+            }
+        }
+        val extracted = Loader.loadPDF(pdf).use(stripper::getText)
+
+        assertEquals(text.text, extracted.trim())
+        close(mmToPoints(20.0), positions.first().xDirAdj.toDouble(), 0.05)
+        close(mmToPoints(30.0), positions.first().yDirAdj.toDouble(), 0.05)
+    }
+
+    @Test
     fun overflowBecomesASecondPage() {
         val orders = listOf(Order("A", "0001", 30), Order("B", "0002", 15))
         Loader.loadPDF(render(orders)).use { assertEquals(2, it.numberOfPages) }
@@ -105,12 +138,14 @@ class PdfBoxRendererTest {
 
     private data class DrawnImage(val x: Double, val y: Double, val width: Double, val height: Double)
     private data class DrawnLine(val x1: Double, val y1: Double, val x2: Double, val y2: Double)
+    private data class DrawnRect(val x: Double, val y: Double, val width: Double, val height: Double)
 
     /** Records where images and line segments end up on the page, in PDF points. */
     private class Recorder(page: PDPage) : PDFGraphicsStreamEngine(page) {
         private val page = page
         val images = mutableListOf<DrawnImage>()
         val lines = mutableListOf<DrawnLine>()
+        val rects = mutableListOf<DrawnRect>()
         private var current = Point2D.Float()
 
         fun run() = processPage(page)
@@ -126,7 +161,9 @@ class PdfBoxRendererTest {
             current = Point2D.Float(x, y)
         }
         override fun getCurrentPoint(): Point2D = current
-        override fun appendRectangle(p0: Point2D, p1: Point2D, p2: Point2D, p3: Point2D) = Unit
+        override fun appendRectangle(p0: Point2D, p1: Point2D, p2: Point2D, p3: Point2D) {
+            rects += DrawnRect(p0.x, p0.y, p2.x - p0.x, p2.y - p0.y)
+        }
         override fun clip(windingRule: Int) = Unit
         override fun curveTo(x1: Float, y1: Float, x2: Float, y2: Float, x3: Float, y3: Float) = Unit
         override fun closePath() = Unit

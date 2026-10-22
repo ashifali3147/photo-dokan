@@ -5,6 +5,8 @@ import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDPage
 import org.apache.pdfbox.pdmodel.PDPageContentStream
 import org.apache.pdfbox.pdmodel.common.PDRectangle
+import org.apache.pdfbox.pdmodel.font.PDType1Font
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts
 import org.apache.pdfbox.pdmodel.graphics.image.JPEGFactory
 import java.io.ByteArrayOutputStream
 
@@ -16,6 +18,7 @@ class PdfBoxRenderer : PdfRenderer {
 
     override fun render(document: PrintDocument): ByteArray =
         PDDocument().use { pdf ->
+            val font = PDType1Font(Standard14Fonts.FontName.HELVETICA)
             for (page in document.pages) {
                 val pageHeight = mmToPoints(page.paper.height)
                 val pdPage = PDPage(PDRectangle(mmToPoints(page.paper.width).toFloat(), pageHeight.toFloat()))
@@ -41,6 +44,26 @@ class PdfBoxRenderer : PdfRenderer {
                                 content.moveTo(mmToPoints(l.x1).toFloat(), (pageHeight - mmToPoints(l.y1)).toFloat())
                                 content.lineTo(mmToPoints(l.x2).toFloat(), (pageHeight - mmToPoints(l.y2)).toFloat())
                                 content.stroke()
+                            }
+                            is PageItem.Box -> {
+                                val r = item.rect
+                                content.setLineWidth(mmToPoints(item.widthMm).toFloat())
+                                content.setStrokingColor(item.gray.toFloat())
+                                content.addRect(
+                                    mmToPoints(r.x).toFloat(),
+                                    (pageHeight - mmToPoints(r.bottom)).toFloat(),
+                                    mmToPoints(r.width).toFloat(),
+                                    mmToPoints(r.height).toFloat(),
+                                )
+                                content.stroke()
+                            }
+                            is PageItem.Text -> {
+                                content.beginText()
+                                content.setFont(font, mmToPoints(item.sizeMm).toFloat())
+                                content.setNonStrokingColor(item.gray.toFloat())
+                                content.newLineAtOffset(mmToPoints(item.x).toFloat(), (pageHeight - mmToPoints(item.baselineY)).toFloat())
+                                content.showText(item.text)
+                                content.endText()
                             }
                         }
                     }
