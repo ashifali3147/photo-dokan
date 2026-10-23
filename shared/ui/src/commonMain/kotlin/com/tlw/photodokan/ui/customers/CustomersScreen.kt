@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -94,6 +95,16 @@ fun CustomersScreen(modifier: Modifier = Modifier, viewModel: CustomersViewModel
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (state.edit == null) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { CustomerList(state, viewModel) }
+                    // The editor panel, which shows these side by side, is hidden here.
+                    if (state.busy) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                            Text("Opening photo…")
+                        }
+                    }
+                    state.message?.let {
+                        Text(it, color = if (state.messageIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                    }
                     Button(onClick = pickPhoto, enabled = !state.busy) { Text("Choose photo") }
                 } else {
                     if (state.draft == null) TextButton(onClick = close) { Text("◀ Customers") }

@@ -141,7 +141,14 @@ class CustomersViewModel(
     }
 
     fun import(source: PhotoSource) = launchWork {
-        val original = source.read()
+        val original = try {
+            source.read()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // E.g. a share whose app took back its permission, or a file on a removed card.
+            return@launchWork error("Could not open \"${source.name}\". Choose it with Choose photo instead.")
+        }
         val preview = decodePreview(original)
         if (preview == null) {
             error("\"${source.name}\" is not a photo Photo Dokan can open. Choose a JPEG or PNG photo.")

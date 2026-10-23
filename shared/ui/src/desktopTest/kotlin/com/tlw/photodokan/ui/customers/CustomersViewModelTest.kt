@@ -358,4 +358,13 @@ class CustomersViewModelTest {
         assertNull(state.edit)
         assertEquals(1, state.customers.size)
     }
+
+    @Test
+    fun aPhotoThatCannotBeReadSaysSo() {
+        vm.import(PhotoSource("IMG_7.jpg") { throw SecurityException("Permission Denial: no access to content://media/19") })
+        assertEquals("Could not open \"IMG_7.jpg\". Choose it with Choose photo instead.", state.message)
+        assertTrue(state.messageIsError)
+        assertNull(state.draft)
+        assertFalse(state.busy)
+    }
 }
