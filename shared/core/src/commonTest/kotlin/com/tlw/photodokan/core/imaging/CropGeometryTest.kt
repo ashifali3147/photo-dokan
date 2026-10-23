@@ -135,4 +135,25 @@ class CropGeometryTest {
         assertFailsWith<IllegalArgumentException> { FaceGuide(headTop = 0.8, chin = 0.2) }
         assertTrue(PhotoSizePreset.DEFAULTS.all { it.guide.headTop < it.guide.chin })
     }
+
+    @Test
+    fun sourcePointOfAnUnturnedCropIsAPlainScale() {
+        // A 40 × 20 crop centred at (100, 50) drawn at 80 × 40: two output pixels per photo pixel.
+        val rect = CropRect(100.0, 50.0, 40.0, 20.0, 0.0)
+        val (x0, y0) = CropGeometry.sourcePoint(rect, 80, 40, 0, 0)
+        close(80.25, x0); close(40.25, y0)
+        val (xc, yc) = CropGeometry.sourcePoint(rect, 80, 40, 40, 20)
+        close(100.25, xc); close(50.25, yc)
+    }
+
+    @Test
+    fun sourcePointUndoesAClockwiseTurn() {
+        // Turned a quarter clockwise, 12 o'clock moves to 3: the output's right shows what was above the centre.
+        val rect = CropRect(100.0, 50.0, 20.0, 20.0, 90.0)
+        val (x, y) = CropGeometry.sourcePoint(rect, 20, 20, 19, 10) // right edge, middle row
+        close(100.5, x); close(40.5, y)
+        // ...and the output's top shows what was left of the centre.
+        val (tx, ty) = CropGeometry.sourcePoint(rect, 20, 20, 10, 0)
+        close(90.5, tx); close(49.5, ty)
+    }
 }

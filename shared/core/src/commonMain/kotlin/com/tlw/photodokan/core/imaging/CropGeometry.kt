@@ -90,6 +90,20 @@ object CropGeometry {
         clamp(imageWidth, imageHeight, aspect, crop.copy(rotationDegrees = degrees.coerceIn(-MAX_ROTATION, MAX_ROTATION)))
 
     /** Like coerceIn, but when rounding leaves no room at all it settles in the middle instead of throwing. */
+    /**
+     * The point of the upright photo that the centre of output pixel ([x], [y]) shows when [rect]
+     * is drawn into a [width] × [height] image: the turn and scale the renderer applies, undone.
+     * The reference the platform renderers are checked against.
+     */
+    fun sourcePoint(rect: CropRect, width: Int, height: Int, x: Int, y: Int): Pair<Double, Double> {
+        val k = width / rect.width
+        val dx = (x + 0.5 - width / 2.0) / k
+        val dy = (y + 0.5 - height / 2.0) / k
+        // The photo was turned clockwise (y points down); turn the offset back.
+        val a = rect.rotationDegrees * PI / 180
+        return Pair(rect.centerX + dx * cos(a) + dy * sin(a), rect.centerY - dx * sin(a) + dy * cos(a))
+    }
+
     private fun Double.within(low: Double, high: Double) = if (low > high) (low + high) / 2 else coerceIn(low, high)
 
     /** The largest frame of [aspect] that fits the photo unrotated: crop scale 1. */

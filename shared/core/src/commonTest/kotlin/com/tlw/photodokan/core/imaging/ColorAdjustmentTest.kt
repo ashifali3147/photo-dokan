@@ -82,4 +82,13 @@ class ColorAdjustmentTest {
         val m = ColorAdjustment.matrix(neutral.copy(exposure = 1.0, contrast = 1.0))
         close(128.0, m.apply(64.0, 64.0, 64.0)[0])
     }
+
+    @Test
+    fun applyToUsesTheMatrixOffsetsAndClamps() {
+        val contrast = ColorAdjustment.matrix(neutral.copy(contrast = 1.0)) // ×1.5 around 128
+        val out = ColorAdjustment.applyTo(contrast, doubleArrayOf(128.0, 168.0, 250.0))
+        close(128.0, out[0]); close(188.0, out[1]); close(255.0, out[2])
+        val dark = ColorAdjustment.applyTo(contrast, doubleArrayOf(10.0, 10.0, 10.0))
+        close(0.0, dark[0])
+    }
 }
