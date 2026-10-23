@@ -47,7 +47,18 @@ kotlin {
             implementation(libs.koin.test)
             implementation(libs.kotlinx.coroutines.test)
         }
+        // Runs on a phone or emulator: ./gradlew :shared:ui:connectedDebugAndroidTest
+        val androidInstrumentedTest by getting {
+            kotlin.srcDir("src/renderParityTest/kotlin")
+            dependencies {
+                implementation(libs.kotlin.test.junit)
+                implementation(libs.androidx.test.runner)
+                implementation(libs.androidx.test.junit)
+            }
+        }
         val desktopTest by getting {
+            // Shared with the Android instrumented tests: the same render checks on both platforms.
+            kotlin.srcDir("src/renderParityTest/kotlin")
             dependencies {
                 implementation(compose.desktop.uiTestJUnit4)
                 implementation(compose.desktop.currentOs)
@@ -61,6 +72,7 @@ android {
     compileSdk = libs.versions.android.compileSdk.get().toInt()
     defaultConfig {
         minSdk = libs.versions.android.minSdk.get().toInt()
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
