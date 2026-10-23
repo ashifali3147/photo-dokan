@@ -99,4 +99,22 @@ class PrinterPageTest {
         assertEquals(PaperSizes.A4, page.paper)
         assertNull(a4.problemWith(page))
     }
+
+    @Test
+    fun theCalibrationMovesEveryPosition() {
+        // 1% smaller and 2.54 mm (36 px) left: 25.4 mm lands at 25.146 − 2.54 = 22.606 mm = 320.4 px.
+        val calibrated = a4.copy(calibration = PrintCalibration(scaleX = 0.99, offsetXMm = -2.54))
+        assertEquals(320 - 43, calibrated.x(25.4))
+        assertEquals(a4.y(25.4), calibrated.y(25.4), "Y is not corrected")
+        val slot = calibrated.rect(template.slotRect(0))
+        val expected = (template.photo.width * 0.99 / 25.4 * 360).roundToInt()
+        assertTrue(kotlin.math.abs(slot.width - expected) <= 1, "slot is ${slot.width} px, expected about $expected")
+    }
+
+    @Test
+    fun aCalibrationThatPushesPhotosIntoTheBorderIsRefused() {
+        // The studio sheet starts a few mm from the edge; moving it far up-left reaches the border.
+        val shifted = a4.copy(calibration = PrintCalibration(offsetXMm = -9.0, offsetYMm = -9.0))
+        assertNotNull(shifted.problemWith(sheet()))
+    }
 }

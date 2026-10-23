@@ -20,6 +20,8 @@ data class DeviceRect(val left: Int, val top: Int, val right: Int, val bottom: I
  * Drivers draw from the corner of the printable area, not of the paper, so every position is
  * shifted back by the unprintable [offsetXPx] / [offsetYPx]. Without that shift everything
  * would land a few millimetres too far right and down.
+ *
+ * The [calibration] measured for this printer is applied to every position before that.
  */
 data class PrinterPage(
     val dpiX: Int,
@@ -30,6 +32,7 @@ data class PrinterPage(
     val offsetYPx: Int,
     val printableWidthPx: Int,
     val printableHeightPx: Int,
+    val calibration: PrintCalibration = PrintCalibration.NONE,
 ) {
     init {
         require(dpiX > 0 && dpiY > 0) { "Resolution must be positive, was $dpiX × $dpiY dpi" }
@@ -40,9 +43,9 @@ data class PrinterPage(
     val paper: SizeMm get() = SizeMm(paperWidthPx * MM_PER_INCH / dpiX, paperHeightPx * MM_PER_INCH / dpiY)
 
     /** Paper x in mm to a printer pixel column. Each edge is rounded on its own, so sizes never drift. */
-    fun x(mm: Double): Int = mmToPixels(mm, dpiX.toDouble()).roundToInt() - offsetXPx
+    fun x(mm: Double): Int = mmToPixels(calibration.x(mm), dpiX.toDouble()).roundToInt() - offsetXPx
 
-    fun y(mm: Double): Int = mmToPixels(mm, dpiY.toDouble()).roundToInt() - offsetYPx
+    fun y(mm: Double): Int = mmToPixels(calibration.y(mm), dpiY.toDouble()).roundToInt() - offsetYPx
 
     fun rect(r: RectMm): DeviceRect = DeviceRect(x(r.x), y(r.y), x(r.right), y(r.bottom))
 
@@ -100,6 +103,16 @@ interface SheetPrinter {
      * saved, false when cancelled. Throws [PrintException] with a message for the operator.
      */
     fun choosePhotoSettings(): Boolean = false
+
+    /**
+     * The size and position correction measured for the printer jobs go to; [PrintCalibration.NONE]
+     * when not measured yet. Null when this printer keeps no correction, or until photo settings
+     * are saved: the correction belongs to that paper and quality.
+     */
+    fun calibration(): PrintCalibration? = null
+
+    /** Keeps [calibration] with the photo settings for every later job. Throws [PrintException]. */
+    fun saveCalibration(calibration: PrintCalibration): Unit = throw PrintException("This printer has no size correction.")
 }
 
 enum class PhotoSettings {
