@@ -90,6 +90,27 @@ interface SheetPrinter {
 
     /** Prints every page as one job. Throws [PrintException] with a message for the operator. */
     fun print(document: PrintDocument, jobName: String)
+
+    /** Whether photo settings (paper type, quality) are saved for the printer jobs go to. */
+    fun photoSettings(): PhotoSettings = PhotoSettings.NotSupported
+
+    /**
+     * Shows the printer's own settings window so the operator can pick photo paper and quality,
+     * starting from the saved settings. Blocks until it closes; true when new settings were
+     * saved, false when cancelled. Throws [PrintException] with a message for the operator.
+     */
+    fun choosePhotoSettings(): Boolean = false
+}
+
+enum class PhotoSettings {
+    /** The printer has no settings to save, e.g. a PDF file. */
+    NotSupported,
+
+    /** Nothing saved for this printer yet: jobs use whatever the driver defaults to. */
+    NotSaved,
+
+    /** Every job uses the saved photo paper and quality. */
+    Saved,
 }
 
 class PrintException(message: String) : Exception(message)

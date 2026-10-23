@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.model.Order
 import com.tlw.photodokan.core.model.QueuedOrder
+import com.tlw.photodokan.print.PhotoSettings
 import com.tlw.photodokan.ui.SheetPreview
 import com.tlw.photodokan.ui.orderColor
 import org.koin.compose.viewmodel.koinViewModel
@@ -100,8 +101,10 @@ private fun ColumnScope.Queue(state: PrintState, viewModel: PrintViewModel) {
     }
     state.message?.let { Text(it, color = if (state.messageIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
 
+    if (viewModel.hasPrinter && state.photoSettings != PhotoSettings.NotSupported) PhotoSettingsRow(state, viewModel)
+
     var confirm by remember { mutableStateOf<Confirm?>(null) }
-    val idle = !state.printing
+    val idle = !state.printing && !state.choosingSettings
     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (viewModel.hasPrinter) {
             Button(onClick = { confirm = Confirm.Print }, enabled = idle && queue.orders.isNotEmpty()) { Text("Print") }
@@ -137,6 +140,23 @@ private fun ColumnScope.Queue(state: PrintState, viewModel: PrintViewModel) {
             onDismiss = { confirm = null },
         )
         null -> Unit
+    }
+}
+
+/** Whether photo paper and quality are saved, and the way to choose them. */
+@Composable
+private fun PhotoSettingsRow(state: PrintState, viewModel: PrintViewModel) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val saved = state.photoSettings == PhotoSettings.Saved
+        Text(
+            if (saved) "Photo paper settings saved." else "Photo paper settings not saved yet.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (saved) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = viewModel::choosePhotoSettings, enabled = !state.printing && !state.choosingSettings) {
+            Text(if (state.choosingSettings) "Settings open…" else "Photo settings")
+        }
     }
 }
 
@@ -228,6 +248,9 @@ private fun printInstructions(state: PrintState, capacity: Int): String = buildS
     }
     val more = sheets.size - 1
     if (more > 0) append(if (more == 1) " It needs 1 more blank sheet after that." else " It needs $more more blank sheets after that.")
+    if (state.photoSettings == PhotoSettings.NotSaved) {
+        append("\n\nPhoto paper settings are not saved, so the printer will use its normal paper and quality. Use Photo settings first to avoid wasting a sheet.")
+    }
 }
 
 private fun count(n: Int, noun: String) = if (n == 1) "1 $noun" else "$n ${noun}s"
