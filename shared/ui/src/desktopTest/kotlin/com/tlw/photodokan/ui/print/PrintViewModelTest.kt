@@ -6,8 +6,11 @@ import com.tlw.photodokan.core.model.EditRecipe
 import com.tlw.photodokan.core.model.PrintQueue
 import com.tlw.photodokan.core.model.SheetState
 import com.tlw.photodokan.core.model.SheetTemplate
+import com.tlw.photodokan.print.CalibrationMeasurement
+import com.tlw.photodokan.print.CalibrationSheet
 import com.tlw.photodokan.print.PageItem
 import com.tlw.photodokan.print.PhotoSettings
+import com.tlw.photodokan.print.PrintCalibration
 import com.tlw.photodokan.print.PrintDocument
 import com.tlw.photodokan.print.PrintException
 import com.tlw.photodokan.print.SheetPrinter
@@ -48,7 +51,8 @@ class PrintViewModelTest {
 
     /**
      * Records what it is asked to print, or fails with [failure]. Its settings window "saves"
-     * when [operatorSaves] is set, and cancels otherwise.
+     * when [operatorSaves] is set, and cancels otherwise. Like the Windows printer, it keeps a
+     * size correction only once photo settings are saved.
      */
     private class FakePrinter(val dpi: Double = 100.0, var failure: String? = null) : SheetPrinter {
         val jobs = mutableListOf<Pair<PrintDocument, String>>()
@@ -61,7 +65,13 @@ class PrintViewModelTest {
             failure?.let { throw PrintException(it) }
             jobs += document to jobName
         }
+        var savedCalibration = PrintCalibration.NONE
         override fun photoSettings() = settings
+        override fun calibration() = savedCalibration.takeIf { settings == PhotoSettings.Saved }
+        override fun saveCalibration(calibration: PrintCalibration) {
+            if (settings != PhotoSettings.Saved) throw PrintException("Save the Photo settings first: the size correction goes with them.")
+            savedCalibration = calibration
+        }
         override fun choosePhotoSettings(): Boolean {
             settingsFailure?.let { throw PrintException(it) }
             if (operatorSaves) settings = PhotoSettings.Saved
@@ -312,6 +322,87 @@ class PrintViewModelTest {
         assertTrue(state.messageIsError)
         assertEquals(printer.settingsFailure, state.message)
         assertFalse(state.choosingSettings)
+    }
+
+    /** A printer with photo settings saved, and the Calibrate window open. */
+    private fun startCalibrating(saved: PrintCalibration = PrintCalibration.NONE) {
+        printer.settings = PhotoSettings.Saved
+        printer.savedCalibration = saved
+        start(PrintQueue().add(customer(), 5))
+        vm.refresh()
+        vm.openCalibration()
+    }
+
+    @Test
+    fun calibrationIsOfferedOnceThePhotoSettingsAreSaved() {
+        start()
+        vm.refresh()
+        assertNull(state.calibration)
+        vm.openCalibration()
+        assertFalse(state.calibrating, "nothing to calibrate without photo settings")
+
+        vm.choosePhotoSettings()
+        assertEquals(PrintCalibration.NONE, state.calibration)
+        vm.openCalibration()
+        assertTrue(state.calibrating)
+    }
+
+    @Test
+    fun theCalibrationSheetPrintsWithoutTouchingTheQueue() {
+        startCalibrating()
+        val before = store.saved
+        vm.printCalibrationSheet()
+
+        val (document, jobName) = printer.jobs.single()
+        assertEquals("Photo Dokan calibration sheet", jobName)
+        assertEquals(CalibrationSheet.page().paper, document.pages.single().paper)
+        assertTrue(document.pages.single().items.any { it is PageItem.Box && it.rect == CalibrationSheet.SQUARE })
+        assertEquals(before, store.saved)
+        assertTrue(state.calibrating)
+        assertFalse(state.printing)
+    }
+
+    @Test
+    fun measurementsBecomeTheSavedCorrection() {
+        startCalibrating()
+        vm.saveCalibration("102", "99", "62", "44,05")
+
+        val expected = PrintCalibration.NONE.corrected(CalibrationMeasurement(102.0, 99.0, 62.0, 44.05))
+        assertEquals(expected, printer.savedCalibration)
+        assertEquals(expected, state.calibration)
+        assertFalse(state.calibrating)
+        assertEquals("Size correction saved: ${expected.describe()}. Print the calibration sheet again to check it.", state.message)
+    }
+
+    @Test
+    fun aSecondRoundBuildsOnTheSavedCorrection() {
+        val first = PrintCalibration(scaleX = 0.98, offsetXMm = -0.8)
+        startCalibrating(saved = first)
+        vm.saveCalibration("100.5", "100", "60.2", "45")
+        assertEquals(first.corrected(CalibrationMeasurement(100.5, 100.0, 60.2, 45.0)), printer.savedCalibration)
+    }
+
+    @Test
+    fun missingOrImplausibleNumbersAreRefused() {
+        startCalibrating()
+        vm.saveCalibration("100", "", "60", "45")
+        assertEquals("Enter all four measurements in mm, for example 100.5.", state.calibrationError)
+
+        vm.saveCalibration("1000", "100", "60", "45")
+        assertEquals("The square should be close to 100 mm wide. Check the width measurement.", state.calibrationError)
+
+        assertTrue(state.calibrating, "the window stays open to fix the numbers")
+        assertEquals(PrintCalibration.NONE, printer.savedCalibration)
+    }
+
+    @Test
+    fun theCorrectionCanBeRemoved() {
+        startCalibrating(saved = PrintCalibration(scaleY = 1.01))
+        vm.removeCalibration()
+        assertEquals(PrintCalibration.NONE, printer.savedCalibration)
+        assertEquals(PrintCalibration.NONE, state.calibration)
+        assertEquals("Size correction removed.", state.message)
+        assertFalse(state.calibrating)
     }
 
     @Test

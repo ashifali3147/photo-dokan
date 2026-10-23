@@ -15,7 +15,10 @@ import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.core.packing.PackResult
 import com.tlw.photodokan.core.packing.PackedSheet
 import com.tlw.photodokan.core.library.PhotoLibrary
+import com.tlw.photodokan.print.CalibrationMeasurement
+import com.tlw.photodokan.print.CalibrationSheet
 import com.tlw.photodokan.print.PhotoSettings
+import com.tlw.photodokan.print.PrintCalibration
 import com.tlw.photodokan.print.PrintDocument
 import com.tlw.photodokan.print.PrintException
 import com.tlw.photodokan.print.SheetPrinter
@@ -48,6 +51,12 @@ data class PrintState(
     val photoSettings: PhotoSettings = PhotoSettings.NotSupported,
     /** The printer's settings window is open. */
     val choosingSettings: Boolean = false,
+    /** The size correction saved with the photo settings; null when the printer keeps none. */
+    val calibration: PrintCalibration? = null,
+    /** The Calibrate window is open. */
+    val calibrating: Boolean = false,
+    /** Why the measurements entered in the Calibrate window were not saved. */
+    val calibrationError: String? = null,
     val printing: Boolean = false,
     val message: String? = null,
     val messageIsError: Boolean = false,
@@ -147,8 +156,8 @@ class PrintViewModel(
             _state.update { it.copy(choosingSettings = true, message = null) }
             try {
                 val saved = withContext(work) { printer.choosePhotoSettings() }
-                val status = withContext(work) { printer.photoSettings() }
-                _state.update { it.copy(photoSettings = status) }
+                val (status, calibration) = withContext(work) { printer.photoSettings() to printer.calibration() }
+                _state.update { it.copy(photoSettings = status, calibration = calibration) }
                 if (saved) _state.update { it.copy(message = "Photo settings saved. Every print now uses them.", messageIsError = false) }
             } catch (e: CancellationException) {
                 throw e
@@ -161,6 +170,72 @@ class PrintViewModel(
             }
         }
     }
+
+    fun openCalibration() {
+        if (_state.value.calibration == null) return
+        _state.update { it.copy(calibrating = true, calibrationError = null, message = null) }
+    }
+
+    fun closeCalibration() = _state.update { it.copy(calibrating = false, calibrationError = null) }
+
+    /** Prints the calibration sheet with the photo settings and the current correction. */
+    fun printCalibrationSheet() {
+        val printer = printer ?: return
+        if (_state.value.printing || _state.value.choosingSettings) return
+        viewModelScope.launch {
+            _state.update { it.copy(printing = true, calibrationError = null, message = null) }
+            try {
+                withContext(work) { printer.print(PrintDocument(listOf(CalibrationSheet.page())), "Photo Dokan calibration sheet") }
+                _state.update { it.copy(message = "Calibration sheet printed. Measure it and enter the numbers.", messageIsError = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val text = (e as? PrintException)?.message ?: "Printing failed: ${e.message ?: e::class.simpleName}"
+                _state.update { it.copy(calibrationError = text) }
+            } finally {
+                _state.update { it.copy(printing = false) }
+            }
+        }
+    }
+
+    /**
+     * Works out a new correction from what the operator measured, in mm as typed, on a
+     * calibration sheet printed with the current correction, and saves it. Implausible numbers
+     * are refused with the reason, and the Calibrate window stays open to fix them.
+     */
+    fun saveCalibration(squareWidth: String, squareHeight: String, leftGap: String, topGap: String) {
+        val printer = printer ?: return
+        val current = _state.value.calibration ?: return
+        val numbers = listOf(squareWidth, squareHeight, leftGap, topGap).map(CalibrationMeasurement::parseMm)
+        if (numbers.any { it == null }) return calibrationError("Enter all four measurements in mm, for example 100.5.")
+        val (w, h, left, top) = numbers.map { it!! }
+        val measured = CalibrationMeasurement(w, h, left, top)
+        measured.problem()?.let { return calibrationError(it) }
+        val corrected = runCatching { current.corrected(measured) }.getOrNull()
+            ?: return calibrationError("That correction is larger than any printer needs. Print the calibration sheet again and measure once more.")
+        storeCalibration(corrected, "Size correction saved: ${corrected.describe()}. Print the calibration sheet again to check it.")
+    }
+
+    /** Goes back to printing without any correction. */
+    fun removeCalibration() = storeCalibration(PrintCalibration.NONE, "Size correction removed.")
+
+    private fun storeCalibration(calibration: PrintCalibration, done: String) {
+        val printer = printer ?: return
+        viewModelScope.launch {
+            try {
+                withContext(work) { printer.saveCalibration(calibration) }
+                _state.update {
+                    it.copy(calibration = calibration, calibrating = false, calibrationError = null, message = done, messageIsError = false)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                calibrationError((e as? PrintException)?.message ?: "Could not save the correction: ${e.message ?: e::class.simpleName}")
+            }
+        }
+    }
+
+    private fun calibrationError(text: String) = _state.update { it.copy(calibrationError = text) }
 
     /** A blank sheet went into the printer. */
     fun newSheet() {
@@ -175,11 +250,10 @@ class PrintViewModel(
     fun refresh() = viewModelScope.launch {
         loadPhotos(reload = true)
         val printer = printer ?: return@launch
-        val (name, settings) = withContext(work) {
-            runCatching { printer.printerName() }.getOrNull() to
-                runCatching { printer.photoSettings() }.getOrDefault(PhotoSettings.NotSaved)
-        }
-        _state.update { it.copy(printerName = name, photoSettings = settings) }
+        val name = withContext(work) { runCatching { printer.printerName() }.getOrNull() }
+        val settings = withContext(work) { runCatching { printer.photoSettings() }.getOrDefault(PhotoSettings.NotSaved) }
+        val calibration = withContext(work) { runCatching { printer.calibration() }.getOrNull() }
+        _state.update { it.copy(printerName = name, photoSettings = settings, calibration = calibration) }
     }
 
     private fun renderForPrint(order: QueuedOrder, dpi: Double): ByteArray {
