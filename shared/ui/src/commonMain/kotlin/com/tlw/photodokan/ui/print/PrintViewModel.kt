@@ -15,6 +15,7 @@ import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.core.packing.PackResult
 import com.tlw.photodokan.core.packing.PackedSheet
 import com.tlw.photodokan.core.library.PhotoLibrary
+import com.tlw.photodokan.print.PhotoSettings
 import com.tlw.photodokan.print.PrintDocument
 import com.tlw.photodokan.print.PrintException
 import com.tlw.photodokan.print.SheetPrinter
@@ -43,6 +44,10 @@ data class PrintState(
     val sheetIndex: Int = 0,
     /** The printer jobs go to, as Windows names it; null when unknown or none is set up. */
     val printerName: String? = null,
+    /** Whether photo paper and quality are saved for that printer. */
+    val photoSettings: PhotoSettings = PhotoSettings.NotSupported,
+    /** The printer's settings window is open. */
+    val choosingSettings: Boolean = false,
     val printing: Boolean = false,
     val message: String? = null,
     val messageIsError: Boolean = false,
@@ -99,7 +104,7 @@ class PrintViewModel(
     fun print() {
         val printer = printer ?: return
         val job = _state.value.queue
-        if (job.orders.isEmpty() || _state.value.printing) return
+        if (job.orders.isEmpty() || _state.value.printing || _state.value.choosingSettings) return
         viewModelScope.launch {
             _state.update { it.copy(printing = true, message = null) }
             try {
@@ -131,6 +136,32 @@ class PrintViewModel(
         _state.update { it.copy(message = "Marked ${photosText(before.queue.copies)} as printed. ${nextSheetText()}", messageIsError = false) }
     }
 
+    /**
+     * Opens the printer's own settings window so the operator can pick photo paper and quality
+     * once; every later print uses them.
+     */
+    fun choosePhotoSettings() {
+        val printer = printer ?: return
+        if (_state.value.printing || _state.value.choosingSettings) return
+        viewModelScope.launch {
+            _state.update { it.copy(choosingSettings = true, message = null) }
+            try {
+                val saved = withContext(work) { printer.choosePhotoSettings() }
+                val status = withContext(work) { printer.photoSettings() }
+                _state.update { it.copy(photoSettings = status) }
+                if (saved) _state.update { it.copy(message = "Photo settings saved. Every print now uses them.", messageIsError = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: PrintException) {
+                error(e.message ?: "Could not open the printer settings.")
+            } catch (e: Exception) {
+                error("Could not open the printer settings: ${e.message ?: e::class.simpleName}")
+            } finally {
+                _state.update { it.copy(choosingSettings = false) }
+            }
+        }
+    }
+
     /** A blank sheet went into the printer. */
     fun newSheet() {
         orders.update { it.newSheet() }
@@ -138,13 +169,17 @@ class PrintViewModel(
     }
 
     /**
-     * Reads the photos and the printer name again, e.g. after a customer's crop was saved or the
-     * default printer changed.
+     * Reads the photos, the printer name and its photo settings again, e.g. after a customer's
+     * crop was saved or the default printer changed.
      */
     fun refresh() = viewModelScope.launch {
         loadPhotos(reload = true)
-        val name = printer?.let { p -> withContext(work) { runCatching { p.printerName() }.getOrNull() } }
-        _state.update { it.copy(printerName = name) }
+        val printer = printer ?: return@launch
+        val (name, settings) = withContext(work) {
+            runCatching { printer.printerName() }.getOrNull() to
+                runCatching { printer.photoSettings() }.getOrDefault(PhotoSettings.NotSaved)
+        }
+        _state.update { it.copy(printerName = name, photoSettings = settings) }
     }
 
     private fun renderForPrint(order: QueuedOrder, dpi: Double): ByteArray {

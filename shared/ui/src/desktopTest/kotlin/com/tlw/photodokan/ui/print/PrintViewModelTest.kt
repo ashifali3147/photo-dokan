@@ -7,6 +7,7 @@ import com.tlw.photodokan.core.model.PrintQueue
 import com.tlw.photodokan.core.model.SheetState
 import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.print.PageItem
+import com.tlw.photodokan.print.PhotoSettings
 import com.tlw.photodokan.print.PrintDocument
 import com.tlw.photodokan.print.PrintException
 import com.tlw.photodokan.print.SheetPrinter
@@ -45,14 +46,26 @@ class PrintViewModelTest {
         library.saveEdit(it, EditRecipe(presetId = "studio-slot"), jpeg)
     }
 
-    /** Records what it is asked to print, or fails with [failure]. */
+    /**
+     * Records what it is asked to print, or fails with [failure]. Its settings window "saves"
+     * when [operatorSaves] is set, and cancels otherwise.
+     */
     private class FakePrinter(val dpi: Double = 100.0, var failure: String? = null) : SheetPrinter {
         val jobs = mutableListOf<Pair<PrintDocument, String>>()
+        var settings = PhotoSettings.NotSaved
+        var operatorSaves = true
+        var settingsFailure: String? = null
         override fun printerName() = "EPSON L3360 Series"
         override fun photoDpi() = dpi
         override fun print(document: PrintDocument, jobName: String) {
             failure?.let { throw PrintException(it) }
             jobs += document to jobName
+        }
+        override fun photoSettings() = settings
+        override fun choosePhotoSettings(): Boolean {
+            settingsFailure?.let { throw PrintException(it) }
+            if (operatorSaves) settings = PhotoSettings.Saved
+            return operatorSaves
         }
     }
 
@@ -256,6 +269,52 @@ class PrintViewModelTest {
     }
 
     @Test
+    fun theScreenKnowsWhetherPhotoSettingsAreSaved() {
+        start()
+        vm.refresh()
+        assertEquals(PhotoSettings.NotSaved, state.photoSettings)
+
+        printer.settings = PhotoSettings.Saved
+        vm.refresh()
+        assertEquals(PhotoSettings.Saved, state.photoSettings)
+    }
+
+    @Test
+    fun choosingPhotoSettingsSavesThem() {
+        start()
+        vm.refresh()
+        vm.choosePhotoSettings()
+
+        assertEquals(PhotoSettings.Saved, state.photoSettings)
+        assertEquals("Photo settings saved. Every print now uses them.", state.message)
+        assertFalse(state.messageIsError)
+        assertFalse(state.choosingSettings)
+    }
+
+    @Test
+    fun cancellingTheSettingsWindowChangesNothing() {
+        start()
+        vm.refresh()
+        printer.operatorSaves = false
+        vm.choosePhotoSettings()
+
+        assertEquals(PhotoSettings.NotSaved, state.photoSettings)
+        assertNull(state.message)
+        assertFalse(state.choosingSettings)
+    }
+
+    @Test
+    fun aSettingsProblemSaysWhy() {
+        start()
+        printer.settingsFailure = "Could not open the printer \"EPSON L3360 Series\". Check it is switched on."
+        vm.choosePhotoSettings()
+
+        assertTrue(state.messageIsError)
+        assertEquals(printer.settingsFailure, state.message)
+        assertFalse(state.choosingSettings)
+    }
+
+    @Test
     fun withoutAPrinterSheetsAreMarkedByHand() {
         start(PrintQueue().add(customer(), 5), withPrinter = false)
         assertFalse(vm.hasPrinter)
@@ -264,6 +323,9 @@ class PrintViewModelTest {
         assertEquals(1, state.queue.orders.size)
         vm.refresh()
         assertNull(state.printerName)
+        assertEquals(PhotoSettings.NotSupported, state.photoSettings)
+        vm.choosePhotoSettings()
+        assertNull(state.message)
     }
 
     @Test
