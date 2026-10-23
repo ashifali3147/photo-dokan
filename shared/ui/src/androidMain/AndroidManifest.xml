@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Choosing photos still works on a device without a camera. -->
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
+    <application>
+        <activity
+            android:name="com.tlw.photodokan.ui.photo.CameraActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+    </application>
+</manifest>
