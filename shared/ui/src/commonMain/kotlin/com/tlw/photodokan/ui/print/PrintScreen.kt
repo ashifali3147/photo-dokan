@@ -108,6 +108,18 @@ private fun ColumnScope.Queue(state: PrintState, viewModel: PrintViewModel) {
     if (viewModel.hasPrinter && state.photoSettings != PhotoSettings.NotSupported) PhotoSettingsRow(state, viewModel)
     if (state.calibrating) CalibrationDialog(state, viewModel)
 
+    val pickPdf = if (viewModel.canPrintPdf) rememberPdfPicker(viewModel::openPdf) else null
+    state.pendingPdf?.let { pending ->
+        ConfirmDialog(
+            title = "Print \"${pending.name}\"?",
+            text = "${count(pending.pages, "page")} from the phone. Put in the sheet the phone asked for, the same way round as last time. " +
+                "This PC's own queue and sheet don't change.",
+            action = "Print",
+            onConfirm = viewModel::printPdf,
+            onDismiss = viewModel::cancelPdf,
+        )
+    }
+
     var confirm by remember { mutableStateOf<Confirm?>(null) }
     val idle = !state.printing && !state.choosingSettings
     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -116,6 +128,7 @@ private fun ColumnScope.Queue(state: PrintState, viewModel: PrintViewModel) {
             OutlinedButton(onClick = { confirm = Confirm.NewSheet }, enabled = idle && queue.sheet.usedSlots.isNotEmpty()) { Text("New sheet") }
             // For a sheet printed some other way, e.g. from a saved PDF.
             TextButton(onClick = { confirm = Confirm.Printed }, enabled = idle && queue.orders.isNotEmpty()) { Text("Mark as printed") }
+            pickPdf?.let { TextButton(onClick = it, enabled = idle) { Text("Print a PDF from the phone…") } }
         } else if (viewModel.canShare) {
             Button(onClick = viewModel::sharePdf, enabled = idle && queue.orders.isNotEmpty()) {
                 Text(if (state.printing) "Making PDF…" else "Share PDF")

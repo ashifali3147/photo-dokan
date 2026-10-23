@@ -16,6 +16,8 @@ import com.tlw.photodokan.core.model.PrintQueueStore
 import com.tlw.photodokan.library.FilePhotoLibrary
 import com.tlw.photodokan.library.FilePrintQueueStore
 import com.tlw.photodokan.print.FilePrintProfileStore
+import com.tlw.photodokan.print.PdfBoxSheetReader
+import com.tlw.photodokan.print.PdfSheetReader
 import com.tlw.photodokan.print.PdfFilePrinter
 import com.tlw.photodokan.print.SheetPrinter
 import com.tlw.photodokan.print.WindowsGdiPrinter
@@ -37,6 +39,8 @@ private val desktopModule = module {
             PdfFilePrinter(File(appDataDir().toString(), "prints"))
         }
     }
+    // Sheet PDFs shared from the phone, printed here.
+    single<PdfSheetReader> { PdfBoxSheetReader() }
 }
 
 /** The open app window, so the printer's settings window can open over it. */

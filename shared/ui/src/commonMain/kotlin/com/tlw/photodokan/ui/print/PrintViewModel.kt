@@ -20,6 +20,7 @@ import com.tlw.photodokan.print.CalibrationSheet
 import com.tlw.photodokan.print.PhotoSettings
 import com.tlw.photodokan.print.PrintCalibration
 import com.tlw.photodokan.print.PdfRenderer
+import com.tlw.photodokan.print.PdfSheetReader
 import com.tlw.photodokan.print.PrintDocument
 import com.tlw.photodokan.print.PrintException
 import com.tlw.photodokan.print.SheetPrinter
@@ -55,6 +56,8 @@ data class PrintState(
     val choosingSettings: Boolean = false,
     /** The size correction saved with the photo settings; null when the printer keeps none. */
     val calibration: PrintCalibration? = null,
+    /** A sheet PDF from the phone, read and waiting for the operator to confirm printing it. */
+    val pendingPdf: PendingPdf? = null,
     /** The Calibrate window is open. */
     val calibrating: Boolean = false,
     /** Why the measurements entered in the Calibrate window were not saved. */
@@ -73,6 +76,11 @@ data class PrintState(
     val shownSheet: PackedSheet get() = sheets[sheetIndex.coerceIn(sheets.indices)]
 }
 
+/** A sheet PDF from the phone: its file [name] and the pages read from it. */
+class PendingPdf(val name: String, val document: PrintDocument) {
+    val pages: Int get() = document.pages.size
+}
+
 /**
  * The Print screen: the queue of customers to print, where their copies land on the sheet in
  * the printer, printing it, and keeping track of which slots that sheet has used. Without a
@@ -86,12 +94,16 @@ class PrintViewModel(
     private val printer: SheetPrinter? = null,
     private val sharer: SheetSharer? = null,
     private val pdf: PdfRenderer = SimplePdfRenderer(),
+    private val pdfReader: PdfSheetReader? = null,
     private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     val hasPrinter: Boolean get() = printer != null
 
     val canShare: Boolean get() = sharer != null
+
+    /** The PC prints sheet PDFs shared from the phone. */
+    val canPrintPdf: Boolean get() = printer != null && pdfReader != null
 
     private val _state = MutableStateFlow(stateFor(orders.queue.value))
     val state: StateFlow<PrintState> = _state.asStateFlow()
@@ -169,6 +181,54 @@ class PrintViewModel(
                 error(e.message ?: "The PDF could not be made.")
             } catch (e: Exception) {
                 error("The PDF could not be made: ${e.message ?: e::class.simpleName}")
+            } finally {
+                _state.update { it.copy(printing = false) }
+            }
+        }
+    }
+
+    /** Reads a sheet PDF from the phone; printing waits for the operator to confirm. */
+    fun openPdf(file: PickedFile) {
+        val reader = pdfReader ?: return
+        if (_state.value.printing) return
+        viewModelScope.launch {
+            _state.update { it.copy(message = null) }
+            try {
+                val document = withContext(work) { reader.read(file.read()) }
+                _state.update { it.copy(pendingPdf = PendingPdf(file.name, document)) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: PrintException) {
+                error(e.message ?: "The PDF could not be read.")
+            } catch (e: Exception) {
+                error("\"${file.name}\" could not be opened: ${e.message ?: e::class.simpleName}")
+            }
+        }
+    }
+
+    fun cancelPdf() = _state.update { it.copy(pendingPdf = null) }
+
+    /**
+     * Prints the confirmed PDF from the phone, with this printer's photo settings and correction.
+     * The phone keeps track of that sheet, so this PC's queue and sheet don't change.
+     */
+    fun printPdf() {
+        val printer = printer ?: return
+        val pending = _state.value.pendingPdf ?: return
+        if (_state.value.printing) return
+        viewModelScope.launch {
+            _state.update { it.copy(pendingPdf = null, printing = true, message = null) }
+            try {
+                // Shown in the Windows print queue; the phone's file names already start with "Photo Dokan".
+                val name = pending.name.removeSuffix(".pdf").let { if (it.startsWith("Photo Dokan")) it else "Photo Dokan $it" }
+                withContext(work) { printer.print(pending.document, name) }
+                _state.update { it.copy(message = "Printed \"${pending.name}\". Press Mark as printed on the phone.", messageIsError = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: PrintException) {
+                error(e.message ?: "Printing failed.")
+            } catch (e: Exception) {
+                error("Printing failed: ${e.message ?: e::class.simpleName}")
             } finally {
                 _state.update { it.copy(printing = false) }
             }
