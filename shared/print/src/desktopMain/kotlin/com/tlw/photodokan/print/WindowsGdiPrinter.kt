@@ -20,8 +20,9 @@ import kotlin.math.roundToInt
  * never from "fit to page".
  *
  * Prints to the Windows default printer. Paper type and quality come from the photo settings
- * the operator chose once in the driver's own window and [profiles] keeps; without them the
- * driver's defaults apply. [owner] is the app window that settings window opens over.
+ * the operator chose once in the driver's own window and [profiles] keeps, together with the
+ * size correction measured on them; without them the driver's defaults apply. [owner] is the
+ * app window that settings window opens over.
  */
 class WindowsGdiPrinter(
     private val profiles: FilePrintProfileStore,
@@ -44,7 +45,7 @@ class WindowsGdiPrinter(
     override fun photoDpi(): Double {
         val name = printerName() ?: return FALLBACK_DPI
         // A problem with the saved settings is reported when printing; here the default will do.
-        val devMode = runCatching { photoDevMode(name) }.getOrNull()
+        val devMode = runCatching { photoDevMode(name, savedProfile(name)) }.getOrNull()
         val ic = gdi.CreateICW(null, WString(name), null, devMode) ?: return FALLBACK_DPI
         try {
             val dpi = gdi.GetDeviceCaps(ic, G.LOGPIXELSX)
@@ -56,24 +57,34 @@ class WindowsGdiPrinter(
 
     override fun photoSettings(): PhotoSettings {
         val name = printerName() ?: return PhotoSettings.NotSaved
-        return if (profiles.load()?.isFor(name) == true) PhotoSettings.Saved else PhotoSettings.NotSaved
+        return if (savedProfile(name) != null) PhotoSettings.Saved else PhotoSettings.NotSaved
     }
 
     override fun choosePhotoSettings(): Boolean {
         val name = printerName() ?: throw PrintException(NO_PRINTER)
-        val saved = profiles.load()?.takeIf { it.isFor(name) }
+        val saved = savedProfile(name)
         val window = owner()?.let { runCatching { Native.getWindowPointer(it) }.getOrNull() }
         val chosen = withPrinter(name) { documentProperties(it, name, saved?.devMode, prompt = true, window) } ?: return false
-        profiles.save(PrintProfile(name, chosen))
+        // The correction was measured on this printer; keep it until it is measured again.
+        profiles.save(PrintProfile(name, chosen, saved?.calibration ?: PrintCalibration.NONE))
         return true
+    }
+
+    override fun calibration(): PrintCalibration? = printerName()?.let(::savedProfile)?.calibration
+
+    override fun saveCalibration(calibration: PrintCalibration) {
+        val name = printerName() ?: throw PrintException(NO_PRINTER)
+        val saved = savedProfile(name) ?: throw PrintException("Save the Photo settings first: the size correction goes with them.")
+        profiles.save(PrintProfile(name, saved.devMode, calibration))
     }
 
     override fun print(document: PrintDocument, jobName: String) {
         val name = printerName() ?: throw PrintException(NO_PRINTER)
-        val devMode = photoDevMode(name)
+        val profile = savedProfile(name)
+        val devMode = photoDevMode(name, profile)
         val hdc = gdi.CreateDCW(null, WString(name), null, devMode) ?: throw PrintException("Could not open the printer \"$name\". Check it is switched on.")
         try {
-            val page = pageOf(hdc)
+            val page = pageOf(hdc, profile?.calibration ?: PrintCalibration.NONE)
             // Check every page before anything prints: half a job on photo paper is worse than none.
             for (p in document.pages) page.problemWith(p)?.let { throw PrintException(it) }
 
@@ -95,12 +106,15 @@ class WindowsGdiPrinter(
         }
     }
 
+    /** The profile saved for [name]; another printer's is never used. */
+    private fun savedProfile(name: String): PrintProfile? = profiles.load()?.takeIf { it.isFor(name) }
+
     /**
-     * The saved photo settings for [name], passed through the driver once more so that settings
+     * The [saved] photo settings for [name], passed through the driver once more so that settings
      * saved before a driver update still suit it. Null when none are saved for this printer.
      */
-    private fun photoDevMode(name: String): Memory? {
-        val saved = profiles.load()?.takeIf { it.isFor(name) } ?: return null
+    private fun photoDevMode(name: String, saved: PrintProfile?): Memory? {
+        saved ?: return null
         val merged = withPrinter(name) { documentProperties(it, name, saved.devMode, prompt = false, window = null) }
             ?: throw PrintException("The saved photo settings no longer suit \"$name\". Choose Photo settings again.")
         return Memory(merged.size.toLong()).apply { write(0, merged, 0, merged.size) }
@@ -137,7 +151,7 @@ class WindowsGdiPrinter(
         }
     }
 
-    private fun pageOf(hdc: Pointer): PrinterPage {
+    private fun pageOf(hdc: Pointer, calibration: PrintCalibration): PrinterPage {
         fun cap(index: Int) = gdi.GetDeviceCaps(hdc, index)
         return PrinterPage(
             dpiX = cap(G.LOGPIXELSX),
@@ -148,6 +162,7 @@ class WindowsGdiPrinter(
             offsetYPx = cap(G.PHYSICALOFFSETY),
             printableWidthPx = cap(G.HORZRES),
             printableHeightPx = cap(G.VERTRES),
+            calibration = calibration,
         )
     }
 

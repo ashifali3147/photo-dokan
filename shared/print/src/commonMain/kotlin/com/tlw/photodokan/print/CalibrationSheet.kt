@@ -19,7 +19,8 @@ object CalibrationSheet {
     internal const val LEFT_RULER_X = 10.0
     internal const val LEFT_RULER_FROM = 40
     internal const val LEFT_RULER_TO = 280
-    internal val SQUARE = RectMm(60.0, 45.0, 100.0, 100.0)
+    /** The square the operator measures; its size and distance from the paper edges are what a correction is worked out from. */
+    val SQUARE = RectMm(60.0, 45.0, 100.0, 100.0)
 
     private const val TICK_MM = 1.5
     private const val TICK_HALF = 3.0
@@ -32,11 +33,11 @@ object CalibrationSheet {
 
     private val INSTRUCTIONS = listOf(
         "How to check:",
-        "1. Print at Actual size (100%), not Fit to page, with the photo paper profile.",
-        "2. Measure the square with a steel ruler: each side must be 100 mm (±0.5 mm).",
-        "3. Hold the ruler against the left paper edge: top ruler marks must match it.",
-        "4. Hold the ruler against the top paper edge: left ruler marks must match it.",
-        "5. Enter the measurements in Photo Dokan to correct this printer.",
+        "1. Print from Photo Dokan (Print > Calibrate) on the paper you print photos on.",
+        "2. With a steel ruler, measure the square's width and height: each should be 100 mm (±0.5 mm).",
+        "3. Measure from the left edge of the paper to the square: it should be 60 mm.",
+        "4. Measure from the top edge of the paper to the square: it should be 45 mm.",
+        "5. Enter the four numbers in Photo Dokan. The rulers above help check the result.",
     )
 
     fun page(presets: List<PhotoSizePreset> = PhotoSizePreset.DEFAULTS): PrintPage {

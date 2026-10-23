@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -28,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,10 +42,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.model.Order
 import com.tlw.photodokan.core.model.QueuedOrder
+import com.tlw.photodokan.print.CalibrationSheet
 import com.tlw.photodokan.print.PhotoSettings
 import com.tlw.photodokan.ui.SheetPreview
 import com.tlw.photodokan.ui.orderColor
@@ -102,6 +106,7 @@ private fun ColumnScope.Queue(state: PrintState, viewModel: PrintViewModel) {
     state.message?.let { Text(it, color = if (state.messageIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
 
     if (viewModel.hasPrinter && state.photoSettings != PhotoSettings.NotSupported) PhotoSettingsRow(state, viewModel)
+    if (state.calibrating) CalibrationDialog(state, viewModel)
 
     var confirm by remember { mutableStateOf<Confirm?>(null) }
     val idle = !state.printing && !state.choosingSettings
@@ -143,9 +148,10 @@ private fun ColumnScope.Queue(state: PrintState, viewModel: PrintViewModel) {
     }
 }
 
-/** Whether photo paper and quality are saved, and the way to choose them. */
+/** Whether photo paper and quality are saved, and the size correction measured with them. */
 @Composable
 private fun PhotoSettingsRow(state: PrintState, viewModel: PrintViewModel) {
+    val idle = !state.printing && !state.choosingSettings
     Row(verticalAlignment = Alignment.CenterVertically) {
         val saved = state.photoSettings == PhotoSettings.Saved
         Text(
@@ -154,11 +160,69 @@ private fun PhotoSettingsRow(state: PrintState, viewModel: PrintViewModel) {
             color = if (saved) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = viewModel::choosePhotoSettings, enabled = !state.printing && !state.choosingSettings) {
+        TextButton(onClick = viewModel::choosePhotoSettings, enabled = idle) {
             Text(if (state.choosingSettings) "Settings open…" else "Photo settings")
         }
     }
+    // Measured on the photo paper, so offered once the photo settings are saved.
+    state.calibration?.let { calibration ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Size correction: ${calibration.describe().replaceFirstChar { it.lowercase() }}.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = viewModel::openCalibration, enabled = idle) { Text("Calibrate") }
+        }
+    }
 }
+
+/** Print the calibration sheet, measure it with a ruler, and type in the four numbers. */
+@Composable
+private fun CalibrationDialog(state: PrintState, viewModel: PrintViewModel) {
+    val square = CalibrationSheet.SQUARE
+    var width by remember { mutableStateOf("") }
+    var height by remember { mutableStateOf("") }
+    var left by remember { mutableStateOf("") }
+    var top by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = viewModel::closeCalibration,
+        title = { Text("Calibrate the printer") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("1. Put one sheet of photo paper in the printer and print the calibration sheet.")
+                OutlinedButton(onClick = viewModel::printCalibrationSheet, enabled = !state.printing) {
+                    Text(if (state.printing) "Printing…" else "Print calibration sheet")
+                }
+                Text("2. Measure the big square on it with a steel ruler, and type the numbers in mm.")
+                MeasurementField("Square width (should be ${square.width.toInt()})", width) { width = it }
+                MeasurementField("Square height (should be ${square.height.toInt()})", height) { height = it }
+                MeasurementField("Left edge of paper to square (should be ${square.x.toInt()})", left) { left = it }
+                MeasurementField("Top edge of paper to square (should be ${square.y.toInt()})", top) { top = it }
+                state.calibrationError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (state.calibration?.isNone == false) {
+                    TextButton(onClick = viewModel::removeCalibration, contentPadding = PaddingValues(0.dp)) { Text("Remove the saved correction") }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { viewModel.saveCalibration(width, height, left, top) }, enabled = !state.printing) { Text("Save correction") }
+        },
+        dismissButton = { TextButton(onClick = viewModel::closeCalibration) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun MeasurementField(label: String, value: String, onChange: (String) -> Unit) = OutlinedTextField(
+    value = value,
+    onValueChange = { text -> onChange(text.filter { it.isDigit() || it == '.' || it == ',' }.take(6)) },
+    label = { Text(label) },
+    suffix = { Text("mm") },
+    singleLine = true,
+    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+    modifier = Modifier.fillMaxWidth(),
+)
 
 @Composable
 private fun OrderRow(order: QueuedOrder, color: Color, viewModel: PrintViewModel) {

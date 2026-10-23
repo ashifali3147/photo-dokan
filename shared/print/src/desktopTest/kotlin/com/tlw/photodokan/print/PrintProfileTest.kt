@@ -1,5 +1,6 @@
 package com.tlw.photodokan.print
 
+import java.io.DataOutputStream
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.AfterTest
@@ -87,6 +88,30 @@ class PrintProfileTest {
         assertEquals("EPSON L360 Series", loaded.printerName)
         assertEquals(1020, loaded.devMode.size)
         assertFalse(File(file.path + ".tmp").exists())
+    }
+
+    @Test
+    fun keepsTheCalibrationWithTheSettings() {
+        val calibration = PrintCalibration(scaleX = 0.992, scaleY = 1.004, offsetXMm = -0.7, offsetYMm = 1.3)
+        FilePrintProfileStore(file).save(PrintProfile("EPSON L3360 Series", devMode(), calibration))
+        assertEquals(calibration, FilePrintProfileStore(file).load()!!.calibration)
+        assertEquals(PrintCalibration.NONE, PrintProfile("EPSON L3360 Series", devMode()).calibration)
+    }
+
+    @Test
+    fun loadsProfilesSavedBeforeCalibrationExisted() {
+        val bytes = devMode()
+        file.parentFile.mkdirs()
+        DataOutputStream(file.outputStream()).use { out ->
+            out.writeInt(0x50445050)
+            out.writeInt(1)
+            out.writeUTF("EPSON L3360 Series")
+            out.writeInt(bytes.size)
+            out.write(bytes)
+        }
+        val loaded = FilePrintProfileStore(file).load()!!
+        assertContentEquals(bytes, loaded.devMode)
+        assertEquals(PrintCalibration.NONE, loaded.calibration)
     }
 
     @Test
