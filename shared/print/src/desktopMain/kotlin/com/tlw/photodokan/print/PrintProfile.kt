@@ -10,10 +10,15 @@ import java.nio.file.StandardCopyOption
 
 /**
  * The photo settings chosen once in the printer's own settings window: the Windows DEVMODE the
- * driver returned, kept as it is, for the printer it belongs to. Another printer's DEVMODE must
- * never be handed to a driver, so [printerName] is checked before every use.
+ * driver returned, kept as it is, for the printer it belongs to, and the [calibration] measured
+ * with them. Another printer's DEVMODE must never be handed to a driver, so [printerName] is
+ * checked before every use.
  */
-class PrintProfile(val printerName: String, val devMode: ByteArray) {
+class PrintProfile(
+    val printerName: String,
+    val devMode: ByteArray,
+    val calibration: PrintCalibration = PrintCalibration.NONE,
+) {
     init {
         require(printerName.isNotBlank()) { "A print profile needs a printer name" }
         require(DevMode.isWellFormed(devMode)) { "Not a DEVMODE: ${devMode.size} bytes" }
@@ -63,10 +68,18 @@ class FilePrintProfileStore(private val file: File) {
         if (!file.isFile) return null
         return runCatching {
             DataInputStream(ByteArrayInputStream(file.readBytes())).use { input ->
-                if (input.readInt() != MAGIC || input.readInt() != VERSION) return null
+                if (input.readInt() != MAGIC) return null
+                val version = input.readInt()
+                if (version !in 1..VERSION) return null
                 val name = input.readUTF()
                 val devMode = ByteArray(input.readInt()).also(input::readFully)
-                PrintProfile(name, devMode)
+                // Version 1 files were saved before calibration existed.
+                val calibration = if (version >= 2) {
+                    PrintCalibration(input.readDouble(), input.readDouble(), input.readDouble(), input.readDouble())
+                } else {
+                    PrintCalibration.NONE
+                }
+                PrintProfile(name, devMode, calibration)
             }
         }.getOrNull()
     }
@@ -79,6 +92,12 @@ class FilePrintProfileStore(private val file: File) {
                 out.writeUTF(profile.printerName)
                 out.writeInt(profile.devMode.size)
                 out.write(profile.devMode)
+                with(profile.calibration) {
+                    out.writeDouble(scaleX)
+                    out.writeDouble(scaleY)
+                    out.writeDouble(offsetXMm)
+                    out.writeDouble(offsetYMm)
+                }
             }
         }.toByteArray()
         file.parentFile?.mkdirs()
@@ -91,6 +110,6 @@ class FilePrintProfileStore(private val file: File) {
     private companion object {
         /** "PDPP": Photo Dokan print profile. */
         const val MAGIC = 0x50445050
-        const val VERSION = 1
+        const val VERSION = 2
     }
 }
