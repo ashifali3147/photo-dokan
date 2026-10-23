@@ -1,5 +1,6 @@
 package com.tlw.photodokan.desktop
 
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -14,6 +15,7 @@ import com.tlw.photodokan.core.library.PhotoLibrary
 import com.tlw.photodokan.core.model.PrintQueueStore
 import com.tlw.photodokan.library.FilePhotoLibrary
 import com.tlw.photodokan.library.FilePrintQueueStore
+import com.tlw.photodokan.print.FilePrintProfileStore
 import com.tlw.photodokan.print.PdfFilePrinter
 import com.tlw.photodokan.print.SheetPrinter
 import com.tlw.photodokan.print.WindowsGdiPrinter
@@ -28,8 +30,18 @@ private val desktopModule = module {
     single<PhotoLibrary> { FilePhotoLibrary(Path(System.getProperty("user.home"), "Pictures", "Photo Dokan")) }
     single<PrintQueueStore> { FilePrintQueueStore(Path(appDataDir(), "print-queue.json")) }
     // Away from Windows (developing on a Mac) Print saves an actual-size PDF instead.
-    single<SheetPrinter> { if (WindowsGdiPrinter.isAvailable) WindowsGdiPrinter() else PdfFilePrinter(File(appDataDir().toString(), "prints")) }
+    single<SheetPrinter> {
+        if (WindowsGdiPrinter.isAvailable) {
+            WindowsGdiPrinter(FilePrintProfileStore(File(appDataDir().toString(), "photo-print-profile.bin")), owner = { mainWindow })
+        } else {
+            PdfFilePrinter(File(appDataDir().toString(), "prints"))
+        }
+    }
 }
+
+/** The open app window, so the printer's settings window can open over it. */
+@Volatile
+private var mainWindow: java.awt.Window? = null
 
 /** The app's own files: %APPDATA%\Photo Dokan on Windows, ~/.photo-dokan when developing elsewhere. */
 private fun appDataDir(): Path =
@@ -60,6 +72,10 @@ fun main() {
             icon = AppIcon,
             state = windowState,
         ) {
+            DisposableEffect(window) {
+                mainWindow = window
+                onDispose { mainWindow = null }
+            }
             LaunchedEffect(showRequests) {
                 if (showRequests > 0) {
                     windowState.isMinimized = false

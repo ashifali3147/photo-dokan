@@ -1,9 +1,13 @@
 package com.tlw.photodokan.print
 
+import com.sun.jna.Memory
+import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.WString
 import com.sun.jna.ptr.IntByReference
+import com.sun.jna.ptr.PointerByReference
 import com.tlw.photodokan.print.Gdi32.Companion as G
+import java.awt.Window
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferInt
 import java.io.ByteArrayInputStream
@@ -15,12 +19,17 @@ import kotlin.math.roundToInt
  * millimetres and the resolution and unprintable border the driver reports (see [PrinterPage]),
  * never from "fit to page".
  *
- * Prints to the Windows default printer with its current settings. The saved photo-paper
- * profile (paper type and quality) comes with the printer profile task.
+ * Prints to the Windows default printer. Paper type and quality come from the photo settings
+ * the operator chose once in the driver's own window and [profiles] keeps; without them the
+ * driver's defaults apply. [owner] is the app window that settings window opens over.
  */
-class WindowsGdiPrinter : SheetPrinter {
+class WindowsGdiPrinter(
+    private val profiles: FilePrintProfileStore,
+    private val owner: () -> Window? = { null },
+) : SheetPrinter {
 
     private val gdi get() = Win32.gdi
+    private val spool get() = Win32.spool
 
     override fun printerName(): String? {
         val size = IntByReference(0)
@@ -31,9 +40,12 @@ class WindowsGdiPrinter : SheetPrinter {
         return String(buffer, 0, size.value - 1).takeIf { it.isNotBlank() }
     }
 
+    /** The resolution depends on the quality chosen, so it is read with the photo settings applied. */
     override fun photoDpi(): Double {
         val name = printerName() ?: return FALLBACK_DPI
-        val ic = gdi.CreateICW(null, WString(name), null, null) ?: return FALLBACK_DPI
+        // A problem with the saved settings is reported when printing; here the default will do.
+        val devMode = runCatching { photoDevMode(name) }.getOrNull()
+        val ic = gdi.CreateICW(null, WString(name), null, devMode) ?: return FALLBACK_DPI
         try {
             val dpi = gdi.GetDeviceCaps(ic, G.LOGPIXELSX)
             return if (dpi > 0) minOf(dpi, MAX_PHOTO_DPI).toDouble() else FALLBACK_DPI
@@ -42,9 +54,24 @@ class WindowsGdiPrinter : SheetPrinter {
         }
     }
 
+    override fun photoSettings(): PhotoSettings {
+        val name = printerName() ?: return PhotoSettings.NotSaved
+        return if (profiles.load()?.isFor(name) == true) PhotoSettings.Saved else PhotoSettings.NotSaved
+    }
+
+    override fun choosePhotoSettings(): Boolean {
+        val name = printerName() ?: throw PrintException(NO_PRINTER)
+        val saved = profiles.load()?.takeIf { it.isFor(name) }
+        val window = owner()?.let { runCatching { Native.getWindowPointer(it) }.getOrNull() }
+        val chosen = withPrinter(name) { documentProperties(it, name, saved?.devMode, prompt = true, window) } ?: return false
+        profiles.save(PrintProfile(name, chosen))
+        return true
+    }
+
     override fun print(document: PrintDocument, jobName: String) {
-        val name = printerName() ?: throw PrintException("No printer is set up in Windows. Set the photo printer as the default printer.")
-        val hdc = gdi.CreateDCW(null, WString(name), null, null) ?: throw PrintException("Could not open the printer \"$name\". Check it is switched on.")
+        val name = printerName() ?: throw PrintException(NO_PRINTER)
+        val devMode = photoDevMode(name)
+        val hdc = gdi.CreateDCW(null, WString(name), null, devMode) ?: throw PrintException("Could not open the printer \"$name\". Check it is switched on.")
         try {
             val page = pageOf(hdc)
             // Check every page before anything prints: half a job on photo paper is worse than none.
@@ -65,6 +92,48 @@ class WindowsGdiPrinter : SheetPrinter {
             }
         } finally {
             gdi.DeleteDC(hdc)
+        }
+    }
+
+    /**
+     * The saved photo settings for [name], passed through the driver once more so that settings
+     * saved before a driver update still suit it. Null when none are saved for this printer.
+     */
+    private fun photoDevMode(name: String): Memory? {
+        val saved = profiles.load()?.takeIf { it.isFor(name) } ?: return null
+        val merged = withPrinter(name) { documentProperties(it, name, saved.devMode, prompt = false, window = null) }
+            ?: throw PrintException("The saved photo settings no longer suit \"$name\". Choose Photo settings again.")
+        return Memory(merged.size.toLong()).apply { write(0, merged, 0, merged.size) }
+    }
+
+    /**
+     * Asks the driver for its settings with [input] applied, after showing its settings window
+     * over [window] when [prompt] is set. Null when the operator cancelled.
+     */
+    private fun documentProperties(printer: Pointer, name: String, input: ByteArray?, prompt: Boolean, window: Pointer?): ByteArray? {
+        val device = WString(name)
+        val size = spool.DocumentPropertiesW(window, printer, device, null, null, 0)
+        if (size <= 0) throw PrintException("Could not read the settings of \"$name\".")
+        val output = Memory(size.toLong()).apply { clear() }
+        val inputMemory = input?.let { Memory(it.size.toLong()).apply { write(0, it, 0, it.size) } }
+        var mode = Winspool.DM_OUT_BUFFER
+        if (inputMemory != null) mode = mode or Winspool.DM_IN_BUFFER
+        if (prompt) mode = mode or Winspool.DM_IN_PROMPT
+        return when (spool.DocumentPropertiesW(window, printer, device, output, inputMemory, mode)) {
+            Winspool.IDOK -> DevMode.trim(output.getByteArray(0, size))
+                ?: throw PrintException("The printer \"$name\" returned settings that could not be read.")
+            Winspool.IDCANCEL -> null
+            else -> throw PrintException("Could not read the settings of \"$name\".")
+        }
+    }
+
+    private inline fun <T> withPrinter(name: String, block: (Pointer) -> T): T {
+        val handle = PointerByReference()
+        if (!spool.OpenPrinterW(WString(name), handle, null)) throw PrintException("Could not open the printer \"$name\". Check it is switched on.")
+        try {
+            return block(handle.value)
+        } finally {
+            spool.ClosePrinter(handle.value)
         }
     }
 
@@ -161,6 +230,7 @@ class WindowsGdiPrinter : SheetPrinter {
         /** Epson photo modes report 360, 720 or more; beyond 720 dpi a passport photo gains nothing. */
         const val MAX_PHOTO_DPI = 720
         const val FALLBACK_DPI = 300.0
+        private const val NO_PRINTER = "No printer is set up in Windows. Set the photo printer as the default printer."
 
         val isAvailable: Boolean get() = System.getProperty("os.name").orEmpty().startsWith("Windows")
     }

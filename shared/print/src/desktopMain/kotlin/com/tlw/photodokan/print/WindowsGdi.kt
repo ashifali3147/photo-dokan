@@ -5,6 +5,7 @@ import com.sun.jna.Pointer
 import com.sun.jna.Structure
 import com.sun.jna.WString
 import com.sun.jna.ptr.IntByReference
+import com.sun.jna.ptr.PointerByReference
 import com.sun.jna.win32.StdCallLibrary
 
 /** The few Windows GDI calls printing needs. Names and argument order follow the Win32 API. */
@@ -75,6 +76,24 @@ internal interface Gdi32 : StdCallLibrary {
 internal interface Winspool : StdCallLibrary {
     /** With a null buffer, sets [size] to the characters needed, including the terminating zero. */
     fun GetDefaultPrinterW(buffer: CharArray?, size: IntByReference): Boolean
+
+    fun OpenPrinterW(name: WString, printer: PointerByReference, defaults: Pointer?): Boolean
+    fun ClosePrinter(printer: Pointer): Boolean
+
+    /**
+     * With [mode] 0, returns the DEVMODE buffer size the driver needs. Otherwise fills [output]
+     * from [input] merged into the driver's settings, after showing the driver's settings window
+     * when [mode] has [DM_IN_PROMPT]; returns [IDOK], [IDCANCEL] or a negative error.
+     */
+    fun DocumentPropertiesW(window: Pointer?, printer: Pointer, device: WString, output: Pointer?, input: Pointer?, mode: Int): Int
+
+    companion object {
+        const val DM_OUT_BUFFER = 2
+        const val DM_IN_PROMPT = 4
+        const val DM_IN_BUFFER = 8
+        const val IDOK = 1
+        const val IDCANCEL = 2
+    }
 }
 
 internal object Win32 {
