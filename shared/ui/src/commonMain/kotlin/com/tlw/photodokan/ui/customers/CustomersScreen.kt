@@ -24,6 +24,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -50,6 +51,7 @@ import com.tlw.photodokan.ui.editor.CropEditor
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.photo.canDropPhotos
 import com.tlw.photodokan.ui.photo.photoDropTarget
+import com.tlw.photodokan.ui.photo.rememberCamera
 import com.tlw.photodokan.ui.photo.rememberPhotoPicker
 import com.tlw.photodokan.ui.platform.SystemBackHandler
 import com.tlw.photodokan.ui.print.PrintOrders
@@ -61,6 +63,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun CustomersScreen(modifier: Modifier = Modifier, viewModel: CustomersViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsState()
     val pickPhoto = rememberPhotoPicker(viewModel::import)
+    val takePhoto = rememberCamera(viewModel::import)
 
     // A photo shared from another app is imported here.
     val incomingPhotos = koinInject<IncomingPhotos>()
@@ -87,7 +90,7 @@ fun CustomersScreen(modifier: Modifier = Modifier, viewModel: CustomersViewModel
                     CustomerList(state, viewModel)
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Detail(state, viewModel, pickPhoto)
+                    Detail(state, viewModel, pickPhoto, takePhoto)
                 }
             }
         } else {
@@ -105,10 +108,10 @@ fun CustomersScreen(modifier: Modifier = Modifier, viewModel: CustomersViewModel
                     state.message?.let {
                         Text(it, color = if (state.messageIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
                     }
-                    Button(onClick = pickPhoto, enabled = !state.busy) { Text("Choose photo") }
+                    NewPhotoButtons(pickPhoto, takePhoto, enabled = !state.busy)
                 } else {
                     if (state.draft == null) TextButton(onClick = close) { Text("◀ Customers") }
-                    Detail(state, viewModel, pickPhoto)
+                    Detail(state, viewModel, pickPhoto, takePhoto)
                 }
             }
         }
@@ -174,7 +177,7 @@ private fun ColumnScope.CustomerList(state: CustomersState, viewModel: Customers
 }
 
 @Composable
-private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewModel, pickPhoto: () -> Unit) {
+private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewModel, pickPhoto: () -> Unit, takePhoto: (() -> Unit)?) {
     var hovering by remember { mutableStateOf(false) }
     val borderColor = if (hovering) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
     val edit = state.edit
@@ -269,11 +272,29 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
             Text(customerLine(selected), style = MaterialTheme.typography.titleMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = viewModel::saveChanges, enabled = edit.changed && !state.busy) { Text("Save changes") }
-                TextButton(onClick = pickPhoto, enabled = !state.busy) { Text("New customer photo") }
+                if (takePhoto != null) {
+                    TextButton(onClick = takePhoto, enabled = !state.busy) { Text("Take new photo") }
+                    TextButton(onClick = pickPhoto, enabled = !state.busy) { Text("Choose new photo") }
+                } else {
+                    TextButton(onClick = pickPhoto, enabled = !state.busy) { Text("New customer photo") }
+                }
             }
             PrintRow(selected, edit, state.busy, viewModel)
         }
-        else -> Button(onClick = pickPhoto, enabled = !state.busy) { Text("Choose photo") }
+        else -> NewPhotoButtons(pickPhoto, takePhoto, enabled = !state.busy)
+    }
+}
+
+/** Where there is a camera, taking the photo is the usual way; choosing one is the other. */
+@Composable
+private fun NewPhotoButtons(pickPhoto: () -> Unit, takePhoto: (() -> Unit)?, enabled: Boolean) {
+    if (takePhoto == null) {
+        Button(onClick = pickPhoto, enabled = enabled) { Text("Choose photo") }
+        return
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Button(onClick = takePhoto, enabled = enabled) { Text("Take photo") }
+        OutlinedButton(onClick = pickPhoto, enabled = enabled) { Text("Choose photo") }
     }
 }
 
