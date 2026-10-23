@@ -25,10 +25,15 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class PdfBoxRendererTest {
+/**
+ * What every [PdfRenderer] must do, checked by reading its output back with PDFBox: exact paper
+ * size, photos exactly on their slots and embedded unchanged, lines, outlines and text in place.
+ */
+abstract class PdfRendererContract {
 
-    private val template = SheetTemplate.STUDIO_A4_5X8
-    private val renderer = PdfBoxRenderer()
+    abstract val renderer: PdfRenderer
+
+    protected val template = SheetTemplate.STUDIO_A4_5X8
 
     private fun close(expected: Double, actual: Double, tolerance: Double = 0.01) =
         assertTrue(abs(expected - actual) < tolerance, "expected $expected pt, was $actual pt")
@@ -124,24 +129,24 @@ class PdfBoxRendererTest {
         Loader.loadPDF(render(orders)).use { assertEquals(2, it.numberOfPages) }
     }
 
-    private fun render(orders: List<Order>): ByteArray {
+    protected fun render(orders: List<Order>): ByteArray {
         val photos = mapOf("A" to testJpeg(Color.BLUE), "B" to testJpeg(Color.RED), "C" to testJpeg(Color.GREEN))
         val result = PackingEngine.pack(template, SheetState.FRESH, orders)
         return renderer.render(PrintDocument(result.sheets.map { sheetPage(template, it, photos::getValue) }))
     }
 
-    private fun testJpeg(color: Color): ByteArray {
+    protected fun testJpeg(color: Color): ByteArray {
         val image = BufferedImage(72, 68, BufferedImage.TYPE_INT_RGB)
         image.createGraphics().apply { this.color = color; fillRect(0, 0, 72, 68); dispose() }
         return ByteArrayOutputStream().also { ImageIO.write(image, "jpg", it) }.toByteArray()
     }
 
-    private data class DrawnImage(val x: Double, val y: Double, val width: Double, val height: Double)
-    private data class DrawnLine(val x1: Double, val y1: Double, val x2: Double, val y2: Double)
-    private data class DrawnRect(val x: Double, val y: Double, val width: Double, val height: Double)
+    protected data class DrawnImage(val x: Double, val y: Double, val width: Double, val height: Double)
+    protected data class DrawnLine(val x1: Double, val y1: Double, val x2: Double, val y2: Double)
+    protected data class DrawnRect(val x: Double, val y: Double, val width: Double, val height: Double)
 
     /** Records where images and line segments end up on the page, in PDF points. */
-    private class Recorder(page: PDPage) : PDFGraphicsStreamEngine(page) {
+    protected class Recorder(page: PDPage) : PDFGraphicsStreamEngine(page) {
         private val page = page
         val images = mutableListOf<DrawnImage>()
         val lines = mutableListOf<DrawnLine>()
@@ -173,4 +178,8 @@ class PdfBoxRendererTest {
         override fun fillAndStrokePath(windingRule: Int) = Unit
         override fun shadingFill(shadingName: COSName) = Unit
     }
+}
+
+class PdfBoxRendererTest : PdfRendererContract() {
+    override val renderer = PdfBoxRenderer()
 }
