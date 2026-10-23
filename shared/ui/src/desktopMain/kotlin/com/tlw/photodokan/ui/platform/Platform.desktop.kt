@@ -1,5 +1,6 @@
 package com.tlw.photodokan.ui.platform
 
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toAwtImage
 import com.tlw.photodokan.core.library.StudioDate
@@ -31,3 +32,6 @@ actual fun encodeJpeg(image: ImageBitmap, quality: Int): ByteArray {
     }
     return out.toByteArray()
 }
+
+@Composable
+actual fun SystemBackHandler(enabled: Boolean, onBack: () -> Unit) = Unit

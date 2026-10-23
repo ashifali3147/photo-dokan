@@ -24,6 +24,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -317,5 +318,44 @@ class CustomersViewModelTest {
         assertTrue(orders.queue.value.orders.isEmpty())
         assertTrue(state.messageIsError)
         assertTrue(state.message!!.contains("Passport 35 × 45 mm"))
+    }
+
+    @Test
+    fun aNewPhotoIsUnsavedWorkUntilSavedOrDiscarded() {
+        assertFalse(state.hasUnsavedWork)
+        vm.import(photo())
+        assertTrue(state.hasUnsavedWork)
+        vm.saveDraft()
+        assertFalse(state.hasUnsavedWork, "saved, and nothing changed since")
+    }
+
+    @Test
+    fun changesToASavedCustomerAreUnsavedWork() {
+        vm.import(photo())
+        vm.saveDraft()
+        vm.adjust(Adjustment.Brightness, 0.5)
+        vm.commit()
+        assertTrue(state.hasUnsavedWork)
+        vm.saveChanges()
+        assertFalse(state.hasUnsavedWork)
+    }
+
+    @Test
+    fun closingTheEditorDropsANewPhoto() {
+        vm.import(photo())
+        vm.closeEditor()
+        assertNull(state.draft)
+        assertNull(state.edit)
+        assertTrue(library.customersOn(now).isEmpty())
+    }
+
+    @Test
+    fun closingTheEditorReturnsFromASavedCustomerToTheList() {
+        vm.import(photo())
+        vm.saveDraft()
+        vm.closeEditor()
+        assertNull(state.selected)
+        assertNull(state.edit)
+        assertEquals(1, state.customers.size)
     }
 }

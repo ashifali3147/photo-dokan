@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -49,6 +50,7 @@ import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.photo.canDropPhotos
 import com.tlw.photodokan.ui.photo.photoDropTarget
 import com.tlw.photodokan.ui.photo.rememberPhotoPicker
+import com.tlw.photodokan.ui.platform.SystemBackHandler
 import com.tlw.photodokan.ui.print.PrintOrders
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -66,8 +68,19 @@ fun CustomersScreen(modifier: Modifier = Modifier, viewModel: CustomersViewModel
         incomingPhotos.take()?.let(viewModel::import)
     }
 
+    // Asked before Back or "◀ Customers" throws away a new photo or unsaved changes.
+    var confirmClose by remember { mutableStateOf(false) }
+    val close = { if (state.hasUnsavedWork) confirmClose = true else viewModel.closeEditor() }
+    if (confirmClose) {
+        CloseEditorDialog(state, onDiscard = { confirmClose = false; viewModel.closeEditor() }, onKeep = { confirmClose = false })
+    }
+
     BoxWithConstraints(modifier.fillMaxSize().padding(24.dp)) {
-        if (maxWidth >= 720.dp) {
+        val wide = maxWidth >= 720.dp
+        // On a phone Back closes the editor and shows the list again; side by side the list is
+        // already showing, so Back only steps in to protect unsaved work.
+        SystemBackHandler(enabled = state.edit != null && !state.busy && (!wide || state.hasUnsavedWork), onBack = close)
+        if (wide) {
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 Column(Modifier.width(340.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     CustomerList(state, viewModel)
@@ -83,12 +96,29 @@ fun CustomersScreen(modifier: Modifier = Modifier, viewModel: CustomersViewModel
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { CustomerList(state, viewModel) }
                     Button(onClick = pickPhoto, enabled = !state.busy) { Text("Choose photo") }
                 } else {
-                    if (state.draft == null) TextButton(onClick = viewModel::closeCustomer) { Text("◀ Customers") }
+                    if (state.draft == null) TextButton(onClick = close) { Text("◀ Customers") }
                     Detail(state, viewModel, pickPhoto)
                 }
             }
         }
     }
+}
+
+@Composable
+private fun CloseEditorDialog(state: CustomersState, onDiscard: () -> Unit, onKeep: () -> Unit) {
+    val draft = state.draft
+    AlertDialog(
+        onDismissRequest = onKeep,
+        title = { Text(if (draft != null) "Discard the new photo?" else "Discard changes to customer ${state.selected?.label}?") },
+        text = {
+            Text(
+                if (draft != null) "It has not been saved as customer ${draft.numberLabel} yet."
+                else "The crop and colour changes since the last save will be lost.",
+            )
+        },
+        confirmButton = { TextButton(onClick = onDiscard) { Text("Discard") } },
+        dismissButton = { Button(onClick = onKeep) { Text("Keep editing") } },
+    )
 }
 
 @Composable

@@ -81,6 +81,9 @@ data class CustomersState(
     val messageIsError: Boolean = false,
 ) {
     val searching: Boolean get() = query.isNotBlank()
+
+    /** Leaving the editor now would lose a new photo or changes not saved yet. */
+    val hasUnsavedWork: Boolean get() = draft != null || edit?.changed == true
 }
 
 /**
@@ -157,6 +160,9 @@ class CustomersViewModel(
 
     /** Back to the list from a saved customer. Unsaved changes to them are dropped. */
     fun closeCustomer() = _state.update { it.copy(selected = null, edit = null, message = null) }
+
+    /** Closes whatever the editor shows, a new photo or a saved customer, dropping unsaved work. */
+    fun closeEditor() = if (_state.value.draft != null) discardDraft() else closeCustomer()
 
     /**
      * Changes the crop through [CropGeometry], so it always fits the photo and the photo size.
