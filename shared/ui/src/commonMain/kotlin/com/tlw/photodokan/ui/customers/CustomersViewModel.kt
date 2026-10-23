@@ -81,6 +81,9 @@ data class CustomersState(
     val messageIsError: Boolean = false,
 ) {
     val searching: Boolean get() = query.isNotBlank()
+
+    /** Leaving the editor now would lose a new photo or changes not saved yet. */
+    val hasUnsavedWork: Boolean get() = draft != null || edit?.changed == true
 }
 
 /**
@@ -138,7 +141,14 @@ class CustomersViewModel(
     }
 
     fun import(source: PhotoSource) = launchWork {
-        val original = source.read()
+        val original = try {
+            source.read()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // E.g. a share whose app took back its permission, or a file on a removed card.
+            return@launchWork error("Could not open \"${source.name}\". Choose it with Choose photo instead.")
+        }
         val preview = decodePreview(original)
         if (preview == null) {
             error("\"${source.name}\" is not a photo Photo Dokan can open. Choose a JPEG or PNG photo.")
@@ -157,6 +167,9 @@ class CustomersViewModel(
 
     /** Back to the list from a saved customer. Unsaved changes to them are dropped. */
     fun closeCustomer() = _state.update { it.copy(selected = null, edit = null, message = null) }
+
+    /** Closes whatever the editor shows, a new photo or a saved customer, dropping unsaved work. */
+    fun closeEditor() = if (_state.value.draft != null) discardDraft() else closeCustomer()
 
     /**
      * Changes the crop through [CropGeometry], so it always fits the photo and the photo size.

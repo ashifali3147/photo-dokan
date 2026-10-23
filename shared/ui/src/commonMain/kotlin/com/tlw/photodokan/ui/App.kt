@@ -34,6 +34,7 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.tlw.photodokan.ui.navigation.Destination
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.customers.CustomersScreen
+import com.tlw.photodokan.ui.platform.SystemBackHandler
 import com.tlw.photodokan.ui.print.PrintScreen
 import com.tlw.photodokan.ui.screens.SettingsScreen
 import org.koin.compose.koinInject
@@ -60,6 +61,9 @@ private fun AppContent() {
     LaunchedEffect(incoming) {
         if (incoming != null) current = Destination.Customers
     }
+
+    // Back from Print or Settings returns to Customers; Back there leaves the app.
+    SystemBackHandler(enabled = current != Destination.Customers) { current = Destination.Customers }
 
     MaterialTheme {
         Surface(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
