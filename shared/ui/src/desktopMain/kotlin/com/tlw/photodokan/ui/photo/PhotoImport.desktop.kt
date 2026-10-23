@@ -38,6 +38,10 @@ actual fun rememberPhotoPicker(onPicked: (PhotoSource) -> Unit): () -> Unit {
     }
 }
 
+/** Studio PCs import from files; the camera is the phone's job. */
+@Composable
+actual fun rememberCamera(onTaken: (PhotoSource) -> Unit): (() -> Unit)? = null
+
 actual val canDropPhotos: Boolean = true
 
 @OptIn(ExperimentalComposeUiApi::class)

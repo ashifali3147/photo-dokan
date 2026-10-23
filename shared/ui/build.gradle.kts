@@ -31,6 +31,10 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
+            // The in-app camera; no gallery copy and the same screen on every phone.
+            implementation(libs.androidx.camera.camera2)
+            implementation(libs.androidx.camera.lifecycle)
+            implementation(libs.androidx.camera.view)
         }
         val desktopMain by getting {
             dependencies {

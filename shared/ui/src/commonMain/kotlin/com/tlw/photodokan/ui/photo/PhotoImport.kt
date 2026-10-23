@@ -10,6 +10,13 @@ class PhotoSource(val name: String, val read: () -> ByteArray)
 @Composable
 expect fun rememberPhotoPicker(onPicked: (PhotoSource) -> Unit): () -> Unit
 
+/**
+ * Remembers the device camera. Calling the returned function opens it; the photo taken arrives
+ * in [onTaken], and closing the camera sends nothing. Null where there is no camera to use.
+ */
+@Composable
+expect fun rememberCamera(onTaken: (PhotoSource) -> Unit): (() -> Unit)?
+
 /** True where photos can be dragged onto the app from outside (desktop). */
 expect val canDropPhotos: Boolean
 
