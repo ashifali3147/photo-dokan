@@ -39,6 +39,14 @@ object ColorAdjustment {
         return (contrast * saturation * exposure * warmth).toColorMatrix()
     }
 
+    /**
+     * One pixel's 0..255 [rgb] through a [matrix] from [matrix], clamped as a renderer does. The
+     * reference the platform renderers are checked against.
+     */
+    fun applyTo(matrix: FloatArray, rgb: DoubleArray): DoubleArray = DoubleArray(3) { row ->
+        (matrix[row * 5] * rgb[0] + matrix[row * 5 + 1] * rgb[1] + matrix[row * 5 + 2] * rgb[2] + matrix[row * 5 + 4]).coerceIn(0.0, 255.0)
+    }
+
     /** Mixes each channel with the pixel's grey: 0 is black and white, 1 unchanged, 2 doubled. */
     private fun saturation(s: Double): Affine {
         val r = (1 - s) * LUMA_R
