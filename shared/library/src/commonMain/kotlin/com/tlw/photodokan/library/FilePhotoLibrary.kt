@@ -73,6 +73,14 @@ class FilePhotoLibrary(
     override fun readFinal(customer: Customer): ByteArray? =
         "${layout.customerFolder(customer)}/${LibraryLayout.FINAL_FILE}".takeIf(files::exists)?.let(files::read)
 
+    override fun fileSheet(date: StudioDate, fileName: String, pdf: ByteArray): String {
+        val folder = layout.sheetsFolder(date)
+        files.createDirectories(folder)
+        val path = generateSequence(1) { it + 1 }.map { "$folder/${layout.sheetFileName(fileName, it)}" }.first { !files.exists(it) }
+        files.write(path, pdf)
+        return path
+    }
+
     /** Folders that may hold a customer.json, [depth] levels below [dir]. */
     private fun customerDirs(dir: String, depth: Int): List<String> {
         if (depth == 0) return listOf(dir)

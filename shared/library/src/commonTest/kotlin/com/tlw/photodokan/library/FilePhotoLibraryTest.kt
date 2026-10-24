@@ -50,6 +50,18 @@ class FilePhotoLibraryTest {
     }
 
     @Test
+    fun phoneSheetsAreFiledByDateWithoutTouchingCustomers() {
+        library.create(today, null, null, photo)
+        val pdf = "%PDF-1.4 sheet".encodeToByteArray()
+        assertEquals("2026/10/22/Phone sheets/Photo Dokan 0001 14.30.pdf", library.fileSheet(today, "Photo Dokan 0001 14.30", pdf))
+        assertEquals("2026/10/22/Phone sheets/Photo Dokan 0001 14.30 (2).pdf", library.fileSheet(today, "Photo Dokan 0001 14.30", pdf), "never overwritten")
+        assertContentEquals(pdf, read(file("2026", "10", "22", "Phone sheets", "Photo Dokan 0001 14.30.pdf")))
+        assertEquals(listOf(1), library.customersOn(today).map { it.number })
+        assertEquals(2, library.nextNumber(today))
+        assertEquals(1, library.search("").size)
+    }
+
+    @Test
     fun originalIsStoredByteForByte() {
         val customer = library.create(today, null, null, photo)
         assertContentEquals(photo, library.readOriginal(customer))
