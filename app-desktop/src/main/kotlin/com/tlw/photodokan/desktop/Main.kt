@@ -31,6 +31,9 @@ import com.tlw.photodokan.ui.App
 import com.tlw.photodokan.ui.di.initKoin
 import com.tlw.photodokan.ui.platform.today
 import com.tlw.photodokan.ui.print.StationJobPrinter
+import com.tlw.photodokan.vision.ModelFiles
+import com.tlw.photodokan.vision.ResourceModelFiles
+import com.tlw.photodokan.vision.VisionModels
 import kotlinx.io.files.Path
 import org.koin.dsl.module
 import org.koin.mp.KoinPlatform
@@ -66,6 +69,9 @@ private val desktopModule = module {
     // Sheets from paired phones print at once and are kept in the library.
     single<StationJobs> { StationJobPrinter(get(), get(), get(), ::today) { LocalTime.now().format(DateTimeFormatter.ofPattern("HH.mm")) } }
     single<StationHost> { get<PrintStation>() }
+    // Face detection and background matting, from the models inside the app.
+    single<ModelFiles> { ResourceModelFiles() }
+    single { VisionModels(get()) }
 }
 
 /** The open app window, so the printer's settings window can open over it. */
