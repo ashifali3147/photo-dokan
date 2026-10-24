@@ -12,9 +12,15 @@ import io.ktor.server.netty.Netty
 import io.ktor.server.netty.NettyApplicationEngine
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.origin
+import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.runBlocking
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -24,14 +30,22 @@ import java.util.logging.Logger
  * sheets to. It runs while the app runs; [start] and [stop] are safe to call more than once.
  *
  * @param name the PC's name as phones show it.
+ * @param pairing the paired phones, and the code a new phone pairs with.
  * @param port [StationProtocol.PORT]; tests pass 0 for any free port.
  */
 class PrintStation(
     private val certificate: StationCertificate,
-    private val name: String,
+    override val name: String,
+    val pairing: StationPairing,
     private val port: Int = StationProtocol.PORT,
-) {
+    private val addresses: () -> List<String> = StationPairing::localAddresses,
+) : StationHost {
     private var server: EmbeddedServer<NettyApplicationEngine, NettyApplicationEngine.Configuration>? = null
+
+    private val _running = MutableStateFlow(false)
+    override val running: StateFlow<Boolean> = _running.asStateFlow()
+
+    override val devices: StateFlow<List<PairedDevice>> get() = pairing.devices.devices
 
     /** The port the station listens on while running, or null when it is stopped. */
     @Volatile
@@ -54,7 +68,7 @@ class PrintStation(
                     port = this@PrintStation.port
                 }
             },
-            module = { station(name) },
+            module = { station(name, pairing) },
         )
         try {
             started.start(wait = false)
@@ -64,14 +78,31 @@ class PrintStation(
         }
         server = started
         listeningPort = runBlocking { started.engine.resolvedConnectors().first().port }
+        _running.value = true
         log.info("Print Station listening on port $listeningPort")
     }
+
+    /**
+     * Opens pairing and returns what the QR should hold, or null when the station isn't running or
+     * the PC has no address phones could reach (no network).
+     */
+    override fun invite(): PairingInvite? {
+        val port = listeningPort ?: return null
+        val hosts = addresses().ifEmpty { return null }
+        return PairingInvite(hosts, port, certificate.fingerprint, pairing.newCode())
+    }
+
+    override fun closeInvite() = pairing.close()
+
+    override fun remove(deviceId: String) = pairing.devices.remove(deviceId)
 
     @Synchronized
     fun stop() {
         val running = server ?: return
         server = null
         listeningPort = null
+        _running.value = false
+        pairing.close()
         running.stop(gracePeriodMillis = 500, timeoutMillis = 2_000)
     }
 
@@ -99,7 +130,7 @@ class PrintStation(
  * What the station answers. Callers [allowed] by address only: by default this PC and the shop's
  * own network (see [LocalNetwork]); everyone else gets 403 Forbidden and nothing more.
  */
-internal fun Application.station(name: String, allowed: (String) -> Boolean = LocalNetwork::isLocal) {
+internal fun Application.station(name: String, pairing: StationPairing, allowed: (String) -> Boolean = LocalNetwork::isLocal) {
     install(
         createApplicationPlugin("LocalNetworkOnly") {
             onCall { call ->
@@ -110,5 +141,30 @@ internal fun Application.station(name: String, allowed: (String) -> Boolean = Lo
     install(ContentNegotiation) { json() }
     routing {
         get(StationProtocol.STATUS_PATH) { call.respond(StationStatus(name = name)) }
+
+        post(StationProtocol.PAIR_PATH) {
+            val request = runCatching { call.receive<PairRequest>() }.getOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, StationError("The phone sent a request the PC can't read. Update Photo Dokan on both."))
+            pairing.pair(request.code, request.deviceName).fold(
+                onSuccess = { (device, token) -> call.respond(PairResponse(device.id, token, name)) },
+                onFailure = { call.respond(HttpStatusCode.Forbidden, StationError(it.message ?: "Pairing was refused.")) },
+            )
+        }
+
+        get(StationProtocol.PAIRED_PATH) {
+            val device = pairedDevice(pairing.devices) ?: return@get
+            call.respond(PairedHello(name, device.name))
+        }
     }
+}
+
+/**
+ * The paired phone making this request, by the token it sends. Anyone else is answered with
+ * 401 and the route stops there (null).
+ */
+private suspend fun RoutingContext.pairedDevice(devices: PairedDevices): PairedDevice? {
+    val token = call.request.headers[StationProtocol.AUTHORIZATION]?.takeIf { it.startsWith(StationProtocol.BEARER) }?.removePrefix(StationProtocol.BEARER)
+    val device = token?.let(devices::find)
+    if (device == null) call.respond(HttpStatusCode.Unauthorized, StationError("This phone isn't paired with the PC. Pair it again in Settings."))
+    return device
 }

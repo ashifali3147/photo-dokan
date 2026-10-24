@@ -18,6 +18,16 @@ object StationProtocol {
 
     /** Who is listening: answered to anyone on the network, before pairing. */
     const val STATUS_PATH = "/v1/status"
+
+    /** A phone trades the one-time code from the PC's QR for its own token: [PairRequest] → [PairResponse]. */
+    const val PAIR_PATH = "/v1/pair"
+
+    /** Answers a paired phone with [PairedHello], and anyone else with 401. */
+    const val PAIRED_PATH = "/v1/paired"
+
+    /** How a paired phone proves itself on every other request: `Authorization: Bearer <token>`. */
+    const val AUTHORIZATION = "Authorization"
+    const val BEARER = "Bearer "
 }
 
 /** The answer to [StationProtocol.STATUS_PATH]. */
@@ -32,3 +42,26 @@ data class StationStatus(
         const val APP = "Photo Dokan Print Station"
     }
 }
+
+@Serializable
+data class PairRequest(
+    /** The one-time code from the QR on the PC. */
+    val code: String,
+    /** The phone's name for the PC's paired-devices list, e.g. "Samsung Galaxy A15". */
+    val deviceName: String,
+)
+
+@Serializable
+data class PairResponse(
+    val deviceId: String,
+    /** The phone's own secret for later requests; the PC keeps only its hash. */
+    val token: String,
+    val stationName: String,
+)
+
+@Serializable
+data class PairedHello(val stationName: String, val deviceName: String)
+
+/** Why the station refused, in words for the operator. */
+@Serializable
+data class StationError(val message: String)
