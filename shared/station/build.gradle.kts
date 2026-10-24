@@ -31,6 +31,14 @@ kotlin {
                 implementation(libs.zxing.core)
             }
         }
+        // Runs on a phone or emulator: ./gradlew :shared:station:connectedDebugAndroidTest
+        val androidInstrumentedTest by getting {
+            dependencies {
+                implementation(libs.kotlin.test.junit)
+                implementation(libs.androidx.test.runner)
+                implementation(libs.androidx.test.junit)
+            }
+        }
         // The Print Station itself runs only on the studio PC.
         val desktopMain by getting {
             kotlin.srcDir("src/jvmShared/kotlin")
@@ -58,6 +66,7 @@ android {
     compileSdk = libs.versions.android.compileSdk.get().toInt()
     defaultConfig {
         minSdk = libs.versions.android.minSdk.get().toInt()
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

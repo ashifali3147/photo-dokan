@@ -53,4 +53,35 @@ class AnnounceTest {
         station.stop()
         assertNull(search(address, seconds = 2), "gone once the app closes")
     }
+
+    @Test
+    fun aPhoneFindsItsPcAtANewAddress() {
+        val address = StationPairing.localAddresses().firstOrNull() ?: return println("No network: skipped")
+        val station = PrintStation(
+            certificate, "STUDIO-PC", pairing, jobs = { _, name, _ -> JobResult(printed = true, message = "Printed $name.") },
+            port = 0, addresses = { listOf(address) },
+        ).also { stations += it; it.start() }
+        val client = StationClient(timeoutMillis = 1_000)
+        val paired = client.pair(assertNotNull(station.invite()), "Galaxy A15")
+        // What the phone kept from before the router gave the PC a new address (TEST-NET, nobody there).
+        val old = paired.copy(hosts = listOf("192.0.2.1"))
+        val links = object : StationLinkStore {
+            var saved: StationLink? = old
+            override fun load() = saved
+            override fun save(link: StationLink?) { saved = link }
+        }
+        val finder = object : StationFinder {
+            override fun find(fingerprint: String): List<String> = JmDNS.create(InetAddress.getByName(address)).use { browser ->
+                browser.list(StationProtocol.SERVICE_TYPE + ".local.", 6_000)
+                    .filter { it.getPropertyString(StationProtocol.SERVICE_FINGERPRINT) == fingerprint }
+                    .flatMap { info -> info.inet4Addresses.map { it.hostAddress } }
+            }
+        }
+        Thread.sleep(3_000) // the announcement goes out in the background
+
+        val result = FindingConnector(client, finder, links).send(old, "%PDF-1.4 sheet".encodeToByteArray(), "Photo Dokan 0001")
+
+        assertEquals(JobResult(printed = true, message = "Printed Photo Dokan 0001."), result)
+        assertEquals(listOf(address, "192.0.2.1"), links.saved?.hosts)
+    }
 }

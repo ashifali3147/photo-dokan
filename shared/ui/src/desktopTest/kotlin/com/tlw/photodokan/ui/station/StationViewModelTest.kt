@@ -59,8 +59,10 @@ class StationViewModelTest {
             paired += invite to deviceName
             return link
         }
+        var onCheck: () -> Unit = {}
         override fun check(link: StationLink): PairedHello {
             failure?.let { throw it }
+            onCheck()
             return PairedHello(link.stationName, "Galaxy A15")
         }
         override fun send(link: StationLink, pdf: ByteArray, name: String) = throw UnsupportedOperationException()
@@ -175,6 +177,16 @@ class StationViewModelTest {
         assertEquals(link, vm.state.value.link)
         vm.check()
         assertEquals("Connected to STUDIO-PC.", vm.state.value.message)
+    }
+
+    @Test
+    fun aPcFoundAtANewAddressIsKeptThere() {
+        links.saved = link
+        val vm = phone()
+        val moved = link.copy(hosts = listOf("192.168.1.9", "192.168.1.5"))
+        connector.onCheck = { links.saved = moved } // as FindingConnector saves it
+        vm.check()
+        assertEquals(moved, vm.state.value.link)
     }
 
     @Test
