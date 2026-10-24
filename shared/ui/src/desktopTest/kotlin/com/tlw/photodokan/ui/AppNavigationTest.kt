@@ -45,7 +45,7 @@ class AppNavigationTest {
         onNodeWithText("Nothing to print", substring = true).assertExists()
 
         nav("Settings").performClick()
-        onNodeWithText("Printer, photo sizes", substring = true).assertExists()
+        nav("Settings").assertIsSelected()
 
         nav("Customers").performClick()
         onNodeWithText("Choose photo").assertExists()

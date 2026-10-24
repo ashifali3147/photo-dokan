@@ -18,13 +18,24 @@ kotlin {
         // What the phone and the PC agree on: the port, the paths and the messages.
         commonMain.dependencies {
             implementation(libs.kotlinx.serialization.json)
+            api(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
+        // The phone's client is plain java.net; the PC's tests use it to talk to the real station.
+        androidMain {
+            kotlin.srcDir("src/jvmShared/kotlin")
+            dependencies {
+                // Pairing QR codes: drawn on the PC, read by the phone's camera. Pure Java, offline.
+                implementation(libs.zxing.core)
+            }
+        }
         // The Print Station itself runs only on the studio PC.
         val desktopMain by getting {
+            kotlin.srcDir("src/jvmShared/kotlin")
             dependencies {
+                implementation(libs.zxing.core)
                 implementation(libs.ktor.server.core)
                 implementation(libs.ktor.server.netty)
                 implementation(libs.ktor.server.content.negotiation)

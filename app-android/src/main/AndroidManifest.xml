@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Only to the studio PC's Print Station on the shop's Wi-Fi. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:name=".PhotoDokanApp"
         android:allowBackup="false"
@@ -21,6 +24,13 @@
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
+            </intent-filter>
+            <!-- The PC's pairing QR, scanned with the phone's own camera app. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="photodokan" android:host="pair" />
             </intent-filter>
         </activity>
     </application>

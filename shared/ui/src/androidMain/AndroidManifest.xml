@@ -10,6 +10,10 @@
             android:name="com.tlw.photodokan.ui.photo.CameraActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Material.NoActionBar" />
+        <activity
+            android:name="com.tlw.photodokan.ui.station.QrScanActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
 
         <!-- Lets the app receiving a shared sheet PDF read it. -->
         <provider

@@ -14,6 +14,7 @@ import com.tlw.photodokan.ui.App
 import com.tlw.photodokan.ui.library.PhotoFolderScreen
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.photo.photoSource
+import com.tlw.photodokan.ui.station.IncomingInvites
 import org.koin.mp.KoinPlatform
 
 class MainActivity : ComponentActivity() {
@@ -28,8 +29,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        // On recreation (e.g. rotation) the shared photo was already received.
-        if (savedInstanceState == null) receiveSharedPhoto(intent)
+        // On recreation (e.g. rotation) the shared photo or pairing link was already received.
+        if (savedInstanceState == null) receive(intent)
         setContent {
             if (folderReady) {
                 App()
@@ -48,13 +49,18 @@ class MainActivity : ComponentActivity() {
         folderLost = !folderReady && photoFolder.wasPicked
     }
 
-    /** singleTask: sharing while the app is open arrives here instead of starting a second copy. */
+    /** singleTask: sharing or a pairing link while the app is open arrives here instead of starting a second copy. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        receiveSharedPhoto(intent)
+        receive(intent)
     }
 
-    private fun receiveSharedPhoto(intent: Intent) {
+    /** A photo shared from another app, or the PC's pairing QR opened by the phone's camera app. */
+    private fun receive(intent: Intent) {
+        if (intent.action == Intent.ACTION_VIEW) {
+            intent.dataString?.let { KoinPlatform.getKoin().get<IncomingInvites>().send(it) }
+            return
+        }
         if (intent.action != Intent.ACTION_SEND) return
         val uri = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java) ?: return
         KoinPlatform.getKoin().get<IncomingPhotos>().send(contentResolver.photoSource(uri))

@@ -7,6 +7,9 @@ import com.tlw.photodokan.ui.customers.CustomersViewModel
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.print.PrintOrders
 import com.tlw.photodokan.ui.print.PrintViewModel
+import com.tlw.photodokan.ui.station.IncomingInvites
+import com.tlw.photodokan.ui.station.PhoneName
+import com.tlw.photodokan.ui.station.StationViewModel
 import com.tlw.photodokan.ui.platform.today
 import org.koin.core.KoinApplication
 import org.koin.core.context.startKoin
@@ -28,10 +31,14 @@ val appModule = module {
     single { PhotoSizePreset.DEFAULTS }
     single { LibraryLayout() }
     single { IncomingPhotos() }
+    single { IncomingInvites() }
     single { PrintOrders(get()) }
     viewModel { CustomersViewModel(get(), ::today, orders = get(), template = get(), presets = get()) }
     viewModel {
         PrintViewModel(get(), get(), get(), printer = getOrNull(), sharer = getOrNull(), pdfReader = getOrNull(), phonePrinter = getOrNull())
+    }
+    viewModel {
+        StationViewModel(host = getOrNull(), connector = getOrNull(), links = getOrNull(), deviceName = getOrNull<PhoneName>()?.value ?: "Phone", invites = get())
     }
 }
 

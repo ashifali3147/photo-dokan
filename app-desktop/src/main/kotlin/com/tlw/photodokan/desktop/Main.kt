@@ -21,8 +21,11 @@ import com.tlw.photodokan.print.PdfSheetReader
 import com.tlw.photodokan.print.PdfFilePrinter
 import com.tlw.photodokan.print.SheetPrinter
 import com.tlw.photodokan.print.WindowsGdiPrinter
+import com.tlw.photodokan.station.PairedDevices
 import com.tlw.photodokan.station.PrintStation
 import com.tlw.photodokan.station.StationCertificate
+import com.tlw.photodokan.station.StationHost
+import com.tlw.photodokan.station.StationPairing
 import com.tlw.photodokan.ui.App
 import com.tlw.photodokan.ui.di.initKoin
 import kotlinx.io.files.Path
@@ -46,7 +49,15 @@ private val desktopModule = module {
     // Sheet PDFs shared from the phone, printed here.
     single<PdfSheetReader> { PdfBoxSheetReader() }
     // Phones on the shop's Wi-Fi send sheets here.
-    single { PrintStation(StationCertificate.loadOrCreate(File(appDataDir().toString(), "station.p12")), PrintStation.computerName()) }
+    single {
+        val data = appDataDir().toString()
+        PrintStation(
+            StationCertificate.loadOrCreate(File(data, "station.p12")),
+            PrintStation.computerName(),
+            StationPairing(PairedDevices(File(data, "paired-devices.json"))),
+        )
+    }
+    single<StationHost> { get<PrintStation>() }
 }
 
 /** The open app window, so the printer's settings window can open over it. */

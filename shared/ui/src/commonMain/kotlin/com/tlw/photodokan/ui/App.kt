@@ -37,6 +37,7 @@ import com.tlw.photodokan.ui.customers.CustomersScreen
 import com.tlw.photodokan.ui.platform.SystemBackHandler
 import com.tlw.photodokan.ui.print.PrintScreen
 import com.tlw.photodokan.ui.screens.SettingsScreen
+import com.tlw.photodokan.ui.station.IncomingInvites
 import org.koin.compose.koinInject
 
 /** Root of the app on both platforms: a side rail on wide windows, a bottom bar on phones. */
@@ -60,6 +61,11 @@ private fun AppContent() {
     val incoming by koinInject<IncomingPhotos>().pending.collectAsState()
     LaunchedEffect(incoming) {
         if (incoming != null) current = Destination.Customers
+    }
+    // A pairing link opened from the phone's camera app pairs on the Settings screen.
+    val invite by koinInject<IncomingInvites>().pending.collectAsState()
+    LaunchedEffect(invite) {
+        if (invite != null) current = Destination.Settings
     }
 
     // Back from Print or Settings returns to Customers; Back there leaves the app.

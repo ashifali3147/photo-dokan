@@ -49,5 +49,6 @@ kotlin {
 dependencies {
     implementation(project(":shared:ui"))
     implementation(project(":shared:library"))
+    implementation(project(":shared:station"))
     implementation(libs.androidx.activity.compose)
 }
