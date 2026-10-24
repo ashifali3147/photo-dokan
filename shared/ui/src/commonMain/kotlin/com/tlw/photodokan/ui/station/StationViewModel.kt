@@ -130,7 +130,9 @@ class StationViewModel(
         val link = _state.value.link ?: return
         launchWork {
             val hello = withContext(work) { connector.check(link) }
-            _state.update { it.copy(message = "Connected to ${hello.stationName}.", messageIsError = false) }
+            // The PC may have been found at a new address, now saved.
+            val current = withContext(work) { links?.load() } ?: link
+            _state.update { it.copy(link = current, message = "Connected to ${hello.stationName}.", messageIsError = false) }
         }
     }
 

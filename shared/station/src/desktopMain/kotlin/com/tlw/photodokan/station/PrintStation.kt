@@ -38,6 +38,8 @@ import java.util.logging.Logger
  * @param pairing the paired phones, and the code a new phone pairs with.
  * @param jobs prints the sheets phones send; without it, jobs are refused.
  * @param port [StationProtocol.PORT]; tests pass 0 for any free port.
+ * @param announce whether to announce the station on the network, so phones find it after the
+ *   PC's address changes; tests that don't need it leave the network quiet.
  */
 class PrintStation(
     private val certificate: StationCertificate,
@@ -46,7 +48,10 @@ class PrintStation(
     private val jobs: StationJobs? = null,
     private val port: Int = StationProtocol.PORT,
     private val addresses: () -> List<String> = StationPairing::localAddresses,
+    announce: Boolean = true,
 ) : StationHost {
+    private val announcer = if (announce) StationAnnouncer(name, certificate.fingerprint, addresses) else null
+
     private var server: EmbeddedServer<NettyApplicationEngine, NettyApplicationEngine.Configuration>? = null
 
     private val _running = MutableStateFlow(false)
@@ -85,6 +90,7 @@ class PrintStation(
         }
         server = started
         listeningPort = runBlocking { started.engine.resolvedConnectors().first().port }
+        announcer?.start(listeningPort!!)
         _running.value = true
         log.info("Print Station listening on port $listeningPort")
     }
@@ -109,6 +115,7 @@ class PrintStation(
         server = null
         listeningPort = null
         _running.value = false
+        announcer?.stop()
         pairing.close()
         running.stop(gracePeriodMillis = 500, timeoutMillis = 2_000)
     }
