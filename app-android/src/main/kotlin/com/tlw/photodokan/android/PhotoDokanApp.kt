@@ -2,17 +2,24 @@ package com.tlw.photodokan.android
 
 import android.app.Application
 import android.content.pm.PackageManager
+import android.os.Build
 import com.tlw.photodokan.core.library.PhotoLibrary
 import com.tlw.photodokan.core.model.PrintQueueStore
 import com.tlw.photodokan.library.FilePhotoLibrary
 import com.tlw.photodokan.library.FilePrintQueueStore
+import com.tlw.photodokan.station.FileStationLinkStore
+import com.tlw.photodokan.station.StationClient
+import com.tlw.photodokan.station.StationConnector
+import com.tlw.photodokan.station.StationLinkStore
 import com.tlw.photodokan.ui.di.initKoin
 import com.tlw.photodokan.ui.print.AndroidPhonePrinter
 import com.tlw.photodokan.ui.print.AndroidSheetSharer
 import com.tlw.photodokan.ui.print.PhonePrinter
 import com.tlw.photodokan.ui.print.SheetSharer
+import com.tlw.photodokan.ui.station.PhoneName
 import kotlinx.io.files.Path
 import org.koin.dsl.module
+import java.io.File
 
 /** Starts Koin once per process, so activity recreation (e.g. rotation) doesn't start it twice. */
 class PhotoDokanApp : Application() {
@@ -34,8 +41,19 @@ class PhotoDokanApp : Application() {
                     if (packageManager.hasSystemFeature(PackageManager.FEATURE_PRINTING)) {
                         single<PhonePrinter>(createdAtStart = true) { AndroidPhonePrinter(this@PhotoDokanApp) }
                     }
+                    // Or to the studio PC's Print Station over the shop's Wi-Fi, once paired.
+                    single<StationConnector> { StationClient() }
+                    single<StationLinkStore> { FileStationLinkStore(File(filesDir, "print-station.json")) }
+                    single { PhoneName(phoneName()) }
                 },
             ),
         )
+    }
+
+    /** E.g. "Samsung Galaxy A15", as the PC lists the phone; the maker is left off when the model already says it. */
+    private fun phoneName(): String {
+        val maker = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
+        val model = Build.MODEL
+        return if (model.startsWith(maker, ignoreCase = true)) model else "$maker $model"
     }
 }
