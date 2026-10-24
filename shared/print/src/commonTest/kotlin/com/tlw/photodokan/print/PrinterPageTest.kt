@@ -88,6 +88,26 @@ class PrinterPageTest {
     }
 
     @Test
+    fun androidsA4WithItsMarginsTakesTheSheet() {
+        // Android's A4 is 8270 × 11690 mils; 118 mils is a 3 mm border.
+        assertNull(PrinterPage.fromMils(8270, 11690, 0, 0, 0, 0).problemWith(sheet()))
+        val bordered = PrinterPage.fromMils(8270, 11690, 118, 118, 118, 118)
+        assertEquals(210.06, bordered.paper.width, 0.01)
+        assertNull(bordered.problemWith(sheet()))
+    }
+
+    @Test
+    fun androidsLetterPaperAndWideMarginsAreRefused() {
+        val letter = assertNotNull(PrinterPage.fromMils(8500, 11000, 118, 118, 118, 118).problemWith(sheet()))
+        assertTrue(letter.startsWith("The printer is set to 216 × 279 mm paper"), letter)
+        // A quarter-inch (6.35 mm) bottom margin cuts into the last row, 5.5 mm from the edge.
+        assertEquals(
+            "Part of the sheet falls in the printer's unprintable border, so photos would be cut off.",
+            PrinterPage.fromMils(8270, 11690, 118, 118, 118, 250).problemWith(sheet()),
+        )
+    }
+
+    @Test
     fun linesNeverDisappear() {
         assertEquals(1, a4.width(0.01))
         assertEquals(3, a4.width(0.2))

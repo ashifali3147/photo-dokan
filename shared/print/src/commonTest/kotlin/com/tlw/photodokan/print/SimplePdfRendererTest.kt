@@ -85,6 +85,17 @@ class SimplePdfRendererTest {
     }
 
     @Test
+    fun androidsWholePointPaperKeepsEveryPositionFromTheTop() {
+        val photo = PageItem.Image(RectMm(11.0, 5.5, 36.0, 34.0), jpegHeader(10, 10))
+        val document = PrintDocument(listOf(PrintPage(PaperSizes.A4, listOf(photo)))).onWholePoints(595, 841)
+        assertEquals(photo, document.pages.single().items.single())
+        val pdf = SimplePdfRenderer().render(document).decodeToString()
+        assertTrue(pdf.contains("/MediaBox [0 0 595 841]"), pdf)
+        // 5.5 mm + 34 mm = 39.5 mm from the top is 111.9685 pt; the photo's bottom edge is that far below 841.
+        assertTrue(pdf.contains("q 102.0472 0 0 96.378 31.1811 729.0315 cm"), pdf)
+    }
+
+    @Test
     fun a4IsExactInPoints() {
         val pdf = SimplePdfRenderer().render(PrintDocument(listOf(PrintPage(PaperSizes.A4, emptyList())))).decodeToString()
         assertTrue(pdf.contains("/MediaBox [0 0 595.2756 841.8898]"), pdf)

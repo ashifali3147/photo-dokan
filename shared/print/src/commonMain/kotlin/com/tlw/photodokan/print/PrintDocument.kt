@@ -1,6 +1,7 @@
 package com.tlw.photodokan.print
 
 import com.tlw.photodokan.core.geometry.LineMm
+import com.tlw.photodokan.core.geometry.MM_PER_INCH
 import com.tlw.photodokan.core.geometry.RectMm
 import com.tlw.photodokan.core.geometry.SizeMm
 
@@ -15,6 +16,19 @@ data class PrintDocument(val pages: List<PrintPage>) {
 }
 
 data class PrintPage(val paper: SizeMm, val items: List<PageItem>)
+
+/**
+ * The same pages on paper of [widthPt] × [heightPt] whole points, as Android's print system sizes
+ * paper (A4 is 595 × 841). It cuts any fraction of a point off a page and moves the content by it,
+ * so a page made that size already is printed untouched. Everything keeps its place measured
+ * from the top-left corner; the bottom margin is a fraction of a millimetre smaller.
+ */
+fun PrintDocument.onWholePoints(widthPt: Int, heightPt: Int): PrintDocument {
+    val paper = SizeMm(widthPt * MM_PER_INCH / POINTS_PER_INCH, heightPt * MM_PER_INCH / POINTS_PER_INCH)
+    return PrintDocument(pages.map { it.copy(paper = paper) })
+}
+
+private const val POINTS_PER_INCH = 72.0
 
 sealed interface PageItem {
 
