@@ -230,6 +230,7 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
                 onCropChange = viewModel::updateCrop,
                 onCommit = viewModel::commit,
                 onReset = viewModel::resetCrop,
+                onFitFace = if (viewModel.canFitFace) viewModel::fitFace else null,
             )
             EditorTab.Adjust -> AdjustControls(
                 recipe = edit.recipe,

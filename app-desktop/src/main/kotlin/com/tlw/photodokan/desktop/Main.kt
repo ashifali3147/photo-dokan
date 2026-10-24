@@ -31,7 +31,9 @@ import com.tlw.photodokan.ui.App
 import com.tlw.photodokan.ui.di.initKoin
 import com.tlw.photodokan.ui.platform.today
 import com.tlw.photodokan.ui.print.StationJobPrinter
+import com.tlw.photodokan.vision.FaceFinder
 import com.tlw.photodokan.vision.ModelFiles
+import com.tlw.photodokan.vision.OnnxFaceFinder
 import com.tlw.photodokan.vision.ResourceModelFiles
 import com.tlw.photodokan.vision.VisionModels
 import kotlinx.io.files.Path
@@ -72,6 +74,7 @@ private val desktopModule = module {
     // Face detection and background matting, from the models inside the app.
     single<ModelFiles> { ResourceModelFiles() }
     single { VisionModels(get()) }
+    single<FaceFinder> { OnnxFaceFinder(get()) }
 }
 
 /** The open app window, so the printer's settings window can open over it. */

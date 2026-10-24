@@ -1,5 +1,8 @@
 package com.tlw.photodokan.ui.customers
 
+import com.tlw.photodokan.core.face.Face
+import com.tlw.photodokan.core.face.FaceCrop
+import com.tlw.photodokan.core.face.PointPx
 import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropGeometry
 import com.tlw.photodokan.core.library.StudioDate
@@ -10,6 +13,8 @@ import com.tlw.photodokan.ui.editor.Adjustment
 import com.tlw.photodokan.ui.photo.PhotoSource
 import com.tlw.photodokan.ui.print.InMemoryPrintQueueStore
 import com.tlw.photodokan.ui.print.PrintOrders
+import com.tlw.photodokan.vision.FaceFinder
+import com.tlw.photodokan.vision.VisionException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -366,5 +371,137 @@ class CustomersViewModelTest {
         assertTrue(state.messageIsError)
         assertNull(state.draft)
         assertFalse(state.busy)
+    }
+
+    // ---- Fitting the crop to the face ----
+
+    /** A 400 × 600 portrait-shaped photo; the fake finder decides where the face is. */
+    private val portrait = ByteArrayOutputStream().also { ImageIO.write(BufferedImage(400, 600, BufferedImage.TYPE_INT_RGB), "jpg", it) }.toByteArray()
+
+    /** Faces as the finder reports them on the 400 × 600 preview, or a failure. */
+    private class FakeFinder(var faces: List<Face> = emptyList(), var failure: Exception? = null) : FaceFinder {
+        var searches = 0
+        override fun find(argb: IntArray, width: Int, height: Int): List<Face> {
+            searches++
+            assertEquals(400 * 600, argb.size, "the whole preview")
+            failure?.let { throw it }
+            return faces
+        }
+    }
+
+    /** An upright face with its eyes at ([x], [eyeY]) and its mouth [d] pixels lower. */
+    private fun face(x: Double = 200.0, eyeY: Double = 250.0, d: Double = 40.0) = Face(
+        x = x - d, y = eyeY - d, width = 2 * d, height = 2.4 * d,
+        eyeLeft = PointPx(x - 0.7 * d, eyeY), eyeRight = PointPx(x + 0.7 * d, eyeY), nose = PointPx(x, eyeY + 0.5 * d),
+        mouthLeft = PointPx(x - 0.45 * d, eyeY + d), mouthRight = PointPx(x + 0.45 * d, eyeY + d), score = 0.95,
+    )
+
+    private val finder = FakeFinder()
+
+    private fun withFinder() {
+        vm = CustomersViewModel(library, { now }, orders, SheetTemplate.STUDIO_A4_5X8, faces = finder, work = Dispatchers.Unconfined)
+    }
+
+    private fun importPortrait() = vm.import(PhotoSource("IMG_2.jpg") { portrait })
+
+    private fun fitted(preset: PhotoSizePreset, f: Face = face()) = FaceCrop.fit(400, 600, preset, f)!!.crop
+
+    @Test
+    fun aNewPhotoOpensCroppedToTheFace() {
+        finder.faces = listOf(face(x = 120.0, d = 15.0), face())
+        withFinder()
+        assertTrue(vm.canFitFace)
+        importPortrait()
+
+        val recipe = assertNotNull(state.edit).recipe
+        assertEquals(fitted(PhotoSizePreset.STUDIO_SLOT), recipe.crop, "the larger face, on the slot's guide")
+        assertNull(state.message)
+        assertEquals(1, finder.searches)
+    }
+
+    @Test
+    fun aPhotoWithoutAFaceOpensWhole() {
+        withFinder()
+        importPortrait()
+        assertEquals(CropConfig(), state.edit?.recipe?.crop)
+        assertEquals("No face found. Move and zoom the photo to fit the guide.", state.message)
+        assertFalse(state.messageIsError)
+    }
+
+    @Test
+    fun aHeadAtTheEdgeIsCroppedAsNearAsItGoes() {
+        finder.faces = listOf(face(eyeY = 60.0))
+        withFinder()
+        importPortrait()
+        assertTrue(state.message!!.startsWith("The head is too close to the edge of the photo"))
+        val crop = assertNotNull(state.edit).recipe.crop
+        assertEquals(crop, CropGeometry.clamp(400, 600, PhotoSizePreset.STUDIO_SLOT.aspect, crop))
+    }
+
+    @Test
+    fun aFinderThatFailsLeavesCroppingByHand() {
+        finder.failure = VisionException("The face_detection_yunet_2023mar.onnx model could not be loaded. Reinstall Photo Dokan.")
+        withFinder()
+        importPortrait()
+        assertNotNull(state.draft, "the photo still opens")
+        assertEquals(CropConfig(), state.edit?.recipe?.crop)
+    }
+
+    @Test
+    fun fitFaceUndoesHandWorkInOneStep() {
+        finder.faces = listOf(face())
+        withFinder()
+        importPortrait()
+        vm.updateCrop { w, h, a, c -> CropGeometry.pan(w, h, a, c, 0.2, 0.0) }
+        vm.commit()
+        val moved = state.edit!!.recipe.crop
+
+        vm.fitFace()
+        assertEquals(fitted(PhotoSizePreset.STUDIO_SLOT), state.edit!!.recipe.crop)
+        assertEquals(1, finder.searches, "the faces found on opening are used again")
+        vm.undo()
+        assertEquals(moved, state.edit!!.recipe.crop)
+    }
+
+    @Test
+    fun anotherPhotoSizeKeepsTheHeadOnItsGuide() {
+        finder.faces = listOf(face())
+        withFinder()
+        importPortrait()
+        vm.setPreset(PhotoSizePreset.PASSPORT_35X45)
+        assertEquals(fitted(PhotoSizePreset.PASSPORT_35X45), state.edit!!.recipe.crop)
+    }
+
+    @Test
+    fun aCropMovedByHandStaysPutForAnotherPhotoSize() {
+        finder.faces = listOf(face())
+        withFinder()
+        importPortrait()
+        vm.updateCrop { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 0.8) }
+        vm.commit()
+        val byHand = state.edit!!.recipe.crop
+        vm.setPreset(PhotoSizePreset.PASSPORT_35X45)
+        assertEquals(CropGeometry.clamp(400, 600, PhotoSizePreset.PASSPORT_35X45.aspect, byHand), state.edit!!.recipe.crop)
+    }
+
+    @Test
+    fun aSavedCustomerKeepsTheirCrop() {
+        vm.import(PhotoSource("IMG_2.jpg") { portrait })
+        vm.saveDraft()
+        val customer = library.customersOn(now).single()
+        finder.faces = listOf(face())
+        withFinder()
+        vm.select(customer)
+        assertEquals(CropConfig(), state.edit?.recipe?.crop)
+        assertEquals(0, finder.searches)
+    }
+
+    @Test
+    fun withoutAFinderThereIsNoFitFace() {
+        assertFalse(vm.canFitFace)
+        importPortrait()
+        vm.fitFace()
+        assertEquals(CropConfig(), state.edit?.recipe?.crop)
+        assertNull(state.message)
     }
 }
