@@ -8,7 +8,23 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 import javax.imageio.ImageIO
 import kotlin.math.PI
-import kotlin.math.ceil
+
+actual fun photoSize(bytes: ByteArray): Pair<Int, Int>? {
+    val input = ImageIO.createImageInputStream(ByteArrayInputStream(bytes)) ?: return null
+    input.use {
+        val reader = ImageIO.getImageReaders(input).asSequence().firstOrNull() ?: return null
+        return try {
+            reader.input = input
+            val width = reader.getWidth(0)
+            val height = reader.getHeight(0)
+            if (ExifOrientation.read(bytes).swapsDimensions) height to width else width to height
+        } catch (e: IOException) {
+            null
+        } finally {
+            reader.dispose()
+        }
+    }
+}
 
 actual fun decodePreview(bytes: ByteArray, maxSide: Int): PhotoPreview? {
     val input = ImageIO.createImageInputStream(ByteArrayInputStream(bytes)) ?: return null
@@ -19,7 +35,8 @@ actual fun decodePreview(bytes: ByteArray, maxSide: Int): PhotoPreview? {
             val width = reader.getWidth(0)
             val height = reader.getHeight(0)
             // Skip pixels while decoding, so a 24 MP photo never needs full-size memory for the preview.
-            val step = maxOf(1, ceil(maxOf(width, height) / maxSide.toDouble()).toInt())
+            // Whole steps that keep the longer side at least maxSide, as the phone's decoder does.
+            val step = maxOf(1, maxOf(width, height) / maxSide)
             val param = reader.defaultReadParam.apply { setSourceSubsampling(step, step, 0, 0) }
             val orientation = ExifOrientation.read(bytes)
             val upright = reader.read(0, param).oriented(orientation)

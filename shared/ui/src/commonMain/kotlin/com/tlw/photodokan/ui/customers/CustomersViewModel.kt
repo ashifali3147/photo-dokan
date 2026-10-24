@@ -20,6 +20,7 @@ import com.tlw.photodokan.ui.photo.PhotoSource
 import com.tlw.photodokan.ui.photo.decodePreview
 import com.tlw.photodokan.ui.print.PrintOrders
 import com.tlw.photodokan.ui.platform.encodeJpeg
+import com.tlw.photodokan.ui.platform.timed
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -131,7 +132,8 @@ class CustomersViewModel(
 
     /** Opens a saved customer in the editor with their last edit. */
     fun select(customer: Customer) = launchWork {
-        val preview = decodePreview(library.readOriginal(customer))
+        val original = timed("Read customer ${customer.label}") { library.readOriginal(customer) }
+        val preview = timed("Open photo of ${original.size shr 10} KB") { decodePreview(original) }
         if (preview == null) {
             error("The photo of customer ${customer.label} could not be opened.")
         } else {
@@ -149,7 +151,7 @@ class CustomersViewModel(
             // E.g. a share whose app took back its permission, or a file on a removed card.
             return@launchWork error("Could not open \"${source.name}\". Choose it with Choose photo instead.")
         }
-        val preview = decodePreview(original)
+        val preview = timed("Open photo of ${original.size shr 10} KB") { decodePreview(original) }
         if (preview == null) {
             error("\"${source.name}\" is not a photo Photo Dokan can open. Choose a JPEG or PNG photo.")
         } else {
@@ -287,7 +289,7 @@ class CustomersViewModel(
         val rect = CropGeometry.rect(image.width, image.height, preset.aspect, edit.live.crop)
         val width = mmToPixels(preset.size.width, FINAL_DPI).roundToInt()
         val height = mmToPixels(preset.size.height, FINAL_DPI).roundToInt()
-        return encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(edit.live)))
+        return timed("Make final.jpg") { encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(edit.live))) }
     }
 
     private fun refresh() = launchWork { loadList() }

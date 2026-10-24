@@ -16,6 +16,7 @@ import com.tlw.photodokan.print.PrintException
 import com.tlw.photodokan.print.PrinterPage
 import com.tlw.photodokan.print.SimplePdfRenderer
 import com.tlw.photodokan.print.onWholePoints
+import com.tlw.photodokan.ui.platform.timed
 import java.io.FileOutputStream
 import java.io.IOException
 import java.lang.ref.WeakReference
@@ -83,7 +84,7 @@ class AndroidPhonePrinter(app: Application) : PhonePrinter {
             } catch (e: Exception) {
                 return callback.onLayoutFailed(e.message)
             }
-            shown = SimplePdfRenderer().render(pages)
+            shown = timed("Make print PDF") { SimplePdfRenderer().render(pages) }
             val info = PrintDocumentInfo.Builder("$jobName.pdf")
                 .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
                 .setPageCount(pages.pages.size)

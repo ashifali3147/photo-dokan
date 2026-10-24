@@ -3,8 +3,10 @@ package com.tlw.photodokan.core.imaging
 import com.tlw.photodokan.core.model.CropConfig
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 
 /**
@@ -102,6 +104,17 @@ object CropGeometry {
         // The photo was turned clockwise (y points down); turn the offset back.
         val a = rect.rotationDegrees * PI / 180
         return Pair(rect.centerX + dx * cos(a) + dy * sin(a), rect.centerY - dx * sin(a) + dy * cos(a))
+    }
+
+    /**
+     * How long the longer side of a reduced copy of an [imageWidth] × [imageHeight] photo must be
+     * for [crop] to still span [outputWidth] pixels, so rendering it never enlarges the photo.
+     * Decoding no more than that keeps printing a big phone photo quick. Never more than the photo.
+     */
+    fun sourceSideFor(imageWidth: Int, imageHeight: Int, aspect: Double, crop: CropConfig, outputWidth: Int): Int {
+        val longer = max(imageWidth, imageHeight)
+        val cropWidth = rect(imageWidth, imageHeight, aspect, crop).width
+        return min(longer, ceil(longer * outputWidth / cropWidth - 1e-9).toInt())
     }
 
     private fun Double.within(low: Double, high: Double) = if (low > high) (low + high) / 2 else coerceIn(low, high)

@@ -11,6 +11,23 @@ expect fun today(): StudioDate
 expect fun encodeJpeg(image: ImageBitmap, quality: Int = 90): ByteArray
 
 /**
+ * Runs [block] and, on the phone, logs how long [what] took and how much memory is in use, for
+ * checking speed on a real phone: `adb logcat -s PhotoDokanPerf`.
+ */
+inline fun <T> timed(what: String, block: () -> T): T {
+    val start = monotonicNanos()
+    val result = block()
+    logTiming(what, (monotonicNanos() - start) / 1_000_000)
+    return result
+}
+
+/** A clock for measuring durations only; it has nothing to do with the date. */
+expect fun monotonicNanos(): Long
+
+/** Logs that [what] took [millis] on the phone; nothing on the PC. */
+expect fun logTiming(what: String, millis: Long)
+
+/**
  * Runs [onBack] instead of the system Back gesture while [enabled]. The innermost enabled one
  * wins. Desktop windows have no Back, so there it does nothing.
  */

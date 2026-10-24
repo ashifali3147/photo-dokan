@@ -36,6 +36,7 @@ Imaging (OpenCV, ONNX Runtime), PDF and printing modules are added in later phas
 ./gradlew :app-desktop:run              # desktop app
 ./gradlew :app-android:installDebug     # Android app on a connected device
 ./gradlew :app-desktop:packageMsi       # Windows installer (run on Windows)
+scripts/phone-check.sh                  # measure speed and smoothness on a connected phone
 ```
 
 CI builds and tests every push. The Windows MSI is built on tags (`v*`) or from the
