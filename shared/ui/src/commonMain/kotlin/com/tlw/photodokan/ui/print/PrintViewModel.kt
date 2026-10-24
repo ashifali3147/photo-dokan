@@ -29,6 +29,7 @@ import com.tlw.photodokan.print.sheetPage
 import com.tlw.photodokan.ui.editor.renderCrop
 import com.tlw.photodokan.ui.photo.decodePreview
 import com.tlw.photodokan.ui.platform.encodeJpeg
+import com.tlw.photodokan.ui.platform.timed
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -142,7 +143,9 @@ class PrintViewModel(
             try {
                 withContext(work) {
                     val dpi = printer.photoDpi()
-                    val photos = job.orders.associate { it.id to renderForPrint(it, dpi) }
+                    val photos = timed("Render ${job.orders.size} customers at ${dpi.roundToInt()} dpi") {
+                        job.orders.associate { it.id to renderForPrint(it, dpi) }
+                    }
                     val pages = job.pack(template).sheets.map { sheet -> sheetPage(template, sheet) { photos.getValue(it) } }
                     printer.print(PrintDocument(pages), jobName(job))
                 }
@@ -168,7 +171,7 @@ class PrintViewModel(
     fun sharePdf() {
         val sharer = sharer ?: return
         withSheet { job, document ->
-            sharer.share(withContext(work) { pdf.render(document) }, pdfName(job))
+            sharer.share(withContext(work) { timed("Make shared PDF") { pdf.render(document) } }, pdfName(job))
             shareInstructions(job)
         }
     }
@@ -197,7 +200,9 @@ class PrintViewModel(
             try {
                 val document = withContext(work) {
                     // A phone can't hold a 50-megapixel photo at full size twice over; this is plenty for 600 dpi.
-                    val photos = job.orders.associate { it.id to renderForPrint(it, SHARE_DPI, maxSide = SHARE_DECODE_SIDE) }
+                    val photos = timed("Render ${job.orders.size} customers at ${SHARE_DPI.toInt()} dpi") {
+                        job.orders.associate { it.id to renderForPrint(it, SHARE_DPI, maxSide = SHARE_DECODE_SIDE) }
+                    }
                     PrintDocument(job.pack(template).sheets.map { sheet -> sheetPage(template, sheet) { photos.getValue(it) } })
                 }
                 val message = use(job, document)

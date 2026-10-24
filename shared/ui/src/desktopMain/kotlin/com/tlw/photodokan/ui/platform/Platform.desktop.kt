@@ -33,5 +33,10 @@ actual fun encodeJpeg(image: ImageBitmap, quality: Int): ByteArray {
     return out.toByteArray()
 }
 
+actual fun monotonicNanos(): Long = System.nanoTime()
+
+/** The studio PC is measured with its own tools; nothing is logged here. */
+actual fun logTiming(what: String, millis: Long) = Unit
+
 @Composable
 actual fun SystemBackHandler(enabled: Boolean, onBack: () -> Unit) = Unit

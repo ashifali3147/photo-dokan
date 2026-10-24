@@ -21,6 +21,13 @@ android {
         release {
             isMinifyEnabled = false
         }
+        // Release speed (not debuggable, so Compose runs at full speed) but signed with the debug key,
+        // for measuring on a phone: ./gradlew :app-android:installProfile
+        create("profile") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+        }
     }
 
     compileOptions {
