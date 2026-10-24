@@ -25,13 +25,18 @@ import com.tlw.photodokan.station.PairedDevices
 import com.tlw.photodokan.station.PrintStation
 import com.tlw.photodokan.station.StationCertificate
 import com.tlw.photodokan.station.StationHost
+import com.tlw.photodokan.station.StationJobs
 import com.tlw.photodokan.station.StationPairing
 import com.tlw.photodokan.ui.App
 import com.tlw.photodokan.ui.di.initKoin
+import com.tlw.photodokan.ui.platform.today
+import com.tlw.photodokan.ui.print.StationJobPrinter
 import kotlinx.io.files.Path
 import org.koin.dsl.module
 import org.koin.mp.KoinPlatform
 import java.io.File
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import kotlin.concurrent.thread
 
 // TODO(settings): let the operator pick the library folder, e.g. D:\PhotoDokan\Photos on the studio PC.
@@ -55,8 +60,11 @@ private val desktopModule = module {
             StationCertificate.loadOrCreate(File(data, "station.p12")),
             PrintStation.computerName(),
             StationPairing(PairedDevices(File(data, "paired-devices.json"))),
+            jobs = get(),
         )
     }
+    // Sheets from paired phones print at once and are kept in the library.
+    single<StationJobs> { StationJobPrinter(get(), get(), get(), ::today) { LocalTime.now().format(DateTimeFormatter.ofPattern("HH.mm")) } }
     single<StationHost> { get<PrintStation>() }
 }
 
