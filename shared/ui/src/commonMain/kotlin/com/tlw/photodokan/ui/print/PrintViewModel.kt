@@ -85,7 +85,7 @@ class PendingPdf(val name: String, val document: PrintDocument) {
  * The Print screen: the queue of customers to print, where their copies land on the sheet in
  * the printer, printing it, and keeping track of which slots that sheet has used. Without a
  * [printer] (the phone) the sheet is shared as a PDF through [sharer] and marked as printed by
- * hand once the PC has printed it.
+ * hand once the PC has printed it, or printed through the phone's print dialog with [phonePrinter].
  */
 class PrintViewModel(
     private val orders: PrintOrders,
@@ -95,12 +95,16 @@ class PrintViewModel(
     private val sharer: SheetSharer? = null,
     private val pdf: PdfRenderer = SimplePdfRenderer(),
     private val pdfReader: PdfSheetReader? = null,
+    private val phonePrinter: PhonePrinter? = null,
     private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     val hasPrinter: Boolean get() = printer != null
 
     val canShare: Boolean get() = sharer != null
+
+    /** The phone prints straight to a Wi-Fi printer through its print dialog. */
+    val canPrintOnPhone: Boolean get() = phonePrinter != null
 
     /** The PC prints sheet PDFs shared from the phone. */
     val canPrintPdf: Boolean get() = printer != null && pdfReader != null
@@ -163,18 +167,41 @@ class PrintViewModel(
      */
     fun sharePdf() {
         val sharer = sharer ?: return
+        withSheet { job, document ->
+            sharer.share(withContext(work) { pdf.render(document) }, pdfName(job))
+            shareInstructions(job)
+        }
+    }
+
+    /**
+     * Opens the phone's print dialog with the same sheet. As with sharing, nothing counts as
+     * printed until the operator marks it, once the sheet has come out right.
+     */
+    fun printOnPhone() {
+        val phonePrinter = phonePrinter ?: return
+        withSheet { job, document ->
+            phonePrinter.print(document, pdfName(job).removeSuffix(".pdf"))
+            phonePrintInstructions(job)
+        }
+    }
+
+    /**
+     * Lays out the queue's sheets with photos rendered off the main thread, then hands them to
+     * [use] on it; [use] returns the message for the operator.
+     */
+    private fun withSheet(use: suspend (PrintQueue, PrintDocument) -> String) {
         val job = _state.value.queue
         if (job.orders.isEmpty() || _state.value.printing) return
         viewModelScope.launch {
             _state.update { it.copy(printing = true, message = null) }
             try {
-                val bytes = withContext(work) {
+                val document = withContext(work) {
                     // A phone can't hold a 50-megapixel photo at full size twice over; this is plenty for 600 dpi.
                     val photos = job.orders.associate { it.id to renderForPrint(it, SHARE_DPI, maxSide = SHARE_DECODE_SIDE) }
-                    pdf.render(PrintDocument(job.pack(template).sheets.map { sheet -> sheetPage(template, sheet) { photos.getValue(it) } }))
+                    PrintDocument(job.pack(template).sheets.map { sheet -> sheetPage(template, sheet) { photos.getValue(it) } })
                 }
-                sharer.share(bytes, pdfName(job))
-                _state.update { it.copy(message = shareInstructions(job), messageIsError = false) }
+                val message = use(job, document)
+                _state.update { it.copy(message = message, messageIsError = false) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: PrintException) {
@@ -236,11 +263,16 @@ class PrintViewModel(
     }
 
     /** What to do with a shared PDF: which sheet the PC prints it on, then mark it printed here. */
-    private fun shareInstructions(job: PrintQueue): String = buildString {
-        append("PDF ready. Send it to the PC and print it there ")
+    private fun shareInstructions(job: PrintQueue): String =
+        "PDF ready. Send it to the PC and print it there on ${sheetText(job)}. Then press Mark as printed."
+
+    private fun phonePrintInstructions(job: PrintQueue): String =
+        "Put ${sheetText(job)} in the printer. In the print screen choose A4 paper, and photo paper and best quality if it offers them. " +
+            "Once the sheet has come out right, press Mark as printed."
+
+    private fun sheetText(job: PrintQueue): String {
         val used = job.sheet.usedSlots.size
-        append(if (used > 0) "on the part-used sheet ($used of ${template.capacity} slots used)" else "on a blank photo sheet")
-        append(". Then press Mark as printed.")
+        return if (used > 0) "the part-used sheet ($used of ${template.capacity} slots used)" else "a blank photo sheet"
     }
 
     /** The sheet came out of a printer some other way: empty the queue and remember the used slots. */

@@ -79,6 +79,19 @@ data class PrinterPage(
     companion object {
         const val PAPER_TOLERANCE_MM = 1.5
 
+        /**
+         * The page as Android's print system reports it: the paper and the printer's unprintable
+         * margins in mils (thousandths of an inch). One pixel per mil, so nothing is rounded.
+         */
+        fun fromMils(widthMils: Int, heightMils: Int, leftMils: Int, topMils: Int, rightMils: Int, bottomMils: Int) = PrinterPage(
+            dpiX = MILS_PER_INCH, dpiY = MILS_PER_INCH,
+            paperWidthPx = widthMils, paperHeightPx = heightMils,
+            offsetXPx = leftMils, offsetYPx = topMils,
+            printableWidthPx = widthMils - leftMils - rightMils, printableHeightPx = heightMils - topMils - bottomMils,
+        )
+
+        private const val MILS_PER_INCH = 1000
+
         private fun SizeMm.describe() = "${width.roundToInt()} × ${height.roundToInt()} mm"
     }
 }

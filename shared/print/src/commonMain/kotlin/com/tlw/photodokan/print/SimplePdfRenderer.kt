@@ -64,7 +64,8 @@ class SimplePdfRenderer : PdfRenderer {
             )
         }
         pdf.set(pages, "<< /Type /Pages /Kids [${pageIds.joinToString(" ") { "$it 0 R" }}] /Count ${pageIds.size} >>")
-        pdf.set(catalog, "<< /Type /Catalog /Pages $pages 0 R >>")
+        // Viewers and the phone's print system then print at actual size instead of fitting the page.
+        pdf.set(catalog, "<< /Type /Catalog /Pages $pages 0 R /ViewerPreferences << /PrintScaling /None >> >>")
         return pdf.finish(root = catalog)
     }
 

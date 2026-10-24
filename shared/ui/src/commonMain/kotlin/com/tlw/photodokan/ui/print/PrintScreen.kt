@@ -133,6 +133,10 @@ private fun ColumnScope.Queue(state: PrintState, viewModel: PrintViewModel) {
             Button(onClick = viewModel::sharePdf, enabled = idle && queue.orders.isNotEmpty()) {
                 Text(if (state.printing) "Making PDF…" else "Share PDF")
             }
+            if (viewModel.canPrintOnPhone) {
+                // Straight to a Wi-Fi printer; the PC stays the sure way to get actual size.
+                OutlinedButton(onClick = viewModel::printOnPhone, enabled = idle && queue.orders.isNotEmpty()) { Text("Print") }
+            }
             OutlinedButton(onClick = { confirm = Confirm.Printed }, enabled = idle && queue.orders.isNotEmpty()) { Text("Mark as printed") }
             TextButton(onClick = { confirm = Confirm.NewSheet }, enabled = idle && queue.sheet.usedSlots.isNotEmpty()) { Text("New sheet") }
         } else {

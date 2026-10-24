@@ -93,6 +93,17 @@ class PrintViewModelTest {
 
     private val sharer = FakeSharer()
 
+    /** Keeps what was sent to the phone's print dialog, or fails like a phone with no screen open. */
+    private class FakePhonePrinter(var failure: String? = null) : PhonePrinter {
+        val jobs = mutableListOf<Pair<PrintDocument, String>>()
+        override fun print(document: PrintDocument, jobName: String) {
+            failure?.let { throw PrintException(it) }
+            jobs += document to jobName
+        }
+    }
+
+    private val phonePrinter = FakePhonePrinter()
+
     /** Reads every PDF as [document], or refuses it with [failure]. */
     private class FakeReader(var failure: String? = null) : PdfSheetReader {
         val document = PrintDocument(listOf(PrintPage(SheetTemplate.STUDIO_A4_5X8.paper, emptyList()), PrintPage(SheetTemplate.STUDIO_A4_5X8.paper, emptyList())))
@@ -105,12 +116,18 @@ class PrintViewModelTest {
     private val reader = FakeReader()
     private val phonePdf = PickedFile("Photo Dokan 0001 0002.pdf") { "%PDF-1.4".encodeToByteArray() }
 
-    private fun start(saved: PrintQueue = PrintQueue(), withPrinter: Boolean = true, withSharer: Boolean = false, withReader: Boolean = false) {
+    private fun start(
+        saved: PrintQueue = PrintQueue(),
+        withPrinter: Boolean = true,
+        withSharer: Boolean = false,
+        withReader: Boolean = false,
+        withPhonePrinter: Boolean = false,
+    ) {
         store.saved = saved
         orders = PrintOrders(store)
         vm = PrintViewModel(
             orders, library, template, printer.takeIf { withPrinter }, sharer.takeIf { withSharer },
-            pdfReader = reader.takeIf { withReader }, work = Dispatchers.Unconfined,
+            pdfReader = reader.takeIf { withReader }, phonePrinter = phonePrinter.takeIf { withPhonePrinter }, work = Dispatchers.Unconfined,
         )
     }
 
@@ -489,6 +506,54 @@ class PrintViewModelTest {
         assertTrue(sharer.shared.isEmpty())
         assertEquals("The photo of customer 0001 could not be opened.", state.message)
         assertTrue(state.messageIsError)
+    }
+
+    @Test
+    fun thePhonePrintsTheSameSheetThroughItsPrintDialog() {
+        start(PrintQueue().add(halfRedHalfBlue(), 5).add(customer(), 4), withPrinter = false, withSharer = true, withPhonePrinter = true)
+        assertTrue(vm.canPrintOnPhone)
+        vm.printOnPhone()
+
+        val (document, name) = phonePrinter.jobs.single()
+        assertEquals("Photo Dokan 0001 0002", name)
+        assertEquals(template.paper, document.pages.single().paper)
+        assertEquals(9, images(document).size, "every copy placed")
+        assertTrue(sharer.shared.isEmpty())
+        assertFalse(state.printing)
+    }
+
+    @Test
+    fun printingOnThePhoneWaitsForMarkAsPrinted() {
+        val queue = PrintQueue(sheet = SheetState((0..6).toSet())).add(customer(), 5)
+        start(queue, withPrinter = false, withSharer = true, withPhonePrinter = true)
+        vm.printOnPhone()
+
+        assertEquals(queue, store.saved, "the dialog opening is not the sheet coming out")
+        assertEquals(
+            "Put the part-used sheet (7 of 40 slots used) in the printer. In the print screen choose A4 paper, " +
+                "and photo paper and best quality if it offers them. Once the sheet has come out right, press Mark as printed.",
+            state.message,
+        )
+        vm.markPrinted()
+        assertEquals((0..11).toSet(), store.saved.sheet.usedSlots)
+    }
+
+    @Test
+    fun aPhoneThatCannotPrintSaysWhy() {
+        phonePrinter.failure = "Open Photo Dokan on the screen, then press Print again."
+        start(PrintQueue().add(customer(), 5), withPrinter = false, withSharer = true, withPhonePrinter = true)
+        vm.printOnPhone()
+        assertEquals("Open Photo Dokan on the screen, then press Print again.", state.message)
+        assertTrue(state.messageIsError)
+        assertFalse(state.printing)
+    }
+
+    @Test
+    fun withoutAPrintServiceThereIsNoPhonePrinting() {
+        start(PrintQueue().add(customer(), 5), withPrinter = false, withSharer = true)
+        assertFalse(vm.canPrintOnPhone)
+        vm.printOnPhone()
+        assertNull(state.message)
     }
 
     @Test
