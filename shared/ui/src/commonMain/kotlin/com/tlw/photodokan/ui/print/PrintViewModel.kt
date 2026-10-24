@@ -19,9 +19,12 @@ import com.tlw.photodokan.print.CalibrationMeasurement
 import com.tlw.photodokan.print.CalibrationSheet
 import com.tlw.photodokan.print.PhotoSettings
 import com.tlw.photodokan.print.PrintCalibration
+import com.tlw.photodokan.print.PdfRenderer
+import com.tlw.photodokan.print.PdfSheetReader
 import com.tlw.photodokan.print.PrintDocument
 import com.tlw.photodokan.print.PrintException
 import com.tlw.photodokan.print.SheetPrinter
+import com.tlw.photodokan.print.SimplePdfRenderer
 import com.tlw.photodokan.print.sheetPage
 import com.tlw.photodokan.ui.editor.renderCrop
 import com.tlw.photodokan.ui.photo.decodePreview
@@ -53,6 +56,8 @@ data class PrintState(
     val choosingSettings: Boolean = false,
     /** The size correction saved with the photo settings; null when the printer keeps none. */
     val calibration: PrintCalibration? = null,
+    /** A sheet PDF from the phone, read and waiting for the operator to confirm printing it. */
+    val pendingPdf: PendingPdf? = null,
     /** The Calibrate window is open. */
     val calibrating: Boolean = false,
     /** Why the measurements entered in the Calibrate window were not saved. */
@@ -71,20 +76,34 @@ data class PrintState(
     val shownSheet: PackedSheet get() = sheets[sheetIndex.coerceIn(sheets.indices)]
 }
 
+/** A sheet PDF from the phone: its file [name] and the pages read from it. */
+class PendingPdf(val name: String, val document: PrintDocument) {
+    val pages: Int get() = document.pages.size
+}
+
 /**
  * The Print screen: the queue of customers to print, where their copies land on the sheet in
  * the printer, printing it, and keeping track of which slots that sheet has used. Without a
- * [printer] (Android for now) sheets are marked as printed by hand.
+ * [printer] (the phone) the sheet is shared as a PDF through [sharer] and marked as printed by
+ * hand once the PC has printed it.
  */
 class PrintViewModel(
     private val orders: PrintOrders,
     private val library: PhotoLibrary,
     val template: SheetTemplate,
     private val printer: SheetPrinter? = null,
+    private val sharer: SheetSharer? = null,
+    private val pdf: PdfRenderer = SimplePdfRenderer(),
+    private val pdfReader: PdfSheetReader? = null,
     private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     val hasPrinter: Boolean get() = printer != null
+
+    val canShare: Boolean get() = sharer != null
+
+    /** The PC prints sheet PDFs shared from the phone. */
+    val canPrintPdf: Boolean get() = printer != null && pdfReader != null
 
     private val _state = MutableStateFlow(stateFor(orders.queue.value))
     val state: StateFlow<PrintState> = _state.asStateFlow()
@@ -135,6 +154,93 @@ class PrintViewModel(
                 _state.update { it.copy(printing = false) }
             }
         }
+    }
+
+    /**
+     * Makes the queue's sheet PDF, photos rendered from the originals at [SHARE_DPI] and laid out
+     * on this device's sheet, and hands it to [sharer]. Nothing counts as printed yet: the queue
+     * stays until the operator marks it printed, once the PC has printed the PDF.
+     */
+    fun sharePdf() {
+        val sharer = sharer ?: return
+        val job = _state.value.queue
+        if (job.orders.isEmpty() || _state.value.printing) return
+        viewModelScope.launch {
+            _state.update { it.copy(printing = true, message = null) }
+            try {
+                val bytes = withContext(work) {
+                    // A phone can't hold a 50-megapixel photo at full size twice over; this is plenty for 600 dpi.
+                    val photos = job.orders.associate { it.id to renderForPrint(it, SHARE_DPI, maxSide = SHARE_DECODE_SIDE) }
+                    pdf.render(PrintDocument(job.pack(template).sheets.map { sheet -> sheetPage(template, sheet) { photos.getValue(it) } }))
+                }
+                sharer.share(bytes, pdfName(job))
+                _state.update { it.copy(message = shareInstructions(job), messageIsError = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: PrintException) {
+                error(e.message ?: "The PDF could not be made.")
+            } catch (e: Exception) {
+                error("The PDF could not be made: ${e.message ?: e::class.simpleName}")
+            } finally {
+                _state.update { it.copy(printing = false) }
+            }
+        }
+    }
+
+    /** Reads a sheet PDF from the phone; printing waits for the operator to confirm. */
+    fun openPdf(file: PickedFile) {
+        val reader = pdfReader ?: return
+        if (_state.value.printing) return
+        viewModelScope.launch {
+            _state.update { it.copy(message = null) }
+            try {
+                val document = withContext(work) { reader.read(file.read()) }
+                _state.update { it.copy(pendingPdf = PendingPdf(file.name, document)) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: PrintException) {
+                error(e.message ?: "The PDF could not be read.")
+            } catch (e: Exception) {
+                error("\"${file.name}\" could not be opened: ${e.message ?: e::class.simpleName}")
+            }
+        }
+    }
+
+    fun cancelPdf() = _state.update { it.copy(pendingPdf = null) }
+
+    /**
+     * Prints the confirmed PDF from the phone, with this printer's photo settings and correction.
+     * The phone keeps track of that sheet, so this PC's queue and sheet don't change.
+     */
+    fun printPdf() {
+        val printer = printer ?: return
+        val pending = _state.value.pendingPdf ?: return
+        if (_state.value.printing) return
+        viewModelScope.launch {
+            _state.update { it.copy(pendingPdf = null, printing = true, message = null) }
+            try {
+                // Shown in the Windows print queue; the phone's file names already start with "Photo Dokan".
+                val name = pending.name.removeSuffix(".pdf").let { if (it.startsWith("Photo Dokan")) it else "Photo Dokan $it" }
+                withContext(work) { printer.print(pending.document, name) }
+                _state.update { it.copy(message = "Printed \"${pending.name}\". Press Mark as printed on the phone.", messageIsError = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: PrintException) {
+                error(e.message ?: "Printing failed.")
+            } catch (e: Exception) {
+                error("Printing failed: ${e.message ?: e::class.simpleName}")
+            } finally {
+                _state.update { it.copy(printing = false) }
+            }
+        }
+    }
+
+    /** What to do with a shared PDF: which sheet the PC prints it on, then mark it printed here. */
+    private fun shareInstructions(job: PrintQueue): String = buildString {
+        append("PDF ready. Send it to the PC and print it there ")
+        val used = job.sheet.usedSlots.size
+        append(if (used > 0) "on the part-used sheet ($used of ${template.capacity} slots used)" else "on a blank photo sheet")
+        append(". Then press Mark as printed.")
     }
 
     /** The sheet came out of a printer some other way: empty the queue and remember the used slots. */
@@ -256,9 +362,9 @@ class PrintViewModel(
         _state.update { it.copy(printerName = name, photoSettings = settings, calibration = calibration) }
     }
 
-    private fun renderForPrint(order: QueuedOrder, dpi: Double): ByteArray {
+    private fun renderForPrint(order: QueuedOrder, dpi: Double, maxSide: Int = Int.MAX_VALUE): ByteArray {
         val customer = order.customer
-        val photo = decodePreview(library.readOriginal(customer), maxSide = Int.MAX_VALUE)
+        val photo = decodePreview(library.readOriginal(customer), maxSide = maxSide)
             ?: throw PrintException("The photo of customer ${customer.label} could not be opened.")
         val recipe = library.readRecipe(customer) ?: EditRecipe(presetId = PhotoSizePreset.STUDIO_SLOT.id)
         val slot = template.photo
@@ -303,7 +409,18 @@ class PrintViewModel(
         const val THUMBNAIL_SIDE = 240
         const val PRINT_JPEG_QUALITY = 95
 
+        /** Shared PDFs are printed on the PC; 600 dpi is more than a photo printer resolves. */
+        const val SHARE_DPI = 600.0
+        const val SHARE_DECODE_SIDE = 4000
+
         private fun photosText(n: Int) = if (n == 1) "1 photo" else "$n photos"
+
+        /** The shared file, e.g. "Photo Dokan 0001 0003.pdf", or "Photo Dokan 0001 0002 0003 and 2 more.pdf". */
+        internal fun pdfName(queue: PrintQueue): String {
+            val labels = queue.orders.map { it.customer.label }
+            val more = if (labels.size > 3) " and ${labels.size - 3} more" else ""
+            return "Photo Dokan ${labels.take(3).joinToString(" ")}$more.pdf"
+        }
 
         /** Shown in the Windows print queue, e.g. "Photo Dokan 0001, 0002". */
         internal fun jobName(queue: PrintQueue): String {

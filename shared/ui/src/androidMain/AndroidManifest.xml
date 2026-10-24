@@ -10,5 +10,16 @@
             android:name="com.tlw.photodokan.ui.photo.CameraActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Material.NoActionBar" />
+
+        <!-- Lets the app receiving a shared sheet PDF read it. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/photo_dokan_shared_files" />
+        </provider>
     </application>
 </manifest>

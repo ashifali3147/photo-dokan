@@ -7,6 +7,8 @@ import com.tlw.photodokan.core.model.PrintQueueStore
 import com.tlw.photodokan.library.FilePhotoLibrary
 import com.tlw.photodokan.library.FilePrintQueueStore
 import com.tlw.photodokan.ui.di.initKoin
+import com.tlw.photodokan.ui.print.AndroidSheetSharer
+import com.tlw.photodokan.ui.print.SheetSharer
 import kotlinx.io.files.Path
 import org.koin.dsl.module
 
@@ -22,6 +24,8 @@ class PhotoDokanApp : Application() {
                 module {
                     single<PhotoLibrary> { FilePhotoLibrary(Path(photos, "Photo Dokan")) }
                     single<PrintQueueStore> { FilePrintQueueStore(Path(filesDir.path, "print-queue.json")) }
+                    // No printer on the phone: sheets go to the PC as PDFs.
+                    single<SheetSharer> { AndroidSheetSharer(this@PhotoDokanApp) }
                 },
             ),
         )

@@ -9,6 +9,8 @@ import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.print.CalibrationMeasurement
 import com.tlw.photodokan.print.CalibrationSheet
 import com.tlw.photodokan.print.PageItem
+import com.tlw.photodokan.print.PdfSheetReader
+import com.tlw.photodokan.print.PrintPage
 import com.tlw.photodokan.print.PhotoSettings
 import com.tlw.photodokan.print.PrintCalibration
 import com.tlw.photodokan.print.PrintDocument
@@ -81,10 +83,35 @@ class PrintViewModelTest {
 
     private val printer = FakePrinter()
 
-    private fun start(saved: PrintQueue = PrintQueue(), withPrinter: Boolean = true) {
+    /** Keeps what it was asked to share, as the phone's share sheet would receive it. */
+    private class FakeSharer : SheetSharer {
+        val shared = mutableListOf<Pair<ByteArray, String>>()
+        override fun share(pdf: ByteArray, fileName: String) {
+            shared += pdf to fileName
+        }
+    }
+
+    private val sharer = FakeSharer()
+
+    /** Reads every PDF as [document], or refuses it with [failure]. */
+    private class FakeReader(var failure: String? = null) : PdfSheetReader {
+        val document = PrintDocument(listOf(PrintPage(SheetTemplate.STUDIO_A4_5X8.paper, emptyList()), PrintPage(SheetTemplate.STUDIO_A4_5X8.paper, emptyList())))
+        override fun read(pdf: ByteArray): PrintDocument {
+            failure?.let { throw PrintException(it) }
+            return document
+        }
+    }
+
+    private val reader = FakeReader()
+    private val phonePdf = PickedFile("Photo Dokan 0001 0002.pdf") { "%PDF-1.4".encodeToByteArray() }
+
+    private fun start(saved: PrintQueue = PrintQueue(), withPrinter: Boolean = true, withSharer: Boolean = false, withReader: Boolean = false) {
         store.saved = saved
         orders = PrintOrders(store)
-        vm = PrintViewModel(orders, library, template, printer.takeIf { withPrinter }, work = Dispatchers.Unconfined)
+        vm = PrintViewModel(
+            orders, library, template, printer.takeIf { withPrinter }, sharer.takeIf { withSharer },
+            pdfReader = reader.takeIf { withReader }, work = Dispatchers.Unconfined,
+        )
     }
 
     /** A saved customer whose original is a 720 × 680 photo, red on the left half and blue on the right. */
@@ -417,6 +444,104 @@ class PrintViewModelTest {
         assertEquals(PhotoSettings.NotSupported, state.photoSettings)
         vm.choosePhotoSettings()
         assertNull(state.message)
+    }
+
+    @Test
+    fun thePhoneSharesTheSheetAsAPdf() {
+        start(PrintQueue(sheet = SheetState((0..6).toSet())).add(halfRedHalfBlue(), 5).add(customer(), 4), withPrinter = false, withSharer = true)
+        assertTrue(vm.canShare)
+        vm.sharePdf()
+
+        val (pdf, name) = sharer.shared.single()
+        assertEquals("Photo Dokan 0001 0002.pdf", name)
+        val text = pdf.decodeToString()
+        assertTrue(text.startsWith("%PDF-1.4"))
+        assertEquals(1, Regex("/Type /Page ").findAll(text).count(), "one sheet")
+        assertEquals(9, Regex(" Do Q").findAll(text).count(), "every copy placed")
+        assertTrue(text.contains("/MediaBox [0 0 595.2756 841.8898]"))
+        assertFalse(state.printing)
+    }
+
+    @Test
+    fun sharingIsNotPrinting() {
+        val queue = PrintQueue(sheet = SheetState((0..6).toSet())).add(customer(), 5)
+        start(queue, withPrinter = false, withSharer = true)
+        vm.sharePdf()
+
+        assertEquals(queue, store.saved, "the queue waits until the PC has printed it")
+        assertEquals("PDF ready. Send it to the PC and print it there on the part-used sheet (7 of 40 slots used). Then press Mark as printed.", state.message)
+        vm.markPrinted()
+        assertEquals((0..11).toSet(), store.saved.sheet.usedSlots)
+    }
+
+    @Test
+    fun aFreshSheetIsSharedForABlankSheet() {
+        start(PrintQueue().add(customer(), 5), withPrinter = false, withSharer = true)
+        vm.sharePdf()
+        assertEquals("PDF ready. Send it to the PC and print it there on a blank photo sheet. Then press Mark as printed.", state.message)
+    }
+
+    @Test
+    fun aPhotoThatCannotBeOpenedStopsTheShare() {
+        val broken = library.create(today, null, null, byteArrayOf(1, 2, 3))
+        start(PrintQueue().add(broken, 5), withPrinter = false, withSharer = true)
+        vm.sharePdf()
+        assertTrue(sharer.shared.isEmpty())
+        assertEquals("The photo of customer 0001 could not be opened.", state.message)
+        assertTrue(state.messageIsError)
+    }
+
+    @Test
+    fun thePcPrintsAPdfFromThePhoneOnceConfirmed() {
+        val queue = PrintQueue(sheet = SheetState((0..4).toSet())).add(customer(), 5)
+        start(queue, withReader = true)
+        assertTrue(vm.canPrintPdf)
+        vm.openPdf(phonePdf)
+        assertEquals(2, state.pendingPdf?.pages)
+        assertTrue(printer.jobs.isEmpty(), "nothing prints before the operator confirms")
+
+        vm.printPdf()
+        val (document, jobName) = printer.jobs.single()
+        assertEquals(reader.document, document)
+        assertEquals("Photo Dokan 0001 0002", jobName)
+        assertEquals(queue, store.saved, "this PC's queue and sheet don't change")
+        assertEquals("Printed \"Photo Dokan 0001 0002.pdf\". Press Mark as printed on the phone.", state.message)
+        assertNull(state.pendingPdf)
+        assertFalse(state.printing)
+    }
+
+    @Test
+    fun aPdfCanBePutAsideWithoutPrinting() {
+        start(withReader = true)
+        vm.openPdf(phonePdf)
+        vm.cancelPdf()
+        assertNull(state.pendingPdf)
+        vm.printPdf()
+        assertTrue(printer.jobs.isEmpty())
+    }
+
+    @Test
+    fun aPdfThatCannotBePrintedSaysWhy() {
+        start(withReader = true)
+        reader.failure = "This file is not a PDF, or it is damaged."
+        vm.openPdf(phonePdf)
+        assertNull(state.pendingPdf)
+        assertEquals(reader.failure, state.message)
+        assertTrue(state.messageIsError)
+    }
+
+    @Test
+    fun onlyAPcWithAPrinterPrintsPdfs() {
+        start(withPrinter = false, withSharer = true, withReader = true)
+        assertFalse(vm.canPrintPdf)
+        start(withReader = false)
+        assertFalse(vm.canPrintPdf)
+    }
+
+    @Test
+    fun sharedFileNamesStayShort() {
+        val queue = (1..5).fold(PrintQueue()) { q, n -> q.add(Customer(today, n), 5) }
+        assertEquals("Photo Dokan 0001 0002 0003 and 2 more.pdf", PrintViewModel.pdfName(queue))
     }
 
     @Test

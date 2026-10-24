@@ -57,3 +57,11 @@ sealed interface PageItem {
 interface PdfRenderer {
     fun render(document: PrintDocument): ByteArray
 }
+
+/**
+ * Reads a sheet PDF that Photo Dokan made, on this device or another, back into a [PrintDocument],
+ * so it prints exactly like a sheet made here. Throws [PrintException] for any other PDF.
+ */
+interface PdfSheetReader {
+    fun read(pdf: ByteArray): PrintDocument
+}
