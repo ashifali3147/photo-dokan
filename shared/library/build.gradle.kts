@@ -19,8 +19,21 @@ kotlin {
             api(libs.kotlinx.io.core)
             implementation(libs.kotlinx.serialization.json)
         }
-        commonTest.dependencies {
-            implementation(libs.kotlin.test)
+        commonTest {
+            // What every LibraryFiles must do; the phone's version runs it on a device too.
+            kotlin.srcDir("src/filesContractTest/kotlin")
+            dependencies {
+                implementation(libs.kotlin.test)
+            }
+        }
+        // Runs on a phone or emulator: ./gradlew :shared:library:connectedDebugAndroidTest
+        val androidInstrumentedTest by getting {
+            kotlin.srcDir("src/filesContractTest/kotlin")
+            dependencies {
+                implementation(libs.kotlin.test.junit)
+                implementation(libs.androidx.test.runner)
+                implementation(libs.androidx.test.junit)
+            }
         }
     }
 }
@@ -30,6 +43,7 @@ android {
     compileSdk = libs.versions.android.compileSdk.get().toInt()
     defaultConfig {
         minSdk = libs.versions.android.minSdk.get().toInt()
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

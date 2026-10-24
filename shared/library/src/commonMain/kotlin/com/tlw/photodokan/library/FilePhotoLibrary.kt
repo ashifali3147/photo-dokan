@@ -12,93 +12,79 @@ import kotlinx.io.files.SystemFileSystem
 import kotlinx.serialization.json.Json
 
 /**
- * The photo library as folders on disk: {root}/{day folder}/{0001_Name}/ holding the original,
+ * The photo library as folders: {root}/{day folder}/{0001_Name}/ holding the original,
  * recipe.json, final.jpg and customer.json. Works the same on Windows and Android.
  */
 class FilePhotoLibrary(
-    private val root: Path,
+    private val files: LibraryFiles,
     private val layout: LibraryLayout = LibraryLayout(),
-    private val fs: FileSystem = SystemFileSystem,
 ) : PhotoLibrary {
 
-    override fun nextNumber(date: StudioDate): Int {
-        val dayDir = resolve(layout.dayFolder(date))
-        return if (fs.exists(dayDir)) LibraryLayout.nextCustomerNumber(fs.list(dayDir).map { it.name }) else 1
-    }
+    /** The library in a folder on disk. */
+    constructor(root: Path, layout: LibraryLayout = LibraryLayout(), fs: FileSystem = SystemFileSystem) :
+        this(SystemLibraryFiles(root, fs), layout)
+
+    override fun nextNumber(date: StudioDate): Int =
+        LibraryLayout.nextCustomerNumber(files.list(layout.dayFolder(date)))
 
     override fun create(date: StudioDate, name: String?, phone: String?, original: ByteArray): Customer {
-        fs.createDirectories(resolve(layout.dayFolder(date)))
+        files.createDirectories(layout.dayFolder(date))
         var number = nextNumber(date)
         while (true) {
             val customer = Customer(date, number, name?.trim()?.ifEmpty { null }, phone?.trim()?.ifEmpty { null })
-            val dir = folderOf(customer)
-            try {
-                fs.createDirectories(dir, mustCreate = true)
-            } catch (e: IOException) {
-                if (fs.exists(dir)) { number++; continue } // taken a moment ago: use the next number
-                throw e
-            }
-            write(Path(dir, originalFileName(original)), original)
-            write(Path(dir, LibraryLayout.CUSTOMER_FILE), json.encodeToString(customer).encodeToByteArray())
+            val dir = layout.customerFolder(customer)
+            if (!files.createDirectory(dir)) { number++; continue } // taken a moment ago: use the next number
+            files.write("$dir/${originalFileName(original)}", original)
+            files.write("$dir/${LibraryLayout.CUSTOMER_FILE}", json.encodeToString(customer).encodeToByteArray())
             return customer
         }
     }
 
     override fun saveEdit(customer: Customer, recipe: EditRecipe, finalJpeg: ByteArray) {
-        val dir = folderOf(customer)
-        require(fs.exists(dir)) { "Customer ${customer.label} on ${customer.date} is not in the library" }
-        write(Path(dir, LibraryLayout.RECIPE_FILE), json.encodeToString(recipe).encodeToByteArray())
-        write(Path(dir, LibraryLayout.FINAL_FILE), finalJpeg)
+        val dir = layout.customerFolder(customer)
+        require(files.isDirectory(dir)) { "Customer ${customer.label} on ${customer.date} is not in the library" }
+        files.write("$dir/${LibraryLayout.RECIPE_FILE}", json.encodeToString(recipe).encodeToByteArray())
+        files.write("$dir/${LibraryLayout.FINAL_FILE}", finalJpeg)
     }
 
     override fun customersOn(date: StudioDate): List<Customer> {
-        val dayDir = resolve(layout.dayFolder(date))
-        if (!fs.exists(dayDir)) return emptyList()
-        return fs.list(dayDir).mapNotNull(::readCustomer).sortedBy { it.number }
+        val dayDir = layout.dayFolder(date)
+        return files.list(dayDir).mapNotNull { readCustomer("$dayDir/$it") }.sortedBy { it.number }
     }
 
     override fun search(query: String): List<Customer> {
         val depth = layout.dayPattern.split('/').size + 1
-        return customerDirs(root, depth).mapNotNull(::readCustomer)
+        return customerDirs("", depth).mapNotNull(::readCustomer)
             .filter { it.matches(query) }
             .sortedWith(compareByDescending<Customer> { it.date }.thenByDescending { it.number })
     }
 
     override fun readOriginal(customer: Customer): ByteArray {
-        val dir = folderOf(customer)
-        val file = ORIGINAL_NAMES.map { Path(dir, it) }.firstOrNull(fs::exists)
+        val dir = layout.customerFolder(customer)
+        val file = ORIGINAL_NAMES.map { "$dir/$it" }.firstOrNull(files::exists)
             ?: throw IOException("No original photo for customer ${customer.label} on ${customer.date}")
-        return read(file)
+        return files.read(file)
     }
 
     override fun readRecipe(customer: Customer): EditRecipe? =
-        Path(folderOf(customer), LibraryLayout.RECIPE_FILE).takeIf(fs::exists)
-            ?.let { runCatching { json.decodeFromString<EditRecipe>(read(it).decodeToString()) }.getOrNull() }
+        "${layout.customerFolder(customer)}/${LibraryLayout.RECIPE_FILE}".takeIf(files::exists)
+            ?.let { runCatching { json.decodeFromString<EditRecipe>(files.read(it).decodeToString()) }.getOrNull() }
 
     override fun readFinal(customer: Customer): ByteArray? =
-        Path(folderOf(customer), LibraryLayout.FINAL_FILE).takeIf(fs::exists)?.let(::read)
+        "${layout.customerFolder(customer)}/${LibraryLayout.FINAL_FILE}".takeIf(files::exists)?.let(files::read)
 
-    private fun resolve(relative: String) = Path(root, *relative.split('/').toTypedArray())
-
-    private fun folderOf(customer: Customer) = resolve(layout.customerFolder(customer))
-
-    /** Folders that hold a customer.json, [depth] levels below [dir]. */
-    private fun customerDirs(dir: Path, depth: Int): List<Path> {
-        if (fs.metadataOrNull(dir)?.isDirectory != true) return emptyList()
+    /** Folders that may hold a customer.json, [depth] levels below [dir]. */
+    private fun customerDirs(dir: String, depth: Int): List<String> {
         if (depth == 0) return listOf(dir)
-        return fs.list(dir).flatMap { customerDirs(it, depth - 1) }
+        return files.list(dir).flatMap { customerDirs(if (dir.isEmpty()) it else "$dir/$it", depth - 1) }
     }
 
     /** Folders without a readable customer.json (e.g. the studio's older folders) are skipped. */
-    private fun readCustomer(dir: Path): Customer? {
-        val file = Path(dir, LibraryLayout.CUSTOMER_FILE)
-        if (!fs.exists(file)) return null
-        return runCatching { json.decodeFromString<Customer>(read(file).decodeToString()) }.getOrNull()
+    private fun readCustomer(dir: String): Customer? {
+        val file = "$dir/${LibraryLayout.CUSTOMER_FILE}"
+        if (!files.exists(file)) return null
+        return runCatching { json.decodeFromString<Customer>(files.read(file).decodeToString()) }.getOrNull()
     }
-
-    private fun read(path: Path): ByteArray = fs.readBytes(path)
-
-    private fun write(path: Path, bytes: ByteArray) = fs.writeAtomically(path, bytes)
 
     companion object {
         private val ORIGINAL_NAMES = listOf(LibraryLayout.ORIGINAL_FILE, "original.png")
