@@ -26,6 +26,9 @@ import com.tlw.photodokan.print.PrintException
 import com.tlw.photodokan.print.SheetPrinter
 import com.tlw.photodokan.print.SimplePdfRenderer
 import com.tlw.photodokan.print.sheetPage
+import com.tlw.photodokan.station.StationConnector
+import com.tlw.photodokan.station.StationException
+import com.tlw.photodokan.station.StationLinkStore
 import com.tlw.photodokan.ui.editor.renderCrop
 import com.tlw.photodokan.ui.photo.decodePreview
 import com.tlw.photodokan.ui.photo.photoSize
@@ -70,6 +73,12 @@ data class PrintState(
     /** Why the measurements entered in the Calibrate window were not saved. */
     val calibrationError: String? = null,
     val printing: Boolean = false,
+    /** The PC this phone is paired with, by name; null when it isn't paired with one. */
+    val stationName: String? = null,
+    /** The PC a sheet is on its way to, while it is sent and printed there. */
+    val sendingTo: String? = null,
+    /** A sheet that couldn't be sent to the PC, kept so it can be shared instead without making it again. */
+    val unsent: UnsentSheet? = null,
     val message: String? = null,
     val messageIsError: Boolean = false,
 ) {
@@ -83,6 +92,9 @@ data class PrintState(
     val shownSheet: PackedSheet get() = sheets[sheetIndex.coerceIn(sheets.indices)]
 }
 
+/** A sheet PDF the PC didn't print: why ([reason]), and the PDF itself to share instead. */
+class UnsentSheet(val reason: String, val pdf: ByteArray, val fileName: String)
+
 /** A sheet PDF from the phone: its file [name] and the pages read from it. */
 class PendingPdf(val name: String, val document: PrintDocument) {
     val pages: Int get() = document.pages.size
@@ -93,6 +105,7 @@ class PendingPdf(val name: String, val document: PrintDocument) {
  * the printer, printing it, and keeping track of which slots that sheet has used. Without a
  * [printer] (the phone) the sheet is shared as a PDF through [sharer] and marked as printed by
  * hand once the PC has printed it, or printed through the phone's print dialog with [phonePrinter].
+ * A phone paired with the PC's Print Station ([station] and [links]) sends the sheet straight to it.
  */
 class PrintViewModel(
     private val orders: PrintOrders,
@@ -103,6 +116,8 @@ class PrintViewModel(
     private val pdf: PdfRenderer = SimplePdfRenderer(),
     private val pdfReader: PdfSheetReader? = null,
     private val phonePrinter: PhonePrinter? = null,
+    private val station: StationConnector? = null,
+    private val links: StationLinkStore? = null,
     private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
@@ -112,6 +127,9 @@ class PrintViewModel(
 
     /** The phone prints straight to a Wi-Fi printer through its print dialog. */
     val canPrintOnPhone: Boolean get() = phonePrinter != null
+
+    /** The phone sends sheets to the PC it is paired with; see [PrintState.stationName]. */
+    val canSend: Boolean get() = station != null && links != null
 
     /** The PC prints sheet PDFs shared from the phone. */
     val canPrintPdf: Boolean get() = printer != null && pdfReader != null
@@ -181,6 +199,63 @@ class PrintViewModel(
     }
 
     /**
+     * Sends the queue's sheet PDF to the paired PC, which prints it as soon as it arrives. Once the
+     * PC says it printed, the queue empties and its slots count as used, as when the PC prints its
+     * own queue. Otherwise nothing changes, and the PDF is kept in [PrintState.unsent] so the
+     * operator can share it instead.
+     */
+    fun sendToPc() {
+        val station = station ?: return
+        val links = links ?: return
+        withSheet { job, document ->
+            val bytes = withContext(work) { timed("Make sent PDF") { pdf.render(document) } }
+            val fileName = pdfName(job)
+            val link = withContext(work) { links.load() }
+            if (link == null) {
+                _state.update { it.copy(stationName = null) }
+                notSent("This phone isn't paired with a PC any more. Pair it again in Settings.", bytes, fileName)
+            }
+            _state.update { it.copy(sendingTo = link.stationName) }
+            val result = try {
+                withContext(work) { station.send(link, bytes, fileName.removeSuffix(".pdf")) }
+            } catch (e: StationException) {
+                if (e.reason == StationException.Reason.NotPaired) {
+                    // The PC removed this phone: pairing again is the only way to send to it.
+                    withContext(work) { links.save(null) }
+                    _state.update { it.copy(stationName = null) }
+                }
+                return@withSheet notSent(e.message ?: "The PC refused the sheet.", bytes, fileName)
+            } finally {
+                _state.update { it.copy(sendingTo = null) }
+            }
+            if (!result.printed) return@withSheet notSent(result.message, bytes, fileName)
+            orders.update { it.afterPrinting(job, template) }
+            "Printed ${photosText(job.copies)} on ${link.stationName}. ${nextSheetText()}"
+        }
+    }
+
+    /** Shares the sheet that couldn't be sent, as made for sending. */
+    fun shareUnsent() {
+        val sharer = sharer ?: return
+        val unsent = _state.value.unsent ?: return
+        _state.update { it.copy(unsent = null) }
+        try {
+            sharer.share(unsent.pdf, unsent.fileName)
+            _state.update { it.copy(message = shareInstructions(_state.value.queue), messageIsError = false) }
+        } catch (e: Exception) {
+            error("The PDF could not be shared: ${e.message ?: e::class.simpleName}")
+        }
+    }
+
+    fun keepUnsent() = _state.update { it.copy(unsent = null) }
+
+    private fun notSent(reason: String, pdf: ByteArray, fileName: String): Nothing =
+        throw NotSent(UnsentSheet(reason, pdf, fileName))
+
+    /** Ends [withSheet] with the sheet kept for sharing; the reason is the message. */
+    private class NotSent(val sheet: UnsentSheet) : Exception(sheet.reason)
+
+    /**
      * Opens the phone's print dialog with the same sheet. As with sharing, nothing counts as
      * printed until the operator marks it, once the sheet has come out right.
      */
@@ -213,6 +288,9 @@ class PrintViewModel(
                 _state.update { it.copy(message = message, messageIsError = false) }
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: NotSent) {
+                _state.update { it.copy(unsent = e.sheet.takeIf { sharer != null }) }
+                error(e.sheet.reason)
             } catch (e: PrintException) {
                 error(e.message ?: "The PDF could not be made.")
             } catch (e: Exception) {
@@ -396,6 +474,10 @@ class PrintViewModel(
      */
     fun refresh() = viewModelScope.launch {
         loadPhotos(reload = true)
+        links?.let { links ->
+            val name = withContext(work) { runCatching { links.load()?.stationName }.getOrNull() }
+            _state.update { it.copy(stationName = name) }
+        }
         val printer = printer ?: return@launch
         val name = withContext(work) { runCatching { printer.printerName() }.getOrNull() }
         val settings = withContext(work) { runCatching { printer.photoSettings() }.getOrDefault(PhotoSettings.NotSaved) }

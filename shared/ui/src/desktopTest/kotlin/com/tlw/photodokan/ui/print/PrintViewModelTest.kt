@@ -16,6 +16,13 @@ import com.tlw.photodokan.print.PrintCalibration
 import com.tlw.photodokan.print.PrintDocument
 import com.tlw.photodokan.print.PrintException
 import com.tlw.photodokan.print.SheetPrinter
+import com.tlw.photodokan.station.JobResult
+import com.tlw.photodokan.station.PairedHello
+import com.tlw.photodokan.station.PairingInvite
+import com.tlw.photodokan.station.StationConnector
+import com.tlw.photodokan.station.StationException
+import com.tlw.photodokan.station.StationLink
+import com.tlw.photodokan.station.StationLinkStore
 import com.tlw.photodokan.ui.customers.InMemoryPhotoLibrary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -31,6 +38,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -116,19 +124,51 @@ class PrintViewModelTest {
     private val reader = FakeReader()
     private val phonePdf = PickedFile("Photo Dokan 0001 0002.pdf") { "%PDF-1.4".encodeToByteArray() }
 
+    private val link = StationLink("STUDIO-PC", listOf("192.168.1.5"), 47474, "ab".repeat(32), "device-1", "token-1")
+
+    /** The PC's Print Station as the phone sees it: prints what it is sent, or answers as told. */
+    private class FakeStation : StationConnector {
+        val sent = mutableListOf<Pair<ByteArray, String>>()
+        var answer = JobResult(printed = true, message = "The sheet printed on the PC.")
+        var failure: StationException? = null
+        override fun pair(invite: PairingInvite, deviceName: String) = throw UnsupportedOperationException()
+        override fun check(link: StationLink) = PairedHello(link.stationName, "Galaxy A15")
+        override fun send(link: StationLink, pdf: ByteArray, name: String): JobResult {
+            failure?.let { throw it }
+            sent += pdf to name
+            return answer
+        }
+    }
+
+    private class MemoryLinks(var saved: StationLink?) : StationLinkStore {
+        override fun load() = saved
+        override fun save(link: StationLink?) { saved = link }
+    }
+
+    private val station = FakeStation()
+    private val links = MemoryLinks(link)
+
     private fun start(
         saved: PrintQueue = PrintQueue(),
         withPrinter: Boolean = true,
         withSharer: Boolean = false,
         withReader: Boolean = false,
         withPhonePrinter: Boolean = false,
+        withStation: Boolean = false,
     ) {
         store.saved = saved
         orders = PrintOrders(store)
         vm = PrintViewModel(
             orders, library, template, printer.takeIf { withPrinter }, sharer.takeIf { withSharer },
-            pdfReader = reader.takeIf { withReader }, phonePrinter = phonePrinter.takeIf { withPhonePrinter }, work = Dispatchers.Unconfined,
+            pdfReader = reader.takeIf { withReader }, phonePrinter = phonePrinter.takeIf { withPhonePrinter },
+            station = station.takeIf { withStation }, links = links.takeIf { withStation }, work = Dispatchers.Unconfined,
         )
+    }
+
+    /** A phone paired with the PC, with [saved] queued; the Print screen has been opened. */
+    private fun startPaired(saved: PrintQueue) {
+        start(saved, withPrinter = false, withSharer = true, withStation = true)
+        vm.refresh()
     }
 
     /** A saved customer whose original is a 720 × 680 photo, red on the left half and blue on the right. */
@@ -554,6 +594,115 @@ class PrintViewModelTest {
         assertFalse(vm.canPrintOnPhone)
         vm.printOnPhone()
         assertNull(state.message)
+    }
+
+    @Test
+    fun thePhoneKnowsWhichPcItSendsTo() {
+        startPaired(PrintQueue().add(customer(), 5))
+        assertTrue(vm.canSend)
+        assertEquals("STUDIO-PC", state.stationName)
+        links.saved = null
+        vm.refresh()
+        assertNull(state.stationName, "forgotten in Settings")
+    }
+
+    @Test
+    fun aSheetSentToThePcIsPrintedThere() {
+        startPaired(PrintQueue(sheet = SheetState((0..6).toSet())).add(halfRedHalfBlue(), 5).add(customer(), 4))
+        vm.sendToPc()
+
+        val (pdf, name) = station.sent.single()
+        assertEquals("Photo Dokan 0001 0002", name)
+        val text = pdf.decodeToString()
+        assertTrue(text.startsWith("%PDF-1.4"))
+        assertEquals(9, Regex(" Do Q").findAll(text).count(), "every copy placed")
+        assertTrue(sharer.shared.isEmpty())
+        assertFalse(state.printing)
+        assertNull(state.sendingTo)
+    }
+
+    @Test
+    fun aSheetThePcPrintedLeavesTheQueue() {
+        startPaired(PrintQueue(sheet = SheetState((0..6).toSet())).add(customer(), 5))
+        vm.sendToPc()
+
+        assertTrue(store.saved.orders.isEmpty())
+        assertEquals((0..11).toSet(), store.saved.sheet.usedSlots)
+        assertEquals("Printed 5 photos on STUDIO-PC. 28 slots are left on this sheet.", state.message)
+        assertFalse(state.messageIsError)
+        assertNull(state.unsent)
+    }
+
+    @Test
+    fun anUnreachablePcOffersTheSamePdfToShare() {
+        val queue = PrintQueue().add(customer(), 5)
+        startPaired(queue)
+        station.failure = StationException("The PC can't be reached.", StationException.Reason.Unreachable)
+        vm.sendToPc()
+
+        assertEquals(queue, store.saved, "nothing printed")
+        assertEquals("The PC can't be reached.", state.message)
+        assertTrue(state.messageIsError)
+        val unsent = assertNotNull(state.unsent)
+        assertEquals("The PC can't be reached.", unsent.reason)
+        assertEquals("STUDIO-PC", state.stationName, "still paired: the PC may just be off")
+
+        vm.shareUnsent()
+        val (pdf, name) = sharer.shared.single()
+        assertTrue(pdf.contentEquals(unsent.pdf), "the PDF already made")
+        assertEquals("Photo Dokan 0001.pdf", name)
+        assertNull(state.unsent)
+        assertEquals("PDF ready. Send it to the PC and print it there on a blank photo sheet. Then press Mark as printed.", state.message)
+        assertEquals(queue, store.saved, "sharing is not printing")
+    }
+
+    @Test
+    fun whatThePcCouldNotPrintIsShownAndCanBeShared() {
+        val queue = PrintQueue().add(customer(), 5)
+        startPaired(queue)
+        station.answer = JobResult(printed = false, message = "The printer is out of paper.")
+        vm.sendToPc()
+
+        assertEquals(queue, store.saved)
+        assertEquals("The printer is out of paper.", state.message)
+        assertTrue(state.messageIsError)
+        assertNotNull(state.unsent)
+        vm.keepUnsent()
+        assertNull(state.unsent)
+        assertTrue(sharer.shared.isEmpty())
+    }
+
+    @Test
+    fun aPhoneRemovedOnThePcForgetsIt() {
+        startPaired(PrintQueue().add(customer(), 5))
+        station.failure = StationException("This phone isn't paired with the PC. Pair it again in Settings.", StationException.Reason.NotPaired)
+        vm.sendToPc()
+
+        assertNull(links.saved)
+        assertNull(state.stationName)
+        assertEquals("This phone isn't paired with the PC. Pair it again in Settings.", state.message)
+        assertNotNull(state.unsent, "the sheet can still be shared")
+    }
+
+    @Test
+    fun aPcForgottenInSettingsMeanwhileIsNotSentTo() {
+        startPaired(PrintQueue().add(customer(), 5))
+        links.saved = null
+        vm.sendToPc()
+
+        assertTrue(station.sent.isEmpty())
+        assertNull(state.stationName)
+        assertEquals("This phone isn't paired with a PC any more. Pair it again in Settings.", state.message)
+        assertNotNull(state.unsent)
+    }
+
+    @Test
+    fun aPhoneThatCannotShareKeepsNoUnsentSheet() {
+        start(PrintQueue().add(customer(), 5), withPrinter = false, withStation = true)
+        station.failure = StationException("The PC can't be reached.", StationException.Reason.Unreachable)
+        vm.sendToPc()
+        assertEquals("The PC can't be reached.", state.message)
+        assertNull(state.unsent)
     }
 
     @Test
