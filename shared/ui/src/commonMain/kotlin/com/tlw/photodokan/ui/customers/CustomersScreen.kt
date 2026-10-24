@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.library.Customer
 import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.ui.editor.AdjustControls
+import com.tlw.photodokan.ui.editor.BackgroundControls
 import com.tlw.photodokan.ui.editor.CropControls
 import com.tlw.photodokan.ui.editor.CropEditor
 import com.tlw.photodokan.ui.photo.IncomingPhotos
@@ -192,7 +193,7 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
     ) {
         when {
             edit != null -> CropEditor(
-                image = edit.preview.image,
+                image = edit.shown,
                 preset = viewModel.presetOf(edit.recipe),
                 crop = edit.recipe.crop,
                 onCropChange = viewModel::updateCrop,
@@ -211,9 +212,10 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
     if (edit != null) {
         var tab by remember { mutableStateOf(EditorTab.Crop) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            val tabs = EditorTab.entries.filter { it != EditorTab.Background || viewModel.canChangeBackground }
             SingleChoiceSegmentedButtonRow {
-                EditorTab.entries.forEachIndexed { i, t ->
-                    SegmentedButton(selected = tab == t, onClick = { tab = t }, shape = SegmentedButtonDefaults.itemShape(i, EditorTab.entries.size)) {
+                tabs.forEachIndexed { i, t ->
+                    SegmentedButton(selected = tab == t, onClick = { tab = t }, shape = SegmentedButtonDefaults.itemShape(i, tabs.size)) {
                         Text(t.label)
                     }
                 }
@@ -237,6 +239,13 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
                 onPreview = viewModel::adjust,
                 onCommit = viewModel::commit,
                 onReset = viewModel::resetAdjustments,
+            )
+            EditorTab.Background -> BackgroundControls(
+                background = edit.recipe.background,
+                pending = edit.backgroundPending,
+                onChange = viewModel::setBackground,
+                onPreview = viewModel::previewBackground,
+                onCommit = viewModel::commit,
             )
         }
     }
@@ -330,6 +339,6 @@ private fun PrintRow(customer: Customer, edit: EditSession, busy: Boolean, viewM
     }
 }
 
-private enum class EditorTab(val label: String) { Crop("Crop"), Adjust("Adjust") }
+private enum class EditorTab(val label: String) { Crop("Crop"), Adjust("Adjust"), Background("Background") }
 
 private fun customerLine(c: Customer) = listOfNotNull("Customer ${c.label}", c.name, c.phone, c.date.toString()).joinToString(" · ")

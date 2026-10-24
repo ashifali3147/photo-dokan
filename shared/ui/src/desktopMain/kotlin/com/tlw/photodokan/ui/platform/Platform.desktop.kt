@@ -3,6 +3,7 @@ package com.tlw.photodokan.ui.platform
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toAwtImage
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.tlw.photodokan.core.library.StudioDate
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -32,6 +33,9 @@ actual fun encodeJpeg(image: ImageBitmap, quality: Int): ByteArray {
     }
     return out.toByteArray()
 }
+
+actual fun imageBitmapOf(argb: IntArray, width: Int, height: Int): ImageBitmap =
+    BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB).apply { setRGB(0, 0, width, height, argb, 0, width) }.toComposeImageBitmap()
 
 actual fun monotonicNanos(): Long = System.nanoTime()
 

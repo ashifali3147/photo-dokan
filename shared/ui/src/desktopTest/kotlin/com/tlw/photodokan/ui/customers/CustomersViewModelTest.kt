@@ -7,6 +7,8 @@ import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropGeometry
 import com.tlw.photodokan.core.library.StudioDate
 import com.tlw.photodokan.core.matte.Matte
+import com.tlw.photodokan.core.model.BackgroundConfig
+import com.tlw.photodokan.core.model.BackgroundMode
 import com.tlw.photodokan.core.model.CropConfig
 import com.tlw.photodokan.core.model.PhotoSizePreset
 import com.tlw.photodokan.core.model.SheetTemplate
@@ -570,22 +572,27 @@ class CustomersViewModelTest {
 
     @Test
     fun aPhotoSavedBeforeItsMatteIsReadyStillGetsIt() {
-        // Real threads: the matte is still being worked out while the operator saves.
+        // Real threads: the matte is still being worked out in the background while the operator
+        // saves, so saving works one out itself; the background one, when it ends, changes nothing.
         val working = java.util.concurrent.CountDownLatch(1)
         val release = java.util.concurrent.CountDownLatch(1)
-        matter.during = { working.countDown(); release.await() }
+        matter.during = { if (matter.calls == 1) { working.countDown(); release.await() } }
         vm = CustomersViewModel(library, { now }, orders, SheetTemplate.STUDIO_A4_5X8, matter = matter, work = Dispatchers.Default)
         vm.import(photo())
         assertTrue(working.await(5, java.util.concurrent.TimeUnit.SECONDS))
         waitFor { state.draft != null && !state.busy }
         vm.saveDraft()
         waitFor { state.selected != null && !state.busy }
-        assertTrue(library.mattes.isEmpty(), "no matte yet")
+        assertEquals(personOnTheRight, keptMatte(), "kept with the photo")
+        assertEquals(personOnTheRight, state.edit?.matte)
 
         release.countDown()
-        waitFor { library.mattes.isNotEmpty() }
+        waitFor { matter.calls == 2 && backgroundDone() }
         assertEquals(personOnTheRight, keptMatte())
     }
+
+    /** The background matte job has finished and nothing else is running. */
+    private fun backgroundDone(): Boolean { Thread.sleep(50); return !state.busy }
 
     private fun waitFor(condition: () -> Boolean) {
         val until = System.currentTimeMillis() + 5_000
@@ -614,5 +621,84 @@ class CustomersViewModelTest {
         assertNull(state.message)
         vm.saveDraft()
         assertTrue(library.mattes.isEmpty())
+    }
+
+    // ---- The background behind the person ----
+
+    private val white = BackgroundConfig(mode = BackgroundMode.REPLACE)
+
+    /** The colour of the editor's photo at ([x], [y]) of the 40 × 20 grey photo; its left half is background. */
+    private fun shownAt(x: Int, y: Int): Int {
+        val image = state.edit!!.shown
+        return IntArray(image.width * image.height).also { image.readPixels(it) }[y * image.width + x] and 0xffffff
+    }
+
+    @Test
+    fun theStudiosSoftBlurIsOnFromTheStart() {
+        withMatter()
+        vm.import(photo())
+        val edit = assertNotNull(state.edit)
+        assertEquals(BackgroundConfig(), edit.recipe.background)
+        assertEquals(BackgroundMode.BLUR, edit.recipe.background.mode)
+        assertEquals(edit.recipe.background, edit.backgroundFor, "worked out once the person was separated")
+        assertFalse(edit.backgroundPending)
+        assertTrue(vm.canChangeBackground)
+    }
+
+    @Test
+    fun aPlainColourGoesBehindThePersonAndIntoTheFinal() {
+        withMatter()
+        vm.import(photo())
+        vm.setBackground(white)
+        assertEquals(0xffffff, shownAt(2, 10), "background")
+        assertEquals(0x808080, shownAt(37, 10), "the person, as shot")
+
+        vm.saveDraft()
+        val final = ImageIO.read(ByteArrayInputStream(assertNotNull(library.readFinal(library.customersOn(now).single()))))
+        // The slot crop shows the middle of the photo: its left part is background.
+        assertTrue((final.getRGB(5, final.height / 2) and 0xff) > 245, "white in final.jpg")
+        assertTrue((final.getRGB(final.width - 5, final.height / 2) and 0xff) in 118..138, "grey person in final.jpg")
+    }
+
+    @Test
+    fun keepShowsThePhotoAsShot() {
+        withMatter()
+        vm.import(photo())
+        vm.setBackground(BackgroundConfig(mode = BackgroundMode.KEEP))
+        assertTrue(state.edit!!.shown === state.edit!!.preview.image)
+        assertFalse(state.edit!!.backgroundPending)
+    }
+
+    @Test
+    fun aBackgroundChangeIsOneUndoStep() {
+        withMatter()
+        vm.import(photo())
+        vm.setBackground(white)
+        vm.undo()
+        assertEquals(BackgroundConfig(), state.edit!!.recipe.background)
+        assertEquals(BackgroundConfig(), state.edit!!.backgroundFor, "the blur is shown again")
+        assertEquals(0x808080, shownAt(2, 10))
+        vm.redo()
+        assertEquals(0xffffff, shownAt(2, 10))
+    }
+
+    @Test
+    fun theSoftnessSliderShowsLiveAndIsOneStepWhenLetGo() {
+        withMatter()
+        vm.import(photo())
+        val softer = BackgroundConfig(blurStrength = 0.8)
+        vm.previewBackground(BackgroundConfig(blurStrength = 0.6))
+        vm.previewBackground(softer)
+        assertEquals(softer, state.edit!!.backgroundFor)
+        vm.commit()
+        vm.undo()
+        assertEquals(BackgroundConfig(), state.edit!!.recipe.background)
+    }
+
+    @Test
+    fun withoutAMatterThePhotoShowsAsShot() {
+        vm.import(photo())
+        assertFalse(vm.canChangeBackground)
+        assertTrue(state.edit!!.shown === state.edit!!.preview.image)
     }
 }

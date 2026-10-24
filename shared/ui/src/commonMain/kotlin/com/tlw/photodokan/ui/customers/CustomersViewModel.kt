@@ -1,6 +1,7 @@
 package com.tlw.photodokan.ui.customers
 
 import androidx.lifecycle.ViewModel
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.viewModelScope
 import com.tlw.photodokan.core.face.Face
 import com.tlw.photodokan.core.face.FaceCrop
@@ -12,6 +13,8 @@ import com.tlw.photodokan.core.library.Customer
 import com.tlw.photodokan.core.library.PhotoLibrary
 import com.tlw.photodokan.core.library.StudioDate
 import com.tlw.photodokan.core.matte.Matte
+import com.tlw.photodokan.core.model.BackgroundConfig
+import com.tlw.photodokan.core.model.BackgroundMode
 import com.tlw.photodokan.core.model.CropConfig
 import com.tlw.photodokan.core.model.EditHistory
 import com.tlw.photodokan.core.model.EditRecipe
@@ -19,6 +22,7 @@ import com.tlw.photodokan.core.model.PhotoSizePreset
 import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.ui.editor.Adjustment
 import com.tlw.photodokan.ui.editor.renderCrop
+import com.tlw.photodokan.ui.editor.withBackground
 import com.tlw.photodokan.ui.photo.PhotoPreview
 import com.tlw.photodokan.ui.photo.PhotoSource
 import com.tlw.photodokan.ui.photo.decodePreview
@@ -31,6 +35,7 @@ import com.tlw.photodokan.vision.PortraitMatter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -67,8 +72,22 @@ data class EditSession(
     val faces: List<Face>? = null,
     /** Which part of the photo is the person, once worked out; it takes a moment, so it comes later. */
     val matte: Matte? = null,
+    /** [preview] with its background changed as [backgroundFor] says, once worked out. */
+    val background: ImageBitmap? = null,
+    val backgroundFor: BackgroundConfig? = null,
 ) {
     val recipe: EditRecipe get() = live
+
+    /**
+     * What the editor shows: the photo with the background as [live] says when that is ready,
+     * else the last one worked out, else the photo as shot.
+     */
+    val shown: ImageBitmap
+        get() = if (live.background.mode == BackgroundMode.KEEP || matte == null) preview.image else background ?: preview.image
+
+    /** The background as chosen isn't shown yet: the person is still being separated, or it is being redrawn. */
+    val backgroundPending: Boolean
+        get() = live.background.mode != BackgroundMode.KEEP && (matte == null || backgroundFor != live.background)
     val changed: Boolean get() = live != saved
     val canUndo: Boolean get() = history.canUndo || live != history.present
     val canRedo: Boolean get() = history.canRedo && live == history.present
@@ -126,6 +145,11 @@ class CustomersViewModel(
 
     /** Photos can be cropped to the face automatically. */
     val canFitFace: Boolean get() = faces != null
+
+    /** The background behind the person can be blurred or replaced. */
+    val canChangeBackground: Boolean get() = matter != null
+
+    private var backgroundJob: Job? = null
 
     fun presetOf(recipe: EditRecipe): PhotoSizePreset = presets.firstOrNull { it.id == recipe.presetId } ?: presets.first()
 
@@ -260,9 +284,26 @@ class CustomersViewModel(
                 owner = s.selected
                 s.copy(edit = edit.copy(matte = matte))
             }
+            redrawBackground()
             // A new photo saved meanwhile is a customer now.
             if (kept == null) owner?.let { saveMatte(it, matte) }
         }
+    }
+
+    /**
+     * The matte to save with [edit]: the one worked out already (perhaps while saving began), or,
+     * when the background needs it and it isn't ready, worked out now.
+     */
+    private fun matteForSaving(edit: EditSession): Matte? {
+        edit.matte?.let { return it }
+        _state.value.edit?.takeIf { it.preview === edit.preview }?.matte?.let { return it }
+        if (edit.live.background.mode == BackgroundMode.KEEP) return null
+        val matter = matter ?: return null
+        return runCatching {
+            val image = edit.preview.image
+            val argb = IntArray(image.width * image.height).also { image.readPixels(it) }
+            timed("Separate the person") { matter.matte(argb, image.width, image.height) }
+        }.getOrNull()
     }
 
     private fun saveMatte(customer: Customer, matte: Matte) {
@@ -297,19 +338,31 @@ class CustomersViewModel(
 
     fun resetAdjustments() = step { it.live.copy(exposure = 0.0, contrast = 0.0, warmth = 0.0, saturation = 0.0) }
 
+    /** Shows a background change live, e.g. while the softness slider moves; call [commit] when let go. */
+    fun previewBackground(background: BackgroundConfig) = preview { it.live.copy(background = background) }
+
+    /** Changes the background as one undo step: keep, blur, or a plain colour. */
+    fun setBackground(background: BackgroundConfig) = step { it.live.copy(background = background) }
+
     /** Ends a live change: it becomes one undo step. */
     fun commit() = _state.update { s -> s.copy(edit = s.edit?.let { it.copy(history = it.history.apply(it.live)) }) }
 
     /** Drops a change still being dragged, or steps back one finished change. */
-    fun undo() = _state.update { s ->
-        s.copy(edit = s.edit?.let {
-            if (it.live != it.history.present) it.copy(live = it.history.present)
-            else it.history.undo().let { h -> it.copy(history = h, live = h.present) }
-        })
+    fun undo() {
+        _state.update { s ->
+            s.copy(edit = s.edit?.let {
+                if (it.live != it.history.present) it.copy(live = it.history.present)
+                else it.history.undo().let { h -> it.copy(history = h, live = h.present) }
+            })
+        }
+        redrawBackground()
     }
 
-    fun redo() = _state.update { s ->
-        s.copy(edit = s.edit?.let { if (it.canRedo) it.history.redo().let { h -> it.copy(history = h, live = h.present) } else it })
+    fun redo() {
+        _state.update { s ->
+            s.copy(edit = s.edit?.let { if (it.canRedo) it.history.redo().let { h -> it.copy(history = h, live = h.present) } else it })
+        }
+        redrawBackground()
     }
 
     /**
@@ -340,8 +393,35 @@ class CustomersViewModel(
         _state.update { it.copy(message = "Customer ${customer.label} taken out of the print queue.", messageIsError = false) }
     }
 
-    private fun preview(change: (EditSession) -> EditRecipe) =
+    private fun preview(change: (EditSession) -> EditRecipe) {
         _state.update { s -> s.copy(edit = s.edit?.let { it.copy(live = change(it)) }) }
+        redrawBackground()
+    }
+
+    /**
+     * Works out the photo with the background the open edit asks for, off the UI thread, unless
+     * it is already shown. A newer change replaces one still being worked out.
+     */
+    private fun redrawBackground() {
+        val edit = _state.value.edit ?: return
+        val matte = edit.matte ?: return
+        val wanted = edit.live.background
+        if (wanted.mode == BackgroundMode.KEEP || wanted == edit.backgroundFor) return
+        backgroundJob?.cancel()
+        backgroundJob = viewModelScope.launch(work) {
+            val image = try {
+                edit.preview.image.withBackground(matte, wanted)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return@launch // the photo shows as shot
+            }
+            _state.update { s ->
+                val now = s.edit
+                if (now == null || now.preview !== edit.preview) s else s.copy(edit = now.copy(background = image, backgroundFor = wanted))
+            }
+        }
+    }
 
     private fun step(change: (EditSession) -> EditRecipe) {
         preview(change)
@@ -356,12 +436,13 @@ class CustomersViewModel(
         val date = clock()
         launchWork {
             val customer = library.create(date, draft.name, draft.phone, draft.original)
-            library.saveEdit(customer, edit.recipe, renderFinal(edit))
-            _state.value.edit?.matte?.let { saveMatte(customer, it) }
-            _state.update {
-                it.copy(
+            val matte = matteForSaving(edit)
+            library.saveEdit(customer, edit.recipe, renderFinal(edit, matte))
+            matte?.let { saveMatte(customer, it) }
+            _state.update { s ->
+                s.copy(
                     today = date, date = date, query = "", draft = null,
-                    selected = customer, edit = edit.copy(saved = edit.live),
+                    selected = customer, edit = s.edit?.let { it.copy(saved = edit.live, matte = it.matte ?: matte) },
                     message = "Saved as customer ${customer.label}.", messageIsError = false,
                 )
             }
@@ -375,20 +456,30 @@ class CustomersViewModel(
         commit()
         val edit = _state.value.edit ?: return
         launchWork {
-            library.saveEdit(customer, edit.live, renderFinal(edit))
+            val matte = matteForSaving(edit)
+            library.saveEdit(customer, edit.live, renderFinal(edit, matte))
+            if (edit.matte == null) matte?.let { saveMatte(customer, it) }
             _state.update { s ->
-                s.copy(edit = s.edit?.copy(saved = edit.live), message = "Saved changes for customer ${customer.label}.", messageIsError = false)
+                s.copy(
+                    edit = s.edit?.let { it.copy(saved = edit.live, matte = it.matte ?: matte) },
+                    message = "Saved changes for customer ${customer.label}.", messageIsError = false,
+                )
             }
         }
     }
 
     /**
-     * final.jpg: the crop at 300 dpi of the photo size, rendered from the preview copy. Printing
-     * renders again from the full-resolution original.
+     * final.jpg: the crop at 300 dpi of the photo size, rendered from the preview copy with its
+     * background as the editor shows it. Printing renders again from the full-resolution original.
      */
-    private fun renderFinal(edit: EditSession): ByteArray {
+    private fun renderFinal(edit: EditSession, matte: Matte?): ByteArray {
         val preset = presetOf(edit.live)
-        val image = edit.preview.image
+        val wanted = edit.live.background
+        val image = when {
+            wanted.mode == BackgroundMode.KEEP -> edit.preview.image
+            edit.backgroundFor == wanted && edit.background != null -> edit.background
+            else -> edit.preview.image.withBackground(matte, wanted)
+        }
         val rect = CropGeometry.rect(image.width, image.height, preset.aspect, edit.live.crop)
         val width = mmToPixels(preset.size.width, FINAL_DPI).roundToInt()
         val height = mmToPixels(preset.size.height, FINAL_DPI).roundToInt()
