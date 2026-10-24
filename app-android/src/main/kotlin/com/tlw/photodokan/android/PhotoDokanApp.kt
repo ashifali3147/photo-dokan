@@ -23,6 +23,8 @@ import com.tlw.photodokan.vision.AssetModelFiles
 import com.tlw.photodokan.vision.FaceFinder
 import com.tlw.photodokan.vision.ModelFiles
 import com.tlw.photodokan.vision.OnnxFaceFinder
+import com.tlw.photodokan.vision.OnnxPortraitMatter
+import com.tlw.photodokan.vision.PortraitMatter
 import com.tlw.photodokan.vision.VisionModels
 import kotlinx.io.files.Path
 import org.koin.dsl.module
@@ -57,6 +59,7 @@ class PhotoDokanApp : Application() {
                     single<ModelFiles> { AssetModelFiles(this@PhotoDokanApp) }
                     single { VisionModels(get()) }
                     single<FaceFinder> { OnnxFaceFinder(get()) }
+                    single<PortraitMatter> { OnnxPortraitMatter(get()) }
                 },
             ),
         )

@@ -25,7 +25,8 @@ import org.koin.dsl.module
  * print directly also adds a [com.tlw.photodokan.print.SheetPrinter]; one that shares sheet PDFs
  * instead adds a [com.tlw.photodokan.ui.print.SheetSharer], and one that prints them adds a
  * [com.tlw.photodokan.print.PdfSheetReader]. A [com.tlw.photodokan.vision.FaceFinder] crops new
- * photos to the face.
+ * photos to the face, and a [com.tlw.photodokan.vision.PortraitMatter] separates the person from
+ * the background.
  */
 val appModule = module {
     single { SheetTemplate.STUDIO_A4_5X8 }
@@ -34,7 +35,7 @@ val appModule = module {
     single { IncomingPhotos() }
     single { IncomingInvites() }
     single { PrintOrders(get()) }
-    viewModel { CustomersViewModel(get(), ::today, orders = get(), template = get(), presets = get(), faces = getOrNull()) }
+    viewModel { CustomersViewModel(get(), ::today, orders = get(), template = get(), presets = get(), faces = getOrNull(), matter = getOrNull()) }
     viewModel {
         PrintViewModel(
             get(), get(), get(), printer = getOrNull(), sharer = getOrNull(), pdfReader = getOrNull(), phonePrinter = getOrNull(),

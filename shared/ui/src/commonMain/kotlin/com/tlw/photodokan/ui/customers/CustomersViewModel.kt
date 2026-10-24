@@ -11,6 +11,7 @@ import com.tlw.photodokan.core.imaging.CropGeometry
 import com.tlw.photodokan.core.library.Customer
 import com.tlw.photodokan.core.library.PhotoLibrary
 import com.tlw.photodokan.core.library.StudioDate
+import com.tlw.photodokan.core.matte.Matte
 import com.tlw.photodokan.core.model.CropConfig
 import com.tlw.photodokan.core.model.EditHistory
 import com.tlw.photodokan.core.model.EditRecipe
@@ -25,6 +26,8 @@ import com.tlw.photodokan.ui.print.PrintOrders
 import com.tlw.photodokan.ui.platform.encodeJpeg
 import com.tlw.photodokan.ui.platform.timed
 import com.tlw.photodokan.vision.FaceFinder
+import com.tlw.photodokan.vision.MattePng
+import com.tlw.photodokan.vision.PortraitMatter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -62,6 +65,8 @@ data class EditSession(
     val saved: EditRecipe? = null,
     /** The faces on [preview], once looked for. */
     val faces: List<Face>? = null,
+    /** Which part of the photo is the person, once worked out; it takes a moment, so it comes later. */
+    val matte: Matte? = null,
 ) {
     val recipe: EditRecipe get() = live
     val changed: Boolean get() = live != saved
@@ -98,7 +103,8 @@ data class CustomersState(
  * The Customers screen: import a photo, crop it to a photo size, file it as the day's next
  * customer, find and re-edit customers by day or by number, name or phone, and add them to the
  * print queue. With [faces], a new photo opens already cropped to the face on the photo size's
- * guide. Library and image work runs off the UI thread on [work].
+ * guide; with [matter], each photo's person is separated from the background in the background,
+ * once per customer. Library and image work runs off the UI thread on [work].
  */
 class CustomersViewModel(
     private val library: PhotoLibrary,
@@ -107,6 +113,7 @@ class CustomersViewModel(
     private val template: SheetTemplate,
     val presets: List<PhotoSizePreset> = PhotoSizePreset.DEFAULTS,
     private val faces: FaceFinder? = null,
+    private val matter: PortraitMatter? = null,
     private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
@@ -151,6 +158,7 @@ class CustomersViewModel(
         } else {
             val recipe = library.readRecipe(customer) ?: EditRecipe(presetId = presets.first().id)
             _state.update { it.copy(selected = customer, draft = null, edit = EditSession.start(preview, recipe, saved = recipe), message = null) }
+            findMatte(preview, customer)
         }
     }
 
@@ -174,6 +182,7 @@ class CustomersViewModel(
             val recipe = EditRecipe(presetId = preset.id, crop = fit?.crop ?: CropConfig())
             val edit = EditSession.start(preview, recipe, saved = null, faces = found)
             _state.update { it.copy(draft = draft, selected = null, edit = edit, message = found?.let { faceMessage(fit) }, messageIsError = false) }
+            findMatte(preview, customer = null)
         }
     }
 
@@ -224,6 +233,40 @@ class CustomersViewModel(
             _state.update { s -> s.copy(edit = s.edit?.copy(faces = found), message = faceMessage(fit), messageIsError = false) }
             if (fit != null) step { it.live.copy(crop = fit.crop) }
         }
+    }
+
+    /**
+     * Separates the person in [preview] from the background without holding up the editor: the
+     * saved [customer]'s kept matte, or worked out and kept. A new photo's matte is kept when it
+     * is saved. Without a matter, or when it fails, there is simply no matte.
+     */
+    private fun findMatte(preview: PhotoPreview, customer: Customer?) {
+        val matter = matter ?: return
+        viewModelScope.launch(work) {
+            val kept = customer?.let { runCatching { library.readMatte(it)?.let(MattePng::decode) }.getOrNull() }
+            val matte = kept ?: try {
+                val image = preview.image
+                val argb = IntArray(image.width * image.height).also { image.readPixels(it) }
+                timed("Separate the person") { matter.matte(argb, image.width, image.height) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return@launch
+            }
+            var owner: Customer? = null
+            _state.update { s ->
+                val edit = s.edit
+                if (edit == null || edit.preview !== preview) return@update s // another photo is open now
+                owner = s.selected
+                s.copy(edit = edit.copy(matte = matte))
+            }
+            // A new photo saved meanwhile is a customer now.
+            if (kept == null) owner?.let { saveMatte(it, matte) }
+        }
+    }
+
+    private fun saveMatte(customer: Customer, matte: Matte) {
+        runCatching { library.saveMatte(customer, MattePng.encode(matte)) } // worked out again next time
     }
 
     /** The faces on the photo, or null without a face finder or when it fails. */
@@ -314,6 +357,7 @@ class CustomersViewModel(
         launchWork {
             val customer = library.create(date, draft.name, draft.phone, draft.original)
             library.saveEdit(customer, edit.recipe, renderFinal(edit))
+            _state.value.edit?.matte?.let { saveMatte(customer, it) }
             _state.update {
                 it.copy(
                     today = date, date = date, query = "", draft = null,

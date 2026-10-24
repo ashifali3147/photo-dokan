@@ -6,6 +6,7 @@ import com.tlw.photodokan.core.face.PointPx
 import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropGeometry
 import com.tlw.photodokan.core.library.StudioDate
+import com.tlw.photodokan.core.matte.Matte
 import com.tlw.photodokan.core.model.CropConfig
 import com.tlw.photodokan.core.model.PhotoSizePreset
 import com.tlw.photodokan.core.model.SheetTemplate
@@ -14,6 +15,8 @@ import com.tlw.photodokan.ui.photo.PhotoSource
 import com.tlw.photodokan.ui.print.InMemoryPrintQueueStore
 import com.tlw.photodokan.ui.print.PrintOrders
 import com.tlw.photodokan.vision.FaceFinder
+import com.tlw.photodokan.vision.MattePng
+import com.tlw.photodokan.vision.PortraitMatter
 import com.tlw.photodokan.vision.VisionException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -503,5 +506,113 @@ class CustomersViewModelTest {
         vm.fitFace()
         assertEquals(CropConfig(), state.edit?.recipe?.crop)
         assertNull(state.message)
+    }
+
+    // ---- Separating the person from the background ----
+
+    /** Says the right half of every photo is the person; [during] runs while it works. */
+    private class FakeMatter(var failure: Exception? = null) : PortraitMatter {
+        var calls = 0
+        var during: () -> Unit = {}
+        override fun matte(argb: IntArray, width: Int, height: Int): Matte {
+            calls++
+            during()
+            failure?.let { throw it }
+            return Matte(4, 2, byteArrayOf(0, 0, -1, -1, 0, 0, -1, -1))
+        }
+    }
+
+    private val matter = FakeMatter()
+    private val personOnTheRight = Matte(4, 2, byteArrayOf(0, 0, -1, -1, 0, 0, -1, -1))
+
+    private fun withMatter() {
+        vm = CustomersViewModel(library, { now }, orders, SheetTemplate.STUDIO_A4_5X8, matter = matter, work = Dispatchers.Unconfined)
+    }
+
+    private fun keptMatte() = library.mattes[library.customersOn(now).single()]?.let(MattePng::decode)
+
+    @Test
+    fun aNewPhotosMatteIsKeptOnceItIsSaved() {
+        withMatter()
+        vm.import(photo())
+        assertEquals(personOnTheRight, state.edit?.matte)
+        assertTrue(library.mattes.isEmpty(), "nothing filed before saving")
+        vm.saveDraft()
+        assertEquals(personOnTheRight, keptMatte())
+    }
+
+    @Test
+    fun aCustomersMatteIsWorkedOutOnlyOnce() {
+        vm.import(photo())
+        vm.saveDraft()
+        val customer = library.customersOn(now).single()
+        withMatter()
+        vm.select(customer)
+        assertEquals(personOnTheRight, state.edit?.matte)
+        assertEquals(personOnTheRight, keptMatte(), "kept for next time")
+        vm.closeCustomer()
+        vm.select(customer)
+        assertEquals(personOnTheRight, state.edit?.matte)
+        assertEquals(1, matter.calls)
+    }
+
+    @Test
+    fun aDamagedKeptMatteIsWorkedOutAgain() {
+        vm.import(photo())
+        vm.saveDraft()
+        val customer = library.customersOn(now).single()
+        library.mattes[customer] = byteArrayOf(1, 2, 3)
+        withMatter()
+        vm.select(customer)
+        assertEquals(personOnTheRight, state.edit?.matte)
+        assertEquals(personOnTheRight, keptMatte())
+    }
+
+    @Test
+    fun aPhotoSavedBeforeItsMatteIsReadyStillGetsIt() {
+        // Real threads: the matte is still being worked out while the operator saves.
+        val working = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        matter.during = { working.countDown(); release.await() }
+        vm = CustomersViewModel(library, { now }, orders, SheetTemplate.STUDIO_A4_5X8, matter = matter, work = Dispatchers.Default)
+        vm.import(photo())
+        assertTrue(working.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        waitFor { state.draft != null && !state.busy }
+        vm.saveDraft()
+        waitFor { state.selected != null && !state.busy }
+        assertTrue(library.mattes.isEmpty(), "no matte yet")
+
+        release.countDown()
+        waitFor { library.mattes.isNotEmpty() }
+        assertEquals(personOnTheRight, keptMatte())
+    }
+
+    private fun waitFor(condition: () -> Boolean) {
+        val until = System.currentTimeMillis() + 5_000
+        while (!condition()) {
+            check(System.currentTimeMillis() < until) { "timed out" }
+            Thread.sleep(10)
+        }
+    }
+
+    @Test
+    fun aMatteForAPhotoNoLongerOpenIsDropped() {
+        withMatter()
+        matter.during = { vm.closeEditor() }
+        vm.import(photo())
+        assertNull(state.edit)
+        assertTrue(library.mattes.isEmpty())
+    }
+
+    @Test
+    fun aMatterThatFailsLeavesTheEditorAsItWas() {
+        matter.failure = VisionException("The modnet_fp16.onnx model could not be loaded. Reinstall Photo Dokan.")
+        withMatter()
+        vm.import(photo())
+        assertNotNull(state.edit)
+        assertNull(state.edit?.matte)
+        assertNull(state.message)
+        vm.saveDraft()
+        assertTrue(library.mattes.isEmpty())
     }
 }
