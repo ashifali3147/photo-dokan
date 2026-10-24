@@ -22,7 +22,7 @@ class PairingTest {
     private var now = 1_000_000L
     private val devicesFile = File(folder, "paired-devices.json")
     private val pairing = StationPairing(PairedDevices(devicesFile) { now }) { now }
-    private val station = PrintStation(certificate, "STUDIO-PC", pairing, port = 0, addresses = { listOf("127.0.0.1") }).apply { start() }
+    private val station = PrintStation(certificate, "STUDIO-PC", pairing, announce = false, port = 0, addresses = { listOf("127.0.0.1") }).apply { start() }
     private val phone = StationClient(timeoutMillis = 2_000)
 
     @AfterTest
@@ -123,8 +123,8 @@ class PairingTest {
 
     @Test
     fun noInviteWithoutTheStationOrANetwork() {
-        assertNull(PrintStation(certificate, "PC", pairing, port = 0, addresses = { listOf("127.0.0.1") }).invite(), "not started")
-        val offline = PrintStation(certificate, "PC", pairing, port = 0, addresses = { emptyList() }).apply { start() }
+        assertNull(PrintStation(certificate, "PC", pairing, announce = false, port = 0, addresses = { listOf("127.0.0.1") }).invite(), "not started")
+        val offline = PrintStation(certificate, "PC", pairing, announce = false, port = 0, addresses = { emptyList() }).apply { start() }
         try {
             assertNull(offline.invite())
         } finally {

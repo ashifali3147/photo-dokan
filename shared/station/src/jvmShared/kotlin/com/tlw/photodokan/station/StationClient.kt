@@ -26,7 +26,7 @@ class StationClient(
 
     override fun pair(invite: PairingInvite, deviceName: String): StationLink {
         val body = json.encodeToString(PairRequest(invite.code, deviceName)).toByteArray()
-        val (host, response) = firstAnswer(invite.hosts, invite.port, invite.fingerprint) { host ->
+        val (host, response) = firstAnswer(invite.hosts, invite.port, invite.fingerprint, NO_ANSWER) { host ->
             request(host, invite.port, invite.fingerprint, "POST", StationProtocol.PAIR_PATH, body = body)
         }
         val paired = json.decodeFromString<PairResponse>(response.expect(HttpURLConnection.HTTP_OK))
@@ -34,7 +34,7 @@ class StationClient(
     }
 
     override fun check(link: StationLink): PairedHello {
-        val (_, response) = firstAnswer(link.hosts, link.port, link.fingerprint) { host ->
+        val (_, response) = firstAnswer(link.hosts, link.port, link.fingerprint, NO_ANSWER) { host ->
             request(host, link.port, link.fingerprint, "GET", StationProtocol.PAIRED_PATH, token = link.token)
         }
         return json.decodeFromString(response.expect(HttpURLConnection.HTTP_OK))
@@ -42,7 +42,8 @@ class StationClient(
 
     override fun send(link: StationLink, pdf: ByteArray, name: String): JobResult {
         val path = StationProtocol.JOBS_PATH + "?" + StationProtocol.JOB_NAME + "=" + java.net.URLEncoder.encode(name, "UTF-8").replace("+", "%20")
-        val (_, response) = firstAnswer(link.hosts, link.port, link.fingerprint) { host ->
+        // Once the PC has the sheet, trying another address could print it twice.
+        val (_, response) = firstAnswer(link.hosts, link.port, link.fingerprint, NO_ANSWER_TO_SHEET) { host ->
             request(host, link.port, link.fingerprint, "POST", path, body = pdf, contentType = "application/pdf", token = link.token, readTimeout = printTimeoutMillis)
         }
         return json.decodeFromString(response.expect(HttpURLConnection.HTTP_OK))
@@ -50,12 +51,20 @@ class StationClient(
 
     private class Response(val code: Int, val body: String)
 
-    /** The first of [hosts] that answers, with its answer. */
-    private fun firstAnswer(hosts: List<String>, port: Int, fingerprint: String, call: (String) -> Response): Pair<String, Response> {
+    /** The request reached the PC, which then didn't answer in time; it may still be acting on it. */
+    private class SentWithoutAnswer(cause: IOException) : IOException(cause)
+
+    /**
+     * The first of [hosts] that answers, with its answer. Hosts that can't be reached are skipped,
+     * but a request the PC received and didn't answer stops there, with [noAnswer].
+     */
+    private fun firstAnswer(hosts: List<String>, port: Int, fingerprint: String, noAnswer: String, call: (String) -> Response): Pair<String, Response> {
         var wrongPc = false
         for (host in hosts) {
             try {
                 return host to call(host)
+            } catch (e: SentWithoutAnswer) {
+                throw StationException(noAnswer, StationException.Reason.NoAnswer)
             } catch (e: SSLHandshakeException) {
                 wrongPc = true // something answered, but not the paired PC: try the next address
             } catch (e: IOException) {
@@ -104,7 +113,11 @@ class StationClient(
                 connection.setFixedLengthStreamingMode(body.size)
                 connection.outputStream.use { it.write(body) }
             }
-            val code = connection.responseCode
+            val code = try {
+                connection.responseCode
+            } catch (e: IOException) {
+                if (body != null) throw SentWithoutAnswer(e) else throw e
+            }
             val stream = if (code < 400) connection.inputStream else connection.errorStream
             return Response(code, stream?.use { it.readBytes().decodeToString() }.orEmpty())
         } finally {
@@ -114,6 +127,10 @@ class StationClient(
 
     companion object {
         private val json = Json { ignoreUnknownKeys = true }
+
+        private const val NO_ANSWER = "The PC stopped answering. Try again."
+        private const val NO_ANSWER_TO_SHEET =
+            "The sheet reached the PC, but the PC didn't say whether it printed. Check the PC's printer before sending it again."
 
         /** TLS that accepts only the certificate whose SHA-256 is [fingerprint]. */
         fun pinnedTo(fingerprint: String): SSLContext {

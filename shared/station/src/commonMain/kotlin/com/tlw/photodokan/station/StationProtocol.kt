@@ -13,6 +13,15 @@ object StationProtocol {
     /** Fixed, so the Windows firewall rule can name it. */
     const val PORT = 47474
 
+    /**
+     * How the station announces itself on the shop's network (mDNS / DNS-SD), with its certificate
+     * fingerprint in the [SERVICE_FINGERPRINT] TXT entry, so a paired phone can find its PC again
+     * when the PC's address changes.
+     */
+    const val SERVICE_TYPE = "_photodokan._tcp"
+    const val SERVICE_FINGERPRINT = "fp"
+    const val SERVICE_VERSION = "v"
+
     /** Raised when a change would confuse phones running an older app. */
     const val VERSION = 1
 

@@ -8,6 +8,8 @@ import com.tlw.photodokan.core.model.PrintQueueStore
 import com.tlw.photodokan.library.FilePhotoLibrary
 import com.tlw.photodokan.library.FilePrintQueueStore
 import com.tlw.photodokan.station.FileStationLinkStore
+import com.tlw.photodokan.station.FindingConnector
+import com.tlw.photodokan.station.NsdStationFinder
 import com.tlw.photodokan.station.StationClient
 import com.tlw.photodokan.station.StationConnector
 import com.tlw.photodokan.station.StationLinkStore
@@ -41,8 +43,9 @@ class PhotoDokanApp : Application() {
                     if (packageManager.hasSystemFeature(PackageManager.FEATURE_PRINTING)) {
                         single<PhonePrinter>(createdAtStart = true) { AndroidPhonePrinter(this@PhotoDokanApp) }
                     }
-                    // Or to the studio PC's Print Station over the shop's Wi-Fi, once paired.
-                    single<StationConnector> { StationClient() }
+                    // Or to the studio PC's Print Station over the shop's Wi-Fi, once paired; found
+                    // again by its announcement when the router gives the PC a new address.
+                    single<StationConnector> { FindingConnector(StationClient(), NsdStationFinder(this@PhotoDokanApp), get()) }
                     single<StationLinkStore> { FileStationLinkStore(File(filesDir, "print-station.json")) }
                     single { PhoneName(phoneName()) }
                 },

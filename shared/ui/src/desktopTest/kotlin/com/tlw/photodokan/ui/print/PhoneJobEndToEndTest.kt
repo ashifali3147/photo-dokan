@@ -54,7 +54,7 @@ class PhoneJobEndToEndTest {
     private val station = PrintStation(
         StationCertificate.loadOrCreate(File(folder, "station.p12")), "STUDIO-PC", pairing,
         jobs = StationJobPrinter(PdfBoxSheetReader(), printer, library, { today }, { "14.30" }),
-        port = 0, addresses = { listOf("127.0.0.1") },
+        announce = false, port = 0, addresses = { listOf("127.0.0.1") },
     ).apply { start() }
     private val phone = StationClient()
 

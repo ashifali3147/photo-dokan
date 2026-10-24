@@ -42,7 +42,7 @@ class JobsTest {
     }
 
     private fun station(jobs: StationJobs? = printer) =
-        PrintStation(certificate, "STUDIO-PC", pairing, jobs, port = 0, addresses = { listOf("127.0.0.1") }).also { stations += it; it.start() }
+        PrintStation(certificate, "STUDIO-PC", pairing, jobs, announce = false, port = 0, addresses = { listOf("127.0.0.1") }).also { stations += it; it.start() }
 
     private fun pairedPhone(station: PrintStation, name: String = "Galaxy A15") = phone.pair(assertNotNull(station.invite()), name)
 
@@ -91,6 +91,24 @@ class JobsTest {
         sending.forEach(Thread::join)
         assertEquals(3, received.size)
         assertEquals(1, mostAtOnce.get(), "never two at the same moment")
+    }
+
+    @Test
+    fun aSheetThePcIsSlowToPrintIsNotSentAgain() {
+        val slow = StationJobs { pdf, name, deviceName ->
+            Thread.sleep(1_000)
+            received += Triple(pdf, name, deviceName)
+            JobResult(printed = true, message = "Printed.")
+        }
+        // Two addresses for the same PC, e.g. its Wi-Fi and its cable.
+        val link = pairedPhone(station(slow)).copy(hosts = listOf("127.0.0.1", "127.0.0.1"))
+        val impatient = StationClient(timeoutMillis = 2_000, printTimeoutMillis = 300)
+
+        val error = assertFailsWith<StationException> { impatient.send(link, sheet, "Sheet") }
+        assertEquals(StationException.Reason.NoAnswer, error.reason)
+        assertTrue(error.message!!.startsWith("The sheet reached the PC"))
+        Thread.sleep(2_000)
+        assertEquals(1, received.size, "printed once, not once per address")
     }
 
     @Test
