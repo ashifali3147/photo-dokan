@@ -13,7 +13,7 @@ jna = "5.17.0"
 material-icons = "1.7.3"
 kotlinx-io = "0.8.2"
 lifecycle = "2.9.3"
-coroutines = "1.8.1"
+coroutines = "1.10.2"
 
 android-compileSdk = "36"
 android-targetSdk = "36"
