@@ -49,6 +49,13 @@ abstract class PdfRendererContract {
     }
 
     @Test
+    fun viewersAreAskedToPrintAtActualSize() {
+        Loader.loadPDF(render(listOf(Order("A", "0001", 1)))).use { doc ->
+            assertEquals("None", doc.documentCatalog.viewerPreferences?.printScaling)
+        }
+    }
+
+    @Test
     fun photosLandExactlyOnTheirSlotRects() {
         val orders = listOf(Order("A", "0001", 5), Order("B", "0002", 10), Order("C", "0003", 4))
         val sheet = PackingEngine.pack(template, SheetState.FRESH, orders).sheets.single()

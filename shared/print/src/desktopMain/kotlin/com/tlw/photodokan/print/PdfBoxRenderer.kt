@@ -1,6 +1,7 @@
 package com.tlw.photodokan.print
 
 import com.tlw.photodokan.core.geometry.mmToPoints
+import org.apache.pdfbox.cos.COSDictionary
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDPage
 import org.apache.pdfbox.pdmodel.PDPageContentStream
@@ -8,6 +9,7 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle
 import org.apache.pdfbox.pdmodel.font.PDType1Font
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts
 import org.apache.pdfbox.pdmodel.graphics.image.JPEGFactory
+import org.apache.pdfbox.pdmodel.interactive.viewerpreferences.PDViewerPreferences
 import java.io.ByteArrayOutputStream
 
 /**
@@ -68,6 +70,10 @@ class PdfBoxRenderer : PdfRenderer {
                         }
                     }
                 }
+            }
+            // Viewers and the phone's print system then print at actual size instead of fitting the page.
+            pdf.documentCatalog.viewerPreferences = PDViewerPreferences(COSDictionary()).apply {
+                setPrintScaling(PDViewerPreferences.PRINT_SCALING.None)
             }
             ByteArrayOutputStream().also { pdf.save(it) }.toByteArray()
         }
