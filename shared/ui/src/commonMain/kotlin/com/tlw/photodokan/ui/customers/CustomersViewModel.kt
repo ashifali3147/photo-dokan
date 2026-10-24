@@ -2,6 +2,9 @@ package com.tlw.photodokan.ui.customers
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tlw.photodokan.core.face.Face
+import com.tlw.photodokan.core.face.FaceCrop
+import com.tlw.photodokan.core.face.FaceFit
 import com.tlw.photodokan.core.geometry.mmToPixels
 import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropGeometry
@@ -21,6 +24,7 @@ import com.tlw.photodokan.ui.photo.decodePreview
 import com.tlw.photodokan.ui.print.PrintOrders
 import com.tlw.photodokan.ui.platform.encodeJpeg
 import com.tlw.photodokan.ui.platform.timed
+import com.tlw.photodokan.vision.FaceFinder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +60,8 @@ data class EditSession(
     val live: EditRecipe = history.present,
     /** The recipe as last saved; null for a new photo not yet saved. */
     val saved: EditRecipe? = null,
+    /** The faces on [preview], once looked for. */
+    val faces: List<Face>? = null,
 ) {
     val recipe: EditRecipe get() = live
     val changed: Boolean get() = live != saved
@@ -63,7 +69,8 @@ data class EditSession(
     val canRedo: Boolean get() = history.canRedo && live == history.present
 
     companion object {
-        fun start(preview: PhotoPreview, recipe: EditRecipe, saved: EditRecipe?) = EditSession(preview, EditHistory.start(recipe), saved = saved)
+        fun start(preview: PhotoPreview, recipe: EditRecipe, saved: EditRecipe?, faces: List<Face>? = null) =
+            EditSession(preview, EditHistory.start(recipe), saved = saved, faces = faces)
     }
 }
 
@@ -90,7 +97,8 @@ data class CustomersState(
 /**
  * The Customers screen: import a photo, crop it to a photo size, file it as the day's next
  * customer, find and re-edit customers by day or by number, name or phone, and add them to the
- * print queue. Library and image work runs off the UI thread on [work].
+ * print queue. With [faces], a new photo opens already cropped to the face on the photo size's
+ * guide. Library and image work runs off the UI thread on [work].
  */
 class CustomersViewModel(
     private val library: PhotoLibrary,
@@ -98,6 +106,7 @@ class CustomersViewModel(
     private val orders: PrintOrders,
     private val template: SheetTemplate,
     val presets: List<PhotoSizePreset> = PhotoSizePreset.DEFAULTS,
+    private val faces: FaceFinder? = null,
     private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
@@ -107,6 +116,9 @@ class CustomersViewModel(
     init {
         refresh()
     }
+
+    /** Photos can be cropped to the face automatically. */
+    val canFitFace: Boolean get() = faces != null
 
     fun presetOf(recipe: EditRecipe): PhotoSizePreset = presets.firstOrNull { it.id == recipe.presetId } ?: presets.first()
 
@@ -156,8 +168,12 @@ class CustomersViewModel(
             error("\"${source.name}\" is not a photo Photo Dokan can open. Choose a JPEG or PNG photo.")
         } else {
             val draft = Draft(source.name, original, number = library.nextNumber(clock()))
-            val edit = EditSession.start(preview, EditRecipe(presetId = presets.first().id), saved = null)
-            _state.update { it.copy(draft = draft, selected = null, edit = edit, message = null) }
+            val preset = presets.first()
+            val found = findFaces(preview)
+            val fit = found?.let { fitFace(preview, preset, it) }
+            val recipe = EditRecipe(presetId = preset.id, crop = fit?.crop ?: CropConfig())
+            val edit = EditSession.start(preview, recipe, saved = null, faces = found)
+            _state.update { it.copy(draft = draft, selected = null, edit = edit, message = found?.let { faceMessage(fit) }, messageIsError = false) }
         }
     }
 
@@ -185,10 +201,53 @@ class CustomersViewModel(
     /** Shows a light or colour change live; call [commit] when the slider is let go. */
     fun adjust(adjustment: Adjustment, value: Double) = preview { adjustment.setIn(it.live, value) }
 
-    /** Switches photo size: the frame keeps its centre, zoom and angle, then refits. */
+    /**
+     * Switches photo size: a crop fitted to the face is fitted again for the new size's guide;
+     * any other keeps its centre, zoom and angle, then refits.
+     */
     fun setPreset(preset: PhotoSizePreset) = step { edit ->
         val image = edit.preview.image
-        edit.live.copy(presetId = preset.id, crop = CropGeometry.clamp(image.width, image.height, preset.aspect, edit.live.crop))
+        val faces = edit.faces
+        val fittedBefore = faces != null && fitFace(edit.preview, presetOf(edit.live), faces)?.crop == edit.live.crop
+        val crop = (if (fittedBefore) fitFace(edit.preview, preset, faces!!)?.crop else null)
+            ?: CropGeometry.clamp(image.width, image.height, preset.aspect, edit.live.crop)
+        edit.live.copy(presetId = preset.id, crop = crop)
+    }
+
+    /** Crops to the face on the photo size's guide, with the eyes level, as one undo step. */
+    fun fitFace() {
+        val edit = _state.value.edit ?: return
+        if (faces == null) return
+        launchWork {
+            val found = edit.faces ?: findFaces(edit.preview).orEmpty()
+            val fit = fitFace(edit.preview, presetOf(edit.live), found)
+            _state.update { s -> s.copy(edit = s.edit?.copy(faces = found), message = faceMessage(fit), messageIsError = false) }
+            if (fit != null) step { it.live.copy(crop = fit.crop) }
+        }
+    }
+
+    /** The faces on the photo, or null without a face finder or when it fails. */
+    private fun findFaces(preview: PhotoPreview): List<Face>? {
+        val finder = faces ?: return null
+        val image = preview.image
+        return try {
+            val argb = IntArray(image.width * image.height).also { image.readPixels(it) }
+            timed("Find faces") { finder.find(argb, image.width, image.height) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null // cropping by hand still works
+        }
+    }
+
+    private fun fitFace(preview: PhotoPreview, preset: PhotoSizePreset, faces: List<Face>): FaceFit? =
+        FaceCrop.main(faces)?.let { FaceCrop.fit(preview.image.width, preview.image.height, preset, it) }
+
+    /** What the operator should know about the automatic crop; nothing when it simply worked. */
+    private fun faceMessage(fit: FaceFit?): String? = when {
+        fit == null -> "No face found. Move and zoom the photo to fit the guide."
+        !fit.fits -> "The head is too close to the edge of the photo to fit the guide. Check the crop, or take the photo with more space around the head."
+        else -> null
     }
 
     fun resetCrop() = step { it.live.copy(crop = CropConfig()) }

@@ -123,7 +123,7 @@ private fun DrawScope.drawFaceGuide(guide: FaceGuide) {
     }
 }
 
-/** Photo size, zoom, straighten and reset, for when dragging and pinching isn't handy. */
+/** Photo size, zoom, straighten, fit to the face and reset, for when dragging and pinching isn't handy. */
 @Composable
 fun CropControls(
     presets: List<PhotoSizePreset>,
@@ -133,6 +133,7 @@ fun CropControls(
     onCropChange: (CropChange) -> Unit,
     onCommit: () -> Unit,
     onReset: () -> Unit,
+    onFitFace: (() -> Unit)? = null,
 ) {
     fun step(change: CropChange) {
         onCropChange(change)
@@ -147,6 +148,7 @@ fun CropControls(
         Text("Zoom")
         OutlinedButton(onClick = { step { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1 / 1.2) } }) { Text("−") }
         OutlinedButton(onClick = { step { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1.2) } }) { Text("+") }
+        onFitFace?.let { TextButton(onClick = it) { Text("Fit face") } }
         TextButton(onClick = onReset) { Text("Reset") }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

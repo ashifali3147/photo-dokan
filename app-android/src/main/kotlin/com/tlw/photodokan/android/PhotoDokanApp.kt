@@ -20,7 +20,9 @@ import com.tlw.photodokan.ui.print.PhonePrinter
 import com.tlw.photodokan.ui.print.SheetSharer
 import com.tlw.photodokan.ui.station.PhoneName
 import com.tlw.photodokan.vision.AssetModelFiles
+import com.tlw.photodokan.vision.FaceFinder
 import com.tlw.photodokan.vision.ModelFiles
+import com.tlw.photodokan.vision.OnnxFaceFinder
 import com.tlw.photodokan.vision.VisionModels
 import kotlinx.io.files.Path
 import org.koin.dsl.module
@@ -54,6 +56,7 @@ class PhotoDokanApp : Application() {
                     // Face detection and background matting, from the models inside the APK.
                     single<ModelFiles> { AssetModelFiles(this@PhotoDokanApp) }
                     single { VisionModels(get()) }
+                    single<FaceFinder> { OnnxFaceFinder(get()) }
                 },
             ),
         )

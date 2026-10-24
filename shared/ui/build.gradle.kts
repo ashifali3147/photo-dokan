@@ -20,6 +20,7 @@ kotlin {
             api(project(":shared:core"))
             implementation(project(":shared:print"))
             implementation(project(":shared:station"))
+            implementation(project(":shared:vision"))
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)

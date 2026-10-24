@@ -54,6 +54,11 @@ abstract class ModelsContract {
     }
 
     @Test
+    fun noFaceIsFoundOnAPlainPhoto() {
+        assertTrue(OnnxFaceFinder(models).find(IntArray(1200 * 1600) { 0xff808080.toInt() }, 1200, 1600).isEmpty())
+    }
+
+    @Test
     fun theMattingModelGivesAMaskTheSizeOfThePhoto() {
         // MODNet takes any size that is a multiple of 32.
         val (shape, mask) = runGrey(VisionModel.PortraitMatting, 384, 512).values.single()
