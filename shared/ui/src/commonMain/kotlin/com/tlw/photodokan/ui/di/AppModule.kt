@@ -35,7 +35,10 @@ val appModule = module {
     single { PrintOrders(get()) }
     viewModel { CustomersViewModel(get(), ::today, orders = get(), template = get(), presets = get()) }
     viewModel {
-        PrintViewModel(get(), get(), get(), printer = getOrNull(), sharer = getOrNull(), pdfReader = getOrNull(), phonePrinter = getOrNull())
+        PrintViewModel(
+            get(), get(), get(), printer = getOrNull(), sharer = getOrNull(), pdfReader = getOrNull(), phonePrinter = getOrNull(),
+            station = getOrNull(), links = getOrNull(),
+        )
     }
     viewModel {
         StationViewModel(host = getOrNull(), connector = getOrNull(), links = getOrNull(), deviceName = getOrNull<PhoneName>()?.value ?: "Phone", invites = get())

@@ -100,7 +100,13 @@ private fun ColumnScope.Queue(state: PrintState, viewModel: PrintViewModel) {
     if (state.printing) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            Text(if (viewModel.hasPrinter) "Printing on ${state.printerName ?: "the printer"}…" else "Making the PDF…")
+            Text(
+                when {
+                    viewModel.hasPrinter -> "Printing on ${state.printerName ?: "the printer"}…"
+                    state.sendingTo != null -> "Sending to ${state.sendingTo}. It prints there straight away…"
+                    else -> "Making the PDF…"
+                },
+            )
         }
     }
     state.message?.let { Text(it, color = if (state.messageIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
@@ -120,6 +126,17 @@ private fun ColumnScope.Queue(state: PrintState, viewModel: PrintViewModel) {
         )
     }
 
+    state.unsent?.let { unsent ->
+        ConfirmDialog(
+            title = "Not printed on the PC",
+            text = "${unsent.reason}\n\nYou can share the PDF instead, for example on WhatsApp, and print it on the PC from there.",
+            action = "Share PDF",
+            onConfirm = viewModel::shareUnsent,
+            onDismiss = viewModel::keepUnsent,
+            dismiss = "Not now",
+        )
+    }
+
     var confirm by remember { mutableStateOf<Confirm?>(null) }
     val idle = !state.printing && !state.choosingSettings
     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -130,8 +147,14 @@ private fun ColumnScope.Queue(state: PrintState, viewModel: PrintViewModel) {
             TextButton(onClick = { confirm = Confirm.Printed }, enabled = idle && queue.orders.isNotEmpty()) { Text("Mark as printed") }
             pickPdf?.let { TextButton(onClick = it, enabled = idle) { Text("Print a PDF from the phone…") } }
         } else if (viewModel.canShare) {
-            Button(onClick = viewModel::sharePdf, enabled = idle && queue.orders.isNotEmpty()) {
-                Text(if (state.printing) "Making PDF…" else "Share PDF")
+            val station = state.stationName.takeIf { viewModel.canSend }
+            if (station != null) {
+                Button(onClick = { confirm = Confirm.Send }, enabled = idle && queue.orders.isNotEmpty()) { Text("Send to $station") }
+                OutlinedButton(onClick = viewModel::sharePdf, enabled = idle && queue.orders.isNotEmpty()) { Text("Share PDF") }
+            } else {
+                Button(onClick = viewModel::sharePdf, enabled = idle && queue.orders.isNotEmpty()) {
+                    Text(if (state.printing) "Making PDF…" else "Share PDF")
+                }
             }
             if (viewModel.canPrintOnPhone) {
                 // Straight to a Wi-Fi printer; the PC stays the sure way to get actual size.
@@ -151,6 +174,13 @@ private fun ColumnScope.Queue(state: PrintState, viewModel: PrintViewModel) {
             text = printInstructions(state, viewModel.template.capacity),
             action = "Print",
             onConfirm = viewModel::print,
+            onDismiss = { confirm = null },
+        )
+        Confirm.Send -> ConfirmDialog(
+            title = "Send ${count(queue.copies, "photo")} to ${state.stationName ?: "the PC"}?",
+            text = "It prints on the PC as soon as it arrives. ${sheetInstructions(state, viewModel.template.capacity, "the PC's printer")}",
+            action = "Send",
+            onConfirm = viewModel::sendToPc,
             onDismiss = { confirm = null },
         )
         Confirm.Printed -> ConfirmDialog(
@@ -313,31 +343,43 @@ private fun ColumnScope.Sheets(state: PrintState, viewModel: PrintViewModel) {
 }
 
 @Composable
-private fun ConfirmDialog(title: String, text: String, action: String, onConfirm: () -> Unit, onDismiss: () -> Unit) = AlertDialog(
+private fun ConfirmDialog(
+    title: String,
+    text: String,
+    action: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    dismiss: String = "Cancel",
+) = AlertDialog(
     onDismissRequest = onDismiss,
     title = { Text(title) },
     text = { Text(text) },
     confirmButton = { Button(onClick = { onConfirm(); onDismiss() }) { Text(action) } },
-    dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    dismissButton = { TextButton(onClick = onDismiss) { Text(dismiss) } },
 )
 
-private enum class Confirm { Print, Printed, NewSheet }
+private enum class Confirm { Print, Send, Printed, NewSheet }
 
-/** Which sheet goes into the printer first, and how many blank ones follow. */
+/** What the Print dialog says: which printer, which sheets go in, and whether photo settings are saved. */
 private fun printInstructions(state: PrintState, capacity: Int): String = buildString {
     append("On ${state.printerName ?: "the default printer"}. ")
-    val sheets = state.pack.sheets
-    if (sheets.firstOrNull()?.reusesPartialSheet == true) {
-        val used = state.queue.sheet.usedSlots.size
-        append("Put the part-used sheet ($used of $capacity slots used) in the printer first, the same way round as last time.")
-    } else {
-        append("Put a blank photo sheet in the printer.")
-    }
-    val more = sheets.size - 1
-    if (more > 0) append(if (more == 1) " It needs 1 more blank sheet after that." else " It needs $more more blank sheets after that.")
+    append(sheetInstructions(state, capacity, "the printer"))
     if (state.photoSettings == PhotoSettings.NotSaved) {
         append("\n\nPhoto paper settings are not saved, so the printer will use its normal paper and quality. Use Photo settings first to avoid wasting a sheet.")
     }
+}
+
+/** Which sheet goes into [printer] first, and how many blank ones follow. */
+private fun sheetInstructions(state: PrintState, capacity: Int, printer: String): String = buildString {
+    val sheets = state.pack.sheets
+    if (sheets.firstOrNull()?.reusesPartialSheet == true) {
+        val used = state.queue.sheet.usedSlots.size
+        append("Put the part-used sheet ($used of $capacity slots used) in $printer first, the same way round as last time.")
+    } else {
+        append("Put a blank photo sheet in $printer.")
+    }
+    val more = sheets.size - 1
+    if (more > 0) append(if (more == 1) " It needs 1 more blank sheet after that." else " It needs $more more blank sheets after that.")
 }
 
 private fun count(n: Int, noun: String) = if (n == 1) "1 $noun" else "$n ${noun}s"

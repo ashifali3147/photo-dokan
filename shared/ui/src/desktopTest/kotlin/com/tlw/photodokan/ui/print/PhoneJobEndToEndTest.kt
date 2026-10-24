@@ -2,6 +2,7 @@ package com.tlw.photodokan.ui.print
 
 import com.tlw.photodokan.core.library.StudioDate
 import com.tlw.photodokan.core.model.Order
+import com.tlw.photodokan.core.model.PrintQueue
 import com.tlw.photodokan.core.model.SheetState
 import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.core.packing.PackingEngine
@@ -12,12 +13,18 @@ import com.tlw.photodokan.print.PrintDocument
 import com.tlw.photodokan.print.SimplePdfRenderer
 import com.tlw.photodokan.print.sheetPage
 import com.tlw.photodokan.station.JobResult
+import com.tlw.photodokan.station.FileStationLinkStore
 import com.tlw.photodokan.station.PairedDevices
 import com.tlw.photodokan.station.PrintStation
 import com.tlw.photodokan.station.StationCertificate
 import com.tlw.photodokan.station.StationClient
 import com.tlw.photodokan.station.StationPairing
 import com.tlw.photodokan.ui.customers.InMemoryPhotoLibrary
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -35,6 +42,7 @@ import kotlin.test.assertTrue
  * PDF its Share PDF makes; the PC's station checks it, prints it (to a PDF file, as on a PC without
  * Windows printing) and keeps it in the library.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class PhoneJobEndToEndTest {
 
     private val folder: File = Files.createTempDirectory("photo-dokan-phone-job").toFile()
@@ -52,6 +60,7 @@ class PhoneJobEndToEndTest {
 
     @AfterTest
     fun cleanUp() {
+        Dispatchers.resetMain()
         station.stop()
         folder.deleteRecursively()
     }
@@ -78,6 +87,27 @@ class PhoneJobEndToEndTest {
         val pages = PdfBoxSheetReader().read(printed.readBytes()).pages
         assertEquals(5, pages.single().items.count { it is PageItem.Image }, "every copy printed")
         assertContentEquals(pdf, library.sheets.getValue("2026/10/24/Phone sheets/Photo Dokan 0001 14.30.pdf"), "kept as sent")
+    }
+
+    @Test
+    fun thePhonesSendButtonPrintsOnThePc() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        val phoneLibrary = InMemoryPhotoLibrary()
+        val customer = phoneLibrary.create(today, null, null, jpeg())
+        val phoneQueue = InMemoryPrintQueueStore(PrintQueue().add(customer, 5))
+        val links = FileStationLinkStore(File(folder, "print-station.json"))
+        links.save(phone.pair(assertNotNull(station.invite()), "Galaxy A15"))
+        val vm = PrintViewModel(PrintOrders(phoneQueue), phoneLibrary, template, station = phone, links = links, work = Dispatchers.Unconfined)
+        vm.refresh()
+        assertEquals("STUDIO-PC", vm.state.value.stationName)
+
+        vm.sendToPc()
+
+        assertEquals("Printed 5 photos on STUDIO-PC. 35 slots are left on this sheet.", vm.state.value.message)
+        val printed = assertNotNull(printer.lastFile, "printed on the PC")
+        assertEquals(5, PdfBoxSheetReader().read(printed.readBytes()).pages.single().items.count { it is PageItem.Image })
+        assertTrue(phoneQueue.saved.orders.isEmpty(), "the phone's queue is done")
+        assertEquals(setOf("2026/10/24/Phone sheets/Photo Dokan 0001 14.30.pdf"), library.sheets.keys)
     }
 
     @Test
