@@ -26,6 +26,9 @@ class StationException(message: String, val reason: Reason) : Exception(message)
 
         /** The PC no longer knows this phone: it was removed there. */
         NotPaired,
+
+        /** The PC got the request but didn't answer in time, so it may have acted on it. */
+        NoAnswer,
     }
 }
 
