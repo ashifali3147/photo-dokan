@@ -30,7 +30,9 @@ val appModule = module {
     single { IncomingPhotos() }
     single { PrintOrders(get()) }
     viewModel { CustomersViewModel(get(), ::today, orders = get(), template = get(), presets = get()) }
-    viewModel { PrintViewModel(get(), get(), get(), printer = getOrNull(), sharer = getOrNull(), pdfReader = getOrNull()) }
+    viewModel {
+        PrintViewModel(get(), get(), get(), printer = getOrNull(), sharer = getOrNull(), pdfReader = getOrNull(), phonePrinter = getOrNull())
+    }
 }
 
 /** Starts Koin once per process: from `main` on desktop, from the Application on Android. */
