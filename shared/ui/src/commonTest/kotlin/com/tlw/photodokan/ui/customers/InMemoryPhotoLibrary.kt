@@ -11,6 +11,7 @@ class InMemoryPhotoLibrary : PhotoLibrary {
     val originals = mutableMapOf<Customer, ByteArray>()
     val recipes = mutableMapOf<Customer, EditRecipe>()
     val finals = mutableMapOf<Customer, ByteArray>()
+    val mattes = mutableMapOf<Customer, ByteArray>()
 
     override fun nextNumber(date: StudioDate) = (originals.keys.filter { it.date == date }.maxOfOrNull { it.number } ?: 0) + 1
 
@@ -32,6 +33,13 @@ class InMemoryPhotoLibrary : PhotoLibrary {
     override fun readOriginal(customer: Customer) = originals.getValue(customer)
     override fun readRecipe(customer: Customer) = recipes[customer]
     override fun readFinal(customer: Customer) = finals[customer]
+
+    override fun saveMatte(customer: Customer, png: ByteArray) {
+        check(customer in originals) { "Customer ${customer.label} is not in the library" }
+        mattes[customer] = png
+    }
+
+    override fun readMatte(customer: Customer) = mattes[customer]
 
     /** Filed sheet PDFs by path, as the real library would name them. */
     val sheets = linkedMapOf<String, ByteArray>()
