@@ -34,11 +34,16 @@ import com.tlw.photodokan.ui.platform.timed
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
@@ -144,9 +149,7 @@ class PrintViewModel(
             try {
                 withContext(work) {
                     val dpi = printer.photoDpi()
-                    val photos = timed("Render ${job.orders.size} customers at ${dpi.roundToInt()} dpi") {
-                        job.orders.associate { it.id to renderForPrint(it, dpi) }
-                    }
+                    val photos = timed("Render ${job.orders.size} customers at ${dpi.roundToInt()} dpi") { renderAll(job, dpi) }
                     val pages = job.pack(template).sheets.map { sheet -> sheetPage(template, sheet) { photos.getValue(it) } }
                     printer.print(PrintDocument(pages), jobName(job))
                 }
@@ -202,7 +205,7 @@ class PrintViewModel(
                 val document = withContext(work) {
                     // A phone can't hold a 50-megapixel photo at full size twice over; this is plenty for 600 dpi.
                     val photos = timed("Render ${job.orders.size} customers at ${SHARE_DPI.toInt()} dpi") {
-                        job.orders.associate { it.id to renderForPrint(it, SHARE_DPI, maxSide = SHARE_DECODE_SIDE) }
+                        renderAll(job, SHARE_DPI, maxSide = SHARE_DECODE_SIDE)
                     }
                     PrintDocument(job.pack(template).sheets.map { sheet -> sheetPage(template, sheet) { photos.getValue(it) } })
                 }
@@ -401,6 +404,15 @@ class PrintViewModel(
     }
 
     /**
+     * Every order's photo for its slots, by order id. A few at a time, on separate cores: each one
+     * is mostly decoding its original, and more at once would only cost memory.
+     */
+    private suspend fun renderAll(job: PrintQueue, dpi: Double, maxSide: Int = Int.MAX_VALUE): Map<String, ByteArray> = coroutineScope {
+        val gate = Semaphore(RENDER_AT_ONCE)
+        job.orders.map { order -> async { order.id to gate.withPermit { renderForPrint(order, dpi, maxSide) } } }.awaitAll().toMap()
+    }
+
+    /**
      * The order's photo for one slot at [dpi]: its crop of the original, decoded only as large as
      * the crop needs to fill the slot (and at most [maxSide]), so a 50 MP photo prints quickly.
      */
@@ -454,6 +466,7 @@ class PrintViewModel(
         /** Enough for a slot on screen; printing reads the full-resolution photo. */
         const val THUMBNAIL_SIDE = 240
         const val PRINT_JPEG_QUALITY = 95
+        private const val RENDER_AT_ONCE = 3
 
         /** Shared PDFs are printed on the PC; 600 dpi is more than a photo printer resolves. */
         const val SHARE_DPI = 600.0
