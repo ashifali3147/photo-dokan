@@ -41,6 +41,8 @@ kotlin {
                 implementation(libs.ktor.server.content.negotiation)
                 implementation(libs.ktor.serialization.kotlinx.json)
                 implementation(libs.ktor.network.tls.certificates)
+                // Announces the station on the shop's network, so phones find it after its address changes.
+                implementation(libs.jmdns)
             }
         }
         val desktopTest by getting {

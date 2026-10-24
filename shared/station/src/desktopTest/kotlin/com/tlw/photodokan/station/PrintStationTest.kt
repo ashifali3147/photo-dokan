@@ -39,7 +39,7 @@ class PrintStationTest {
 
     private val pairing = StationPairing(PairedDevices(File(folder, "paired-devices.json")))
 
-    private fun running(port: Int = 0) = PrintStation(certificate, "STUDIO-PC", pairing, port = port).also { stations += it; it.start() }
+    private fun running(port: Int = 0) = PrintStation(certificate, "STUDIO-PC", pairing, announce = false, port = port).also { stations += it; it.start() }
 
     /**
      * Calls the station as a paired phone will: trusting only the certificate with [fingerprint],
@@ -100,7 +100,7 @@ class PrintStationTest {
     @Test
     fun aSecondCopyOfTheAppCannotTakeThePort() {
         val first = running()
-        val second = PrintStation(certificate, "STUDIO-PC", pairing, port = first.listeningPort!!).also { stations += it }
+        val second = PrintStation(certificate, "STUDIO-PC", pairing, announce = false, port = first.listeningPort!!).also { stations += it }
         assertFailsWith<BindException> { second.start() }
         assertNull(second.listeningPort)
         assertEquals(HttpURLConnection.HTTP_OK, get(first.listeningPort!!, StationProtocol.STATUS_PATH).first, "the first keeps working")

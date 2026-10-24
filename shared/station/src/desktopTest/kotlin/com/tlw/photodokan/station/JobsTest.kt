@@ -42,7 +42,7 @@ class JobsTest {
     }
 
     private fun station(jobs: StationJobs? = printer) =
-        PrintStation(certificate, "STUDIO-PC", pairing, jobs, port = 0, addresses = { listOf("127.0.0.1") }).also { stations += it; it.start() }
+        PrintStation(certificate, "STUDIO-PC", pairing, jobs, announce = false, port = 0, addresses = { listOf("127.0.0.1") }).also { stations += it; it.start() }
 
     private fun pairedPhone(station: PrintStation, name: String = "Galaxy A15") = phone.pair(assertNotNull(station.invite()), name)
 
