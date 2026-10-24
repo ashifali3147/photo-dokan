@@ -19,6 +19,10 @@ class VisionModels(private val files: ModelFiles) : AutoCloseable {
         try {
             OrtSession.SessionOptions().use { options ->
                 options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                // Give working memory back after each run instead of keeping it for the next: a
+                // matte needs hundreds of MB for a moment, too much to hold on a phone.
+                options.setCPUArenaAllocator(false)
+                options.setMemoryPatternOptimization(false)
                 environment.createSession(bytes, options)
             }
         } catch (e: OrtException) {
