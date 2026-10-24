@@ -17,6 +17,7 @@ coroutines = "1.10.2"
 ktor = "3.3.0"
 zxing = "3.5.3"
 jmdns = "3.6.3"
+onnxruntime = "1.30.0"
 
 android-compileSdk = "36"
 android-targetSdk = "36"
@@ -52,6 +53,8 @@ ktor-network-tls-certificates = { module = "io.ktor:ktor-network-tls-certificate
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 jmdns = { module = "org.jmdns:jmdns", version.ref = "jmdns" }
+onnxruntime = { module = "com.microsoft.onnxruntime:onnxruntime", version.ref = "onnxruntime" }
+onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxruntime" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
