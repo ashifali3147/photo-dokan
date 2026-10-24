@@ -19,6 +19,7 @@ kotlin {
         commonMain.dependencies {
             api(project(":shared:core"))
             implementation(project(":shared:print"))
+            implementation(project(":shared:station"))
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)
