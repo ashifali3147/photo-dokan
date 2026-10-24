@@ -21,6 +21,7 @@ dependencies {
     implementation(project(":shared:library"))
     implementation(project(":shared:print"))
     implementation(project(":shared:station"))
+    implementation(project(":shared:vision"))
     implementation(compose.desktop.currentOs)
 }
 

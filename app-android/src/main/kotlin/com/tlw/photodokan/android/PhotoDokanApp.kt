@@ -19,6 +19,9 @@ import com.tlw.photodokan.ui.print.AndroidSheetSharer
 import com.tlw.photodokan.ui.print.PhonePrinter
 import com.tlw.photodokan.ui.print.SheetSharer
 import com.tlw.photodokan.ui.station.PhoneName
+import com.tlw.photodokan.vision.AssetModelFiles
+import com.tlw.photodokan.vision.ModelFiles
+import com.tlw.photodokan.vision.VisionModels
 import kotlinx.io.files.Path
 import org.koin.dsl.module
 import java.io.File
@@ -48,6 +51,9 @@ class PhotoDokanApp : Application() {
                     single<StationConnector> { FindingConnector(StationClient(), NsdStationFinder(this@PhotoDokanApp), get()) }
                     single<StationLinkStore> { FileStationLinkStore(File(filesDir, "print-station.json")) }
                     single { PhoneName(phoneName()) }
+                    // Face detection and background matting, from the models inside the APK.
+                    single<ModelFiles> { AssetModelFiles(this@PhotoDokanApp) }
+                    single { VisionModels(get()) }
                 },
             ),
         )

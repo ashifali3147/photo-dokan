@@ -15,9 +15,20 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
         versionName = "1.0.0"
+        // ONNX Runtime's native library is large: only phones, 64- and 32-bit ARM.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+    }
+
+    // Compressed in the APK, so it stays small enough to send; Android unpacks it on install.
+    packaging {
+        jniLibs.useLegacyPackaging = true
     }
 
     buildTypes {
+        // And the emulator, while developing.
+        debug {
+            ndk { abiFilters += "x86_64" }
+        }
         release {
             isMinifyEnabled = false
         }
@@ -50,5 +61,6 @@ dependencies {
     implementation(project(":shared:ui"))
     implementation(project(":shared:library"))
     implementation(project(":shared:station"))
+    implementation(project(":shared:vision"))
     implementation(libs.androidx.activity.compose)
 }
