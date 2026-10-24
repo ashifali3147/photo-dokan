@@ -6,6 +6,13 @@ import android.graphics.Matrix
 import androidx.compose.ui.graphics.asImageBitmap
 import com.tlw.photodokan.core.imaging.ExifOrientation
 
+actual fun photoSize(bytes: ByteArray): Pair<Int, Int>? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    return if (ExifOrientation.read(bytes).swapsDimensions) bounds.outHeight to bounds.outWidth else bounds.outWidth to bounds.outHeight
+}
+
 actual fun decodePreview(bytes: ByteArray, maxSide: Int): PhotoPreview? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)

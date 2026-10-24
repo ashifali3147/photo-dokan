@@ -28,6 +28,7 @@ import com.tlw.photodokan.print.SimplePdfRenderer
 import com.tlw.photodokan.print.sheetPage
 import com.tlw.photodokan.ui.editor.renderCrop
 import com.tlw.photodokan.ui.photo.decodePreview
+import com.tlw.photodokan.ui.photo.photoSize
 import com.tlw.photodokan.ui.platform.encodeJpeg
 import com.tlw.photodokan.ui.platform.timed
 import kotlinx.coroutines.CancellationException
@@ -399,16 +400,24 @@ class PrintViewModel(
         _state.update { it.copy(printerName = name, photoSettings = settings, calibration = calibration) }
     }
 
+    /**
+     * The order's photo for one slot at [dpi]: its crop of the original, decoded only as large as
+     * the crop needs to fill the slot (and at most [maxSide]), so a 50 MP photo prints quickly.
+     */
     private fun renderForPrint(order: QueuedOrder, dpi: Double, maxSide: Int = Int.MAX_VALUE): ByteArray {
         val customer = order.customer
-        val photo = decodePreview(library.readOriginal(customer), maxSide = maxSide)
-            ?: throw PrintException("The photo of customer ${customer.label} could not be opened.")
+        val original = library.readOriginal(customer)
+        val unreadable = PrintException("The photo of customer ${customer.label} could not be opened.")
         val recipe = library.readRecipe(customer) ?: EditRecipe(presetId = PhotoSizePreset.STUDIO_SLOT.id)
         val slot = template.photo
-        val image = photo.image
-        val rect = CropGeometry.rect(image.width, image.height, slot.width / slot.height, recipe.crop)
+        val aspect = slot.width / slot.height
         val width = mmToPixels(slot.width, dpi).roundToInt()
         val height = mmToPixels(slot.height, dpi).roundToInt()
+        val (fullWidth, fullHeight) = photoSize(original) ?: throw unreadable
+        val needed = CropGeometry.sourceSideFor(fullWidth, fullHeight, aspect, recipe.crop, width)
+        val photo = decodePreview(original, maxSide = minOf(needed, maxSide)) ?: throw unreadable
+        val image = photo.image
+        val rect = CropGeometry.rect(image.width, image.height, aspect, recipe.crop)
         return encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(recipe)), quality = PRINT_JPEG_QUALITY)
     }
 

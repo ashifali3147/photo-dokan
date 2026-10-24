@@ -36,6 +36,31 @@ class CropGeometryTest {
     }
 
     @Test
+    fun aReducedCopyIsJustBigEnoughForTheCropToCoverTheOutput() {
+        // A 50 MP photo, the default passport crop 4760 px wide: an 827 px slot needs 1/5.76 of it.
+        val crop = CropConfig()
+        val full = CropGeometry.rect(8160, 6120, passport, crop)
+        close(4760.0, full.width)
+        val side = CropGeometry.sourceSideFor(8160, 6120, passport, crop, outputWidth = 827)
+        assertEquals(1418, side)
+        // At that size the crop spans the output to within a pixel (the height is whole pixels).
+        val reduced = CropGeometry.rect(side, side * 6120 / 8160, passport, crop)
+        assertTrue(reduced.width > 826 && reduced.width < 828, "crop is ${reduced.width} px")
+    }
+
+    @Test
+    fun zoomingInNeedsMoreOfThePhoto() {
+        val wide = CropGeometry.sourceSideFor(8160, 6120, passport, CropConfig(), outputWidth = 827)
+        val zoomed = CropGeometry.sourceSideFor(8160, 6120, passport, CropConfig(scale = 4.0), outputWidth = 827)
+        assertTrue(abs(zoomed - wide * 4) < 4, "four times the zoom needs four times the pixels: $wide then $zoomed")
+    }
+
+    @Test
+    fun aSmallPhotoIsNeverAskedToBeBigger() {
+        assertEquals(1280, CropGeometry.sourceSideFor(960, 1280, passport, CropConfig(scale = 3.0), outputWidth = 827))
+    }
+
+    @Test
     fun defaultCropIsTheLargestCentredFrameOfThePhotoSize() {
         // Phone portrait 3000 × 4000: limited by width.
         val tall = CropGeometry.rect(3000, 4000, passport, CropConfig())
