@@ -39,7 +39,7 @@ val appModule = module {
     viewModel {
         PrintViewModel(
             get(), get(), get(), printer = getOrNull(), sharer = getOrNull(), pdfReader = getOrNull(), phonePrinter = getOrNull(),
-            station = getOrNull(), links = getOrNull(),
+            station = getOrNull(), links = getOrNull(), matter = getOrNull(),
         )
     }
     viewModel {

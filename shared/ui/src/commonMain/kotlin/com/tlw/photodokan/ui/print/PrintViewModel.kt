@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.tlw.photodokan.core.geometry.mmToPixels
 import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropGeometry
+import com.tlw.photodokan.core.matte.Matte
+import com.tlw.photodokan.core.model.BackgroundMode
 import com.tlw.photodokan.core.model.EditRecipe
 import com.tlw.photodokan.core.model.Order
 import com.tlw.photodokan.core.model.PhotoSizePreset
@@ -30,10 +32,13 @@ import com.tlw.photodokan.station.StationConnector
 import com.tlw.photodokan.station.StationException
 import com.tlw.photodokan.station.StationLinkStore
 import com.tlw.photodokan.ui.editor.renderCrop
+import com.tlw.photodokan.ui.editor.withBackground
 import com.tlw.photodokan.ui.photo.decodePreview
 import com.tlw.photodokan.ui.photo.photoSize
 import com.tlw.photodokan.ui.platform.encodeJpeg
 import com.tlw.photodokan.ui.platform.timed
+import com.tlw.photodokan.vision.MattePng
+import com.tlw.photodokan.vision.PortraitMatter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -106,6 +111,8 @@ class PendingPdf(val name: String, val document: PrintDocument) {
  * [printer] (the phone) the sheet is shared as a PDF through [sharer] and marked as printed by
  * hand once the PC has printed it, or printed through the phone's print dialog with [phonePrinter].
  * A phone paired with the PC's Print Station ([station] and [links]) sends the sheet straight to it.
+ * Each photo's background is changed as its recipe says, with the customer's kept matte or one
+ * worked out by [matter].
  */
 class PrintViewModel(
     private val orders: PrintOrders,
@@ -118,6 +125,7 @@ class PrintViewModel(
     private val phonePrinter: PhonePrinter? = null,
     private val station: StationConnector? = null,
     private val links: StationLinkStore? = null,
+    private val matter: PortraitMatter? = null,
     private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
@@ -510,9 +518,25 @@ class PrintViewModel(
         val (fullWidth, fullHeight) = photoSize(original) ?: throw unreadable
         val needed = CropGeometry.sourceSideFor(fullWidth, fullHeight, aspect, recipe.crop, width)
         val photo = decodePreview(original, maxSide = minOf(needed, maxSide)) ?: throw unreadable
-        val image = photo.image
+        val image = photo.image.withBackground(matteFor(order, photo.image, recipe), recipe.background)
         val rect = CropGeometry.rect(image.width, image.height, aspect, recipe.crop)
         return encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(recipe)), quality = PRINT_JPEG_QUALITY)
+    }
+
+    /**
+     * The customer's kept matte, or, when their background needs one and none is kept (e.g. saved
+     * before mattes were kept), one worked out from [image] and kept. Null prints the photo as shot,
+     * as the editor shows it when the person can't be separated.
+     */
+    private fun matteFor(order: QueuedOrder, image: ImageBitmap, recipe: EditRecipe): Matte? {
+        if (recipe.background.mode == BackgroundMode.KEEP) return null
+        val customer = order.customer
+        runCatching { library.readMatte(customer)?.let(MattePng::decode) }.getOrNull()?.let { return it }
+        val matter = matter ?: return null
+        val argb = IntArray(image.width * image.height).also { image.readPixels(it) }
+        val matte = runCatching { timed("Separate the person of ${customer.label}") { matter.matte(argb, image.width, image.height) } }.getOrNull() ?: return null
+        runCatching { library.saveMatte(customer, MattePng.encode(matte)) }
+        return matte
     }
 
     private fun nextSheetText(): String {

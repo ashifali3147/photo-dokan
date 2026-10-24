@@ -2,6 +2,9 @@ package com.tlw.photodokan.ui.print
 
 import com.tlw.photodokan.core.library.Customer
 import com.tlw.photodokan.core.library.StudioDate
+import com.tlw.photodokan.core.matte.Matte
+import com.tlw.photodokan.core.model.BackgroundConfig
+import com.tlw.photodokan.core.model.BackgroundMode
 import com.tlw.photodokan.core.model.EditRecipe
 import com.tlw.photodokan.core.model.PrintQueue
 import com.tlw.photodokan.core.model.SheetState
@@ -24,6 +27,8 @@ import com.tlw.photodokan.station.StationException
 import com.tlw.photodokan.station.StationLink
 import com.tlw.photodokan.station.StationLinkStore
 import com.tlw.photodokan.ui.customers.InMemoryPhotoLibrary
+import com.tlw.photodokan.vision.MattePng
+import com.tlw.photodokan.vision.PortraitMatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -155,13 +160,15 @@ class PrintViewModelTest {
         withReader: Boolean = false,
         withPhonePrinter: Boolean = false,
         withStation: Boolean = false,
+        withMatter: Boolean = false,
     ) {
         store.saved = saved
         orders = PrintOrders(store)
         vm = PrintViewModel(
             orders, library, template, printer.takeIf { withPrinter }, sharer.takeIf { withSharer },
             pdfReader = reader.takeIf { withReader }, phonePrinter = phonePrinter.takeIf { withPhonePrinter },
-            station = station.takeIf { withStation }, links = links.takeIf { withStation }, work = Dispatchers.Unconfined,
+            station = station.takeIf { withStation }, links = links.takeIf { withStation },
+            matter = matter.takeIf { withMatter }, work = Dispatchers.Unconfined,
         )
     }
 
@@ -171,8 +178,19 @@ class PrintViewModelTest {
         vm.refresh()
     }
 
+    /** Says the right half of every photo is the person. */
+    private class FakeMatter : PortraitMatter {
+        var calls = 0
+        override fun matte(argb: IntArray, width: Int, height: Int): Matte {
+            calls++
+            return personOnTheRight
+        }
+    }
+
+    private val matter = FakeMatter()
+
     /** A saved customer whose original is a 720 × 680 photo, red on the left half and blue on the right. */
-    private fun halfRedHalfBlue(): Customer {
+    private fun halfRedHalfBlue(recipe: EditRecipe = EditRecipe(presetId = "studio-slot")): Customer {
         val photo = BufferedImage(720, 680, BufferedImage.TYPE_INT_RGB).apply {
             createGraphics().apply {
                 color = java.awt.Color.RED; fillRect(0, 0, 360, 680)
@@ -183,8 +201,45 @@ class PrintViewModelTest {
         val original = ByteArrayOutputStream().also { ImageIO.write(photo, "jpg", it) }.toByteArray()
         return library.create(today, null, null, original).also {
             // final.jpg is deliberately a tiny black image: printing must not use it.
-            library.saveEdit(it, EditRecipe(presetId = "studio-slot"), jpeg)
+            library.saveEdit(it, recipe, jpeg)
         }
+    }
+
+    private fun printedColours(): Pair<java.awt.Color, java.awt.Color> {
+        val printed = ImageIO.read(ByteArrayInputStream(images(printer.jobs.single().first).first().jpeg))
+        return java.awt.Color(printed.getRGB(20, 67)) to java.awt.Color(printed.getRGB(121, 67))
+    }
+
+    private val onWhite = EditRecipe(presetId = "studio-slot", background = BackgroundConfig(mode = BackgroundMode.REPLACE))
+
+    @Test
+    fun theBackgroundPrintsAsTheEditorShowedIt() {
+        val customer = halfRedHalfBlue(onWhite)
+        library.saveMatte(customer, MattePng.encode(personOnTheRight))
+        start(PrintQueue().add(customer, 4))
+        vm.print()
+        val (left, right) = printedColours()
+        assertTrue(left.red > 245 && left.green > 245 && left.blue > 245, "white behind the person, was $left")
+        assertTrue(right.blue > 200 && right.red < 60, "the person as shot, was $right")
+    }
+
+    @Test
+    fun aCustomerWithoutAKeptMatteGetsOneWhenPrinted() {
+        val customer = halfRedHalfBlue(onWhite)
+        start(PrintQueue().add(customer, 4), withMatter = true)
+        vm.print()
+        assertEquals(1, matter.calls)
+        assertEquals(personOnTheRight, library.readMatte(customer)?.let(MattePng::decode), "kept for next time")
+        assertTrue(printedColours().first.green > 245)
+    }
+
+    @Test
+    fun aPhotoKeptAsShotNeedsNoMatte() {
+        val customer = halfRedHalfBlue(onWhite.copy(background = BackgroundConfig(mode = BackgroundMode.KEEP)))
+        start(PrintQueue().add(customer, 4), withMatter = true)
+        vm.print()
+        assertEquals(0, matter.calls)
+        assertTrue(printedColours().first.red > 200)
     }
 
     private fun images(document: PrintDocument) = document.pages.flatMap { p -> p.items.filterIsInstance<PageItem.Image>() }
@@ -762,5 +817,9 @@ class PrintViewModelTest {
     fun longJobNamesAreShortened() {
         val queue = (1..7).fold(PrintQueue()) { q, n -> q.add(Customer(today, n), 5) }
         assertEquals("Photo Dokan 0001, 0002, 0003, 0004, 0005 …", PrintViewModel.jobName(queue))
+    }
+
+    private companion object {
+        val personOnTheRight = Matte(4, 2, byteArrayOf(0, 0, -1, -1, 0, 0, -1, -1))
     }
 }
