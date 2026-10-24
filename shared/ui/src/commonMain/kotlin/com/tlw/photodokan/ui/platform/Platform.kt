@@ -10,6 +10,9 @@ expect fun today(): StudioDate
 /** Encodes an image as JPEG, e.g. the final.jpg kept in the library. */
 expect fun encodeJpeg(image: ImageBitmap, quality: Int = 90): ByteArray
 
+/** A [width] × [height] image of [argb] pixels, row by row: the counterpart of [ImageBitmap.readPixels]. */
+expect fun imageBitmapOf(argb: IntArray, width: Int, height: Int): ImageBitmap
+
 /**
  * Runs [block] and, on the phone, logs how long [what] took and how much memory is in use, for
  * checking speed on a real phone: `adb logcat -s PhotoDokanPerf`.

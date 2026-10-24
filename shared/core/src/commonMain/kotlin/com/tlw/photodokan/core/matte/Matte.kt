@@ -35,6 +35,49 @@ class Matte(val width: Int, val height: Int, val alpha: ByteArray) {
         return (top * (1 - ty) + bottom * ty) / 255
     }
 
+    /**
+     * The matte scaled to a [width] × [height] photo, one value 0–255 per photo pixel: the same
+     * values as [at] gives at each pixel's centre, worked out a row at a time so that a full-size
+     * photo takes a fraction of a second.
+     */
+    fun resized(width: Int, height: Int): ByteArray {
+        require(width > 0 && height > 0) { "Need a size, was $width × $height" }
+        val out = ByteArray(width * height)
+        val columns = Lerp(width, this.width)
+        val rows = Lerp(height, this.height)
+        val line = FloatArray(this.width)
+        for (y in 0 until height) {
+            val top = rows.low[y] * this.width
+            val bottom = rows.high[y] * this.width
+            val ty = rows.t[y]
+            for (x in 0 until this.width) {
+                line[x] = (alpha[top + x].toInt() and 0xff) * (1 - ty) + (alpha[bottom + x].toInt() and 0xff) * ty
+            }
+            val row = y * width
+            for (x in 0 until width) {
+                val tx = columns.t[x]
+                out[row + x] = (line[columns.low[x]] * (1 - tx) + line[columns.high[x]] * tx + 0.5f).toInt().toByte()
+            }
+        }
+        return out
+    }
+
+    /** For each of [n] pixel centres, the two of [size] matte pixels around it and how far between. */
+    private class Lerp(n: Int, size: Int) {
+        val low = IntArray(n)
+        val high = IntArray(n)
+        val t = FloatArray(n)
+
+        init {
+            for (i in 0 until n) {
+                val p = ((i + 0.5) / n * size - 0.5).coerceIn(0.0, size - 1.0)
+                low[i] = floor(p).toInt()
+                high[i] = minOf(low[i] + 1, size - 1)
+                t[i] = (p - low[i]).toFloat()
+            }
+        }
+    }
+
     override fun equals(other: Any?): Boolean =
         other is Matte && width == other.width && height == other.height && alpha.contentEquals(other.alpha)
 

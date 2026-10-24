@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import com.tlw.photodokan.core.library.StudioDate
 import java.io.ByteArrayOutputStream
 import java.time.LocalDate
@@ -16,6 +17,9 @@ actual fun today(): StudioDate = LocalDate.now().let { StudioDate(it.year, it.mo
 
 actual fun encodeJpeg(image: ImageBitmap, quality: Int): ByteArray =
     ByteArrayOutputStream().also { image.asAndroidBitmap().compress(Bitmap.CompressFormat.JPEG, quality, it) }.toByteArray()
+
+actual fun imageBitmapOf(argb: IntArray, width: Int, height: Int): ImageBitmap =
+    Bitmap.createBitmap(argb, width, height, Bitmap.Config.ARGB_8888).asImageBitmap()
 
 actual fun monotonicNanos(): Long = SystemClock.elapsedRealtimeNanos()
 

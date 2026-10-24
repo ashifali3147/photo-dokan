@@ -105,4 +105,11 @@ class RenderParityTest {
         /** Rounding, 8-bit colour and filter differences; a wrong matrix or turn is off by tens. */
         const val TOLERANCE = 4
     }
+
+    @Test
+    fun pixelsWrittenAreThePixelsReadBack() {
+        val argb = IntArray(7 * 5) { i -> (0xff shl 24) or (i * 7 shl 16) or (255 - i shl 8) or (i * 3) }
+        val back = IntArray(argb.size).also { com.tlw.photodokan.ui.platform.imageBitmapOf(argb, 7, 5).readPixels(it) }
+        assertTrue(argb.contentEquals(back), "the same pixels on this platform")
+    }
 }

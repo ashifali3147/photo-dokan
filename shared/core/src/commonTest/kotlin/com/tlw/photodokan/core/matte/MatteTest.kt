@@ -36,6 +36,18 @@ class MatteTest {
     }
 
     @Test
+    fun resizingGivesTheSameValuesAsReadingEachPixel() {
+        val matte = Matte(5, 3, ByteArray(15) { (it * 17).toByte() })
+        val (w, h) = 23 to 11
+        val resized = matte.resized(w, h)
+        for (y in 0 until h) for (x in 0 until w) {
+            val expected = matte.at((x + 0.5) / w, (y + 0.5) / h) * 255
+            val actual = resized[y * w + x].toInt() and 0xff
+            assertTrue(abs(expected - actual) <= 0.51, "at ($x, $y): expected $expected, was $actual")
+        }
+    }
+
+    @Test
     fun mattesWithTheSameValuesAreEqual() {
         assertEquals(split, Matte(4, 2, split.alpha.copyOf()))
         assertNotEquals(split, Matte(2, 4, split.alpha.copyOf()))
