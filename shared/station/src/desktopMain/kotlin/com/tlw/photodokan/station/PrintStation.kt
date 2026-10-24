@@ -12,16 +12,21 @@ import io.ktor.server.netty.Netty
 import io.ktor.server.netty.NettyApplicationEngine
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.origin
+import io.ktor.server.request.contentLength
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -31,12 +36,14 @@ import java.util.logging.Logger
  *
  * @param name the PC's name as phones show it.
  * @param pairing the paired phones, and the code a new phone pairs with.
+ * @param jobs prints the sheets phones send; without it, jobs are refused.
  * @param port [StationProtocol.PORT]; tests pass 0 for any free port.
  */
 class PrintStation(
     private val certificate: StationCertificate,
     override val name: String,
     val pairing: StationPairing,
+    private val jobs: StationJobs? = null,
     private val port: Int = StationProtocol.PORT,
     private val addresses: () -> List<String> = StationPairing::localAddresses,
 ) : StationHost {
@@ -68,7 +75,7 @@ class PrintStation(
                     port = this@PrintStation.port
                 }
             },
-            module = { station(name, pairing) },
+            module = { station(name, pairing, jobs) },
         )
         try {
             started.start(wait = false)
@@ -130,7 +137,14 @@ class PrintStation(
  * What the station answers. Callers [allowed] by address only: by default this PC and the shop's
  * own network (see [LocalNetwork]); everyone else gets 403 Forbidden and nothing more.
  */
-internal fun Application.station(name: String, pairing: StationPairing, allowed: (String) -> Boolean = LocalNetwork::isLocal) {
+internal fun Application.station(
+    name: String,
+    pairing: StationPairing,
+    jobs: StationJobs? = null,
+    allowed: (String) -> Boolean = LocalNetwork::isLocal,
+) {
+    // One sheet at a time: the printer takes them in turn anyway, and the PC stays responsive.
+    val printing = Mutex()
     install(
         createApplicationPlugin("LocalNetworkOnly") {
             onCall { call ->
@@ -154,6 +168,20 @@ internal fun Application.station(name: String, pairing: StationPairing, allowed:
         get(StationProtocol.PAIRED_PATH) {
             val device = pairedDevice(pairing.devices) ?: return@get
             call.respond(PairedHello(name, device.name))
+        }
+
+        post(StationProtocol.JOBS_PATH) {
+            val device = pairedDevice(pairing.devices) ?: return@post
+            val printer = jobs ?: return@post call.respond(HttpStatusCode.ServiceUnavailable, StationError("This PC can't print sheets from phones."))
+            val length = call.request.contentLength()
+                ?: return@post call.respond(HttpStatusCode.LengthRequired, StationError("The phone sent a sheet the PC can't read. Update Photo Dokan on both."))
+            if (length > StationProtocol.MAX_JOB_BYTES) {
+                return@post call.respond(HttpStatusCode.PayloadTooLarge, StationError("This sheet is too big to send. Use Share PDF instead."))
+            }
+            val pdf = call.receive<ByteArray>()
+            val sheetName = call.request.queryParameters[StationProtocol.JOB_NAME]?.takeIf { it.isNotBlank() } ?: "Sheet from ${device.name}"
+            val result = printing.withLock { withContext(Dispatchers.IO) { printer.print(pdf, sheetName, device.name) } }
+            call.respond(result)
         }
     }
 }

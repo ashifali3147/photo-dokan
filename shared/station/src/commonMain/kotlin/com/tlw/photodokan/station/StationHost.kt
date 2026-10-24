@@ -33,6 +33,12 @@ interface StationHost {
     fun remove(deviceId: String)
 }
 
+/** Prints sheets that phones send to the PC. Blocking; the station calls it one job at a time. */
+fun interface StationJobs {
+    /** Checks, prints and keeps [pdf], sent as [name] by the phone called [deviceName]. */
+    fun print(pdf: ByteArray, name: String, deviceName: String): JobResult
+}
+
 /** Where a phone keeps the PC it is paired with. */
 interface StationLinkStore {
     fun load(): StationLink?

@@ -18,10 +18,14 @@ import javax.net.ssl.X509TrustManager
  * fingerprint, whatever address the PC has today. Plain `java.net`, the same on the phone and in
  * the PC's tests.
  */
-class StationClient(private val timeoutMillis: Int = 4_000) : StationConnector {
+class StationClient(
+    private val timeoutMillis: Int = 4_000,
+    /** How long the PC may take to print a sheet before answering. */
+    private val printTimeoutMillis: Int = 120_000,
+) : StationConnector {
 
     override fun pair(invite: PairingInvite, deviceName: String): StationLink {
-        val body = json.encodeToString(PairRequest(invite.code, deviceName))
+        val body = json.encodeToString(PairRequest(invite.code, deviceName)).toByteArray()
         val (host, response) = firstAnswer(invite.hosts, invite.port, invite.fingerprint) { host ->
             request(host, invite.port, invite.fingerprint, "POST", StationProtocol.PAIR_PATH, body = body)
         }
@@ -32,6 +36,14 @@ class StationClient(private val timeoutMillis: Int = 4_000) : StationConnector {
     override fun check(link: StationLink): PairedHello {
         val (_, response) = firstAnswer(link.hosts, link.port, link.fingerprint) { host ->
             request(host, link.port, link.fingerprint, "GET", StationProtocol.PAIRED_PATH, token = link.token)
+        }
+        return json.decodeFromString(response.expect(HttpURLConnection.HTTP_OK))
+    }
+
+    override fun send(link: StationLink, pdf: ByteArray, name: String): JobResult {
+        val path = StationProtocol.JOBS_PATH + "?" + StationProtocol.JOB_NAME + "=" + java.net.URLEncoder.encode(name, "UTF-8").replace("+", "%20")
+        val (_, response) = firstAnswer(link.hosts, link.port, link.fingerprint) { host ->
+            request(host, link.port, link.fingerprint, "POST", path, body = pdf, contentType = "application/pdf", token = link.token, readTimeout = printTimeoutMillis)
         }
         return json.decodeFromString(response.expect(HttpURLConnection.HTTP_OK))
     }
@@ -65,21 +77,32 @@ class StationClient(private val timeoutMillis: Int = 4_000) : StationConnector {
         throw StationException(message, reason)
     }
 
-    private fun request(host: String, port: Int, fingerprint: String, method: String, path: String, body: String? = null, token: String? = null): Response {
-        val connection = URI("https", null, host, port, path, null, null).toURL().openConnection() as HttpsURLConnection
+    private fun request(
+        host: String,
+        port: Int,
+        fingerprint: String,
+        method: String,
+        path: String,
+        body: ByteArray? = null,
+        contentType: String = "application/json",
+        token: String? = null,
+        readTimeout: Int = timeoutMillis,
+    ): Response {
+        val connection = URI("https://$host:$port$path").toURL().openConnection() as HttpsURLConnection
         try {
             connection.sslSocketFactory = pinnedTo(fingerprint).socketFactory
             // The certificate's fingerprint is the check; the PC's address may change.
             connection.hostnameVerifier = HostnameVerifier { _, _ -> true }
             connection.connectTimeout = timeoutMillis
-            connection.readTimeout = timeoutMillis
+            connection.readTimeout = readTimeout
             connection.requestMethod = method
             connection.setRequestProperty("Accept", "application/json")
             token?.let { connection.setRequestProperty(StationProtocol.AUTHORIZATION, StationProtocol.BEARER + it) }
             if (body != null) {
                 connection.doOutput = true
-                connection.setRequestProperty("Content-Type", "application/json")
-                connection.outputStream.use { it.write(body.toByteArray()) }
+                connection.setRequestProperty("Content-Type", contentType)
+                connection.setFixedLengthStreamingMode(body.size)
+                connection.outputStream.use { it.write(body) }
             }
             val code = connection.responseCode
             val stream = if (code < 400) connection.inputStream else connection.errorStream

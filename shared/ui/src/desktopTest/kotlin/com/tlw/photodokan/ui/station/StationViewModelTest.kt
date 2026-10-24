@@ -63,6 +63,7 @@ class StationViewModelTest {
             failure?.let { throw it }
             return PairedHello(link.stationName, "Galaxy A15")
         }
+        override fun send(link: StationLink, pdf: ByteArray, name: String) = throw UnsupportedOperationException()
     }
 
     private class MemoryLinks(var saved: StationLink? = null) : StationLinkStore {

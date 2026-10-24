@@ -36,4 +36,10 @@ interface StationConnector {
 
     /** Asks the PC whether this phone is still paired. Throws [StationException]. */
     fun check(link: StationLink): PairedHello
+
+    /**
+     * Sends a sheet [pdf] to the PC, which prints it straight away, and returns how that went.
+     * Throws [StationException] when the PC can't be reached or refuses the job.
+     */
+    fun send(link: StationLink, pdf: ByteArray, name: String): JobResult
 }
