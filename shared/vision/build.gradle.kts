@@ -17,10 +17,12 @@ val models = mapOf(
         "https://media.githubusercontent.com/media/opencv/opencv_zoo/f12e12798e8314f7c074a6656816c048dcc95b7a/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
         "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
     ),
-    // MODNet portrait matting (ZHKKKe/MODNet), ONNX export by Xenova, Apache-2.0 licence.
-    "modnet.onnx" to ModelDownload(
-        "https://huggingface.co/Xenova/modnet/resolve/fa2fa546052fba4c08921230a26cc69a333fca12/onnx/model.onnx",
-        "07c308cf0fc7e6e8b2065a12ed7fc07e1de8febb7dc7839d7b7f15dd66584df9",
+    // MODNet portrait matting (ZHKKKe/MODNet), ONNX export by Xenova, Apache-2.0 licence. Half
+    // precision: the same mattes as the full model at half the size, and as fast on a CPU. The 8-bit
+    // versions lose parts of the person.
+    "modnet_fp16.onnx" to ModelDownload(
+        "https://huggingface.co/Xenova/modnet/resolve/fa2fa546052fba4c08921230a26cc69a333fca12/onnx/model_fp16.onnx",
+        "25f165da9bfd30830a575f1f0490f1acd995975cb349bc02f3d79332e1fe5cf6",
     ),
 )
 

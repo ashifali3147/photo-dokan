@@ -9,7 +9,7 @@ enum class VisionModel(val fileName: String) {
     FaceDetector("face_detection_yunet_2023mar.onnx"),
 
     /** MODNet: how much of each pixel is the person rather than the background. */
-    PortraitMatting("modnet.onnx"),
+    PortraitMatting("modnet_fp16.onnx"),
 }
 
 /** Reads a model shipped with the app: from the APK's assets on the phone, the app's jar on the PC. */

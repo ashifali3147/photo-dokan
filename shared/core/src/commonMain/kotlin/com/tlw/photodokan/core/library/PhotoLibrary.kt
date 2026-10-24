@@ -95,6 +95,15 @@ interface PhotoLibrary {
     fun readFinal(customer: Customer): ByteArray?
 
     /**
+     * Keeps the customer's matte (which part of the photo is the person, as a PNG) so it is worked
+     * out only once: it depends on the original alone, which never changes.
+     */
+    fun saveMatte(customer: Customer, png: ByteArray)
+
+    /** The matte kept by [saveMatte], or null when there is none yet. */
+    fun readMatte(customer: Customer): ByteArray?
+
+    /**
      * Keeps a printed sheet PDF that came from a phone, in [date]'s folder, as [fileName] (e.g.
      * "Photo Dokan 0001 0002 14.30.pdf") or with " (2)" added when that is taken. Returns the
      * path it was saved at, relative to the library.
@@ -143,6 +152,7 @@ class LibraryLayout(val dayPattern: String = DEFAULT_PATTERN) {
         const val ORIGINAL_FILE = "original.jpg"
         const val RECIPE_FILE = "recipe.json"
         const val FINAL_FILE = "final.jpg"
+        const val MATTE_FILE = "matte.png"
         const val CUSTOMER_FILE = "customer.json"
         const val SHEETS_FOLDER = "Phone sheets"
         private const val MAX_SHEET_NAME_LENGTH = 80

@@ -73,6 +73,15 @@ class FilePhotoLibrary(
     override fun readFinal(customer: Customer): ByteArray? =
         "${layout.customerFolder(customer)}/${LibraryLayout.FINAL_FILE}".takeIf(files::exists)?.let(files::read)
 
+    override fun saveMatte(customer: Customer, png: ByteArray) {
+        val dir = layout.customerFolder(customer)
+        require(files.isDirectory(dir)) { "Customer ${customer.label} on ${customer.date} is not in the library" }
+        files.write("$dir/${LibraryLayout.MATTE_FILE}", png)
+    }
+
+    override fun readMatte(customer: Customer): ByteArray? =
+        "${layout.customerFolder(customer)}/${LibraryLayout.MATTE_FILE}".takeIf(files::exists)?.let(files::read)
+
     override fun fileSheet(date: StudioDate, fileName: String, pdf: ByteArray): String {
         val folder = layout.sheetsFolder(date)
         files.createDirectories(folder)

@@ -101,6 +101,18 @@ class FilePhotoLibraryTest {
     }
 
     @Test
+    fun theMatteIsKeptNextToTheFinal() {
+        val customer = library.create(today, null, null, photo)
+        assertNull(library.readMatte(customer))
+        val png = byteArrayOf(0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte())
+        library.saveMatte(customer, png)
+        assertContentEquals(png, library.readMatte(customer))
+        assertContentEquals(png, read(file("2026", "10", "22", "0001", "matte.png")))
+        assertContentEquals(photo, library.readOriginal(customer))
+        assertEquals(listOf(customer), library.customersOn(today))
+    }
+
+    @Test
     fun dayListIsInNumberOrderAndSkipsForeignFolders() {
         repeat(3) { library.create(today, "Customer $it", null, photo) }
         SystemFileSystem.createDirectories(file("2026", "10", "22", "Scans"))

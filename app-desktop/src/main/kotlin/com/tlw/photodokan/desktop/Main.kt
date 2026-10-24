@@ -34,6 +34,8 @@ import com.tlw.photodokan.ui.print.StationJobPrinter
 import com.tlw.photodokan.vision.FaceFinder
 import com.tlw.photodokan.vision.ModelFiles
 import com.tlw.photodokan.vision.OnnxFaceFinder
+import com.tlw.photodokan.vision.OnnxPortraitMatter
+import com.tlw.photodokan.vision.PortraitMatter
 import com.tlw.photodokan.vision.ResourceModelFiles
 import com.tlw.photodokan.vision.VisionModels
 import kotlinx.io.files.Path
@@ -75,6 +77,7 @@ private val desktopModule = module {
     single<ModelFiles> { ResourceModelFiles() }
     single { VisionModels(get()) }
     single<FaceFinder> { OnnxFaceFinder(get()) }
+    single<PortraitMatter> { OnnxPortraitMatter(get()) }
 }
 
 /** The open app window, so the printer's settings window can open over it. */

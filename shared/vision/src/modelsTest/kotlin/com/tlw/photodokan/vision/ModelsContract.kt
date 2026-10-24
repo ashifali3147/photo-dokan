@@ -67,6 +67,15 @@ abstract class ModelsContract {
     }
 
     @Test
+    fun aPhotoGetsAMatteAtTheModelsSize() {
+        val started = System.nanoTime()
+        val matte = OnnxPortraitMatter(models).matte(IntArray(1500 * 2000) { 0xff808080.toInt() }, 1500, 2000)
+        println("Matte of 1500 × 2000 in ${(System.nanoTime() - started) / 1_000_000} ms")
+        assertEquals(512, matte.width)
+        assertEquals(672, matte.height)
+    }
+
+    @Test
     fun eachModelIsLoadedOnce() {
         val started = System.nanoTime()
         val first = models.session(VisionModel.PortraitMatting)
