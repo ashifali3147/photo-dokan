@@ -19,8 +19,12 @@ kotlin {
             api(libs.kotlinx.io.core)
             implementation(libs.kotlinx.serialization.json)
         }
-        commonTest.dependencies {
-            implementation(libs.kotlin.test)
+        commonTest {
+            // What every LibraryFiles must do.
+            kotlin.srcDir("src/filesContractTest/kotlin")
+            dependencies {
+                implementation(libs.kotlin.test)
+            }
         }
     }
 }
