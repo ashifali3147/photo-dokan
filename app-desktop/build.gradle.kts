@@ -20,6 +20,7 @@ dependencies {
     implementation(project(":shared:ui"))
     implementation(project(":shared:library"))
     implementation(project(":shared:print"))
+    implementation(project(":shared:station"))
     implementation(compose.desktop.currentOs)
 }
 

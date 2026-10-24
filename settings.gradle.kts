@@ -18,6 +18,7 @@ dependencyResolutionManagement {
 include(":shared:core")
 include(":shared:library")
 include(":shared:print")
+include(":shared:station")
 include(":shared:ui")
 include(":app-android")
 include(":app-desktop")

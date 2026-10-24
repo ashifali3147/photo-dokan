@@ -21,11 +21,15 @@ import com.tlw.photodokan.print.PdfSheetReader
 import com.tlw.photodokan.print.PdfFilePrinter
 import com.tlw.photodokan.print.SheetPrinter
 import com.tlw.photodokan.print.WindowsGdiPrinter
+import com.tlw.photodokan.station.PrintStation
+import com.tlw.photodokan.station.StationCertificate
 import com.tlw.photodokan.ui.App
 import com.tlw.photodokan.ui.di.initKoin
 import kotlinx.io.files.Path
 import org.koin.dsl.module
+import org.koin.mp.KoinPlatform
 import java.io.File
+import kotlin.concurrent.thread
 
 // TODO(settings): let the operator pick the library folder, e.g. D:\PhotoDokan\Photos on the studio PC.
 private val desktopModule = module {
@@ -41,6 +45,8 @@ private val desktopModule = module {
     }
     // Sheet PDFs shared from the phone, printed here.
     single<PdfSheetReader> { PdfBoxSheetReader() }
+    // Phones on the shop's Wi-Fi send sheets here.
+    single { PrintStation(StationCertificate.loadOrCreate(File(appDataDir().toString(), "station.p12")), PrintStation.computerName()) }
 }
 
 /** The open app window, so the printer's settings window can open over it. */
@@ -53,6 +59,9 @@ private fun appDataDir(): Path =
 
 fun main() {
     initKoin(listOf(desktopModule))
+    val station = KoinPlatform.getKoin().get<PrintStation>()
+    // Off the main thread so the window never waits; the app works without the station.
+    val starting = thread(name = "Print Station start", isDaemon = true) { PrintStation.startQuietly(station) }
     application {
         val windowState = rememberWindowState(width = 1100.dp, height = 820.dp)
         var showRequests by remember { mutableIntStateOf(0) }
@@ -90,4 +99,7 @@ fun main() {
             App()
         }
     }
+    // The window is closed: stop listening, letting a phone's request in progress finish first.
+    starting.join()
+    station.stop()
 }
