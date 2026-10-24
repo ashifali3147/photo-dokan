@@ -93,6 +93,13 @@ interface PhotoLibrary {
     fun readOriginal(customer: Customer): ByteArray
     fun readRecipe(customer: Customer): EditRecipe?
     fun readFinal(customer: Customer): ByteArray?
+
+    /**
+     * Keeps a printed sheet PDF that came from a phone, in [date]'s folder, as [fileName] (e.g.
+     * "Photo Dokan 0001 0002 14.30.pdf") or with " (2)" added when that is taken. Returns the
+     * path it was saved at, relative to the library.
+     */
+    fun fileSheet(date: StudioDate, fileName: String, pdf: ByteArray): String
 }
 
 /**
@@ -113,6 +120,18 @@ class LibraryLayout(val dayPattern: String = DEFAULT_PATTERN) {
             .replace("{dd}", date.day.toString().padStart(2, '0'))
             .replace("{d}", date.day.toString())
 
+    /** Where sheets printed from a phone are kept: inside the day, apart from its customers. */
+    fun sheetsFolder(date: StudioDate): String = dayFolder(date) + "/" + SHEETS_FOLDER
+
+    /**
+     * [name] made safe as a file name on Windows and Android, keeping spaces and dots, ending in
+     * ".pdf"; [copy] 2 and up add " (2)" and so on before it.
+     */
+    fun sheetFileName(name: String, copy: Int = 1): String {
+        val base = name.removeSuffix(".pdf").filter { it.isLetterOrDigit() || it in " -._()" }.trim(' ', '.').take(MAX_SHEET_NAME_LENGTH).ifEmpty { "Sheet" }
+        return if (copy <= 1) "$base.pdf" else "$base ($copy).pdf"
+    }
+
     fun customerFolder(customer: Customer): String {
         val number = customer.number.toString().padStart(4, '0')
         val name = customer.name?.let(::sanitize)?.takeIf { it.isNotEmpty() }
@@ -125,6 +144,8 @@ class LibraryLayout(val dayPattern: String = DEFAULT_PATTERN) {
         const val RECIPE_FILE = "recipe.json"
         const val FINAL_FILE = "final.jpg"
         const val CUSTOMER_FILE = "customer.json"
+        const val SHEETS_FOLDER = "Phone sheets"
+        private const val MAX_SHEET_NAME_LENGTH = 80
 
         private val MONTHS = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
         private const val MAX_NAME_LENGTH = 40

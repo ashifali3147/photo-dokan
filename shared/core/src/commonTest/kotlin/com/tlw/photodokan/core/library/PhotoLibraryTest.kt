@@ -29,6 +29,17 @@ class PhotoLibraryTest {
     }
 
     @Test
+    fun phoneSheetsAreKeptInTheDayApartFromCustomers() {
+        val layout = LibraryLayout()
+        assertEquals("2026/10/24/Phone sheets", layout.sheetsFolder(StudioDate(2026, 10, 24)))
+        assertEquals("Photo Dokan 0001 0002 14.30.pdf", layout.sheetFileName("Photo Dokan 0001 0002 14.30"))
+        assertEquals("Photo Dokan 0001 0002 14.30 (2).pdf", layout.sheetFileName("Photo Dokan 0001 0002 14.30.pdf", copy = 2))
+        assertEquals("a....b.pdf", layout.sheetFileName("../a/../..b"), "no slashes: no way out of the folder")
+        assertEquals("Sheet.pdf", layout.sheetFileName("::"))
+        assertEquals(1, LibraryLayout.nextCustomerNumber(listOf(LibraryLayout.SHEETS_FOLDER)), "not taken for a customer")
+    }
+
+    @Test
     fun namesAreSafeForWindows() {
         assertEquals("ab-c", LibraryLayout.sanitize("a<b>: c?*"))
         assertEquals("", LibraryLayout.sanitize("///"))

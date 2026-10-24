@@ -25,6 +25,16 @@ object StationProtocol {
     /** Answers a paired phone with [PairedHello], and anyone else with 401. */
     const val PAIRED_PATH = "/v1/paired"
 
+    /**
+     * A paired phone sends a sheet PDF made by Photo Dokan (`application/pdf`, its name in [JOB_NAME]);
+     * the PC prints it at once and answers with [JobResult].
+     */
+    const val JOBS_PATH = "/v1/jobs"
+    const val JOB_NAME = "name"
+
+    /** Far more than a full sheet of phone photos at 600 dpi (a few MB). */
+    const val MAX_JOB_BYTES = 50L * 1024 * 1024
+
     /** How a paired phone proves itself on every other request: `Authorization: Bearer <token>`. */
     const val AUTHORIZATION = "Authorization"
     const val BEARER = "Bearer "
@@ -61,6 +71,10 @@ data class PairResponse(
 
 @Serializable
 data class PairedHello(val stationName: String, val deviceName: String)
+
+/** What became of a sheet sent to the PC; [message] is for the operator. */
+@Serializable
+data class JobResult(val printed: Boolean, val message: String)
 
 /** Why the station refused, in words for the operator. */
 @Serializable
