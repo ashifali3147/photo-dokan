@@ -62,6 +62,52 @@ class BackgroundTest {
     }
 
     @Test
+    fun noBlueShowsBetweenStrandsOfHair() {
+        // Dark hair thinning out to the left over a blue backdrop; the model saw only a fade.
+        val hair = rgb(40, 30, 25)
+        val strands = IntArray(w * h) { val x = it % w; if (x >= 240 || (x >= 160 && x % 8 < (x - 160) / 10)) hair else rgb(40, 90, 200) }
+        val fade = Matte(50, 50, ByteArray(50 * 50) { ((it % 50 - 20).coerceIn(0, 10) * 255 / 10).toByte() })
+        val white = Background.apply(strands, w, h, fade, BackgroundConfig(mode = BackgroundMode.REPLACE))
+        for (x in 160 until 230) {
+            val c = white[200 * w + x]
+            if (strands[200 * w + x] == hair) {
+                assertTrue(red(c) < 90 && blue(c) < 70, "strand at $x is ${(c and 0xffffff).toString(16)}")
+            } else {
+                assertTrue(red(c) >= 225 && green(c) >= 225 && blue(c) >= 225, "between strands at $x is ${(c and 0xffffff).toString(16)}")
+            }
+        }
+    }
+
+    @Test
+    fun aSoftEdgeLosesTheOldBackdropsColour() {
+        // A red person over blue whose edge fades over 8 pixels, as a lens draws it.
+        val person = rgb(200, 60, 50)
+        val backdrop = rgb(40, 90, 200)
+        val white = rgb(255, 255, 255)
+        fun blend(a: Double, p: Int, q: Int): Int {
+            fun channel(shift: Int) = (((p shr shift) and 0xff) * a + ((q shr shift) and 0xff) * (1 - a)).toInt()
+            return rgb(channel(16), channel(8), channel(0))
+        }
+        fun share(x: Int) = ((x - 196) / 8.0).coerceIn(0.0, 1.0)
+        val soft = IntArray(w * h) { blend(share(it % w), person, backdrop) }
+        val matte = Matte(50, 50, ByteArray(50 * 50) { if (it % 50 >= 25) -1 else 0 })
+
+        val out = Background.apply(soft, w, h, matte, BackgroundConfig(mode = BackgroundMode.REPLACE))
+
+        // How much bluer than the person over white each pixel is. Mixing the photo's pixel with
+        // white by the matte leaves up to 56 of the backdrop's blue, by the fitted matte 55.
+        fun blueness(c: Int) = blue(c) - (red(c) + green(c)) / 2
+        val scaled = matte.resized(w, h)
+        for (x in 190 until 210) {
+            val wanted = blueness(blend(share(x), person, white))
+            val now = blueness(out[200 * w + x]) - wanted
+            val mixed = blueness(blend((scaled[200 * w + x].toInt() and 0xff) / 255.0, soft[200 * w + x], white)) - wanted
+            assertTrue(now <= 40, "$now bluer at $x")
+            assertTrue(now <= mixed, "$now bluer at $x, plainly mixed $mixed")
+        }
+    }
+
+    @Test
     fun blurSmoothsTheBackdropsCreases() {
         val out = Background.apply(photo, w, h, personInTheMiddle(), blur)
         // Before: stripes 40 apart in red; after, nearby pixels are nearly the same.
@@ -91,6 +137,14 @@ class BackgroundTest {
         for ((x, y) in listOf(20 to 20, 60 to 320, 360 to 180)) {
             val difference = abs(blue(big[y * w + x]) - blue(half[(y / 2) * (w / 2) + x / 2]))
             assertTrue(difference <= 3, "$difference apart at ($x, $y)")
+        }
+    }
+
+    @Test
+    fun oneCutoutServesEveryBackground() {
+        val cutout = Cutout(photo, w, h, personInTheMiddle())
+        for (config in listOf(blur, blur.copy(blurStrength = 0.3), BackgroundConfig(mode = BackgroundMode.REPLACE), BackgroundConfig(mode = BackgroundMode.KEEP))) {
+            assertContentEquals(Background.apply(photo, w, h, personInTheMiddle(), config), Background.apply(cutout, config), "$config")
         }
     }
 
