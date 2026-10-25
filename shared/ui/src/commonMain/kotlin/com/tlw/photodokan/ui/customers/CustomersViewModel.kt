@@ -19,6 +19,7 @@ import com.tlw.photodokan.core.model.BackgroundMode
 import com.tlw.photodokan.core.model.CropConfig
 import com.tlw.photodokan.core.model.EditHistory
 import com.tlw.photodokan.core.model.EditRecipe
+import com.tlw.photodokan.core.model.MaskStroke
 import com.tlw.photodokan.core.model.PhotoSizePreset
 import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.ui.editor.Adjustment
@@ -380,6 +381,12 @@ class CustomersViewModel(
 
     /** Changes the background as one undo step: keep, blur, or a plain colour. */
     fun setBackground(background: BackgroundConfig) = step { it.live.copy(background = background) }
+
+    /** Paints one touch-up stroke on the cut-out, as one undo step. */
+    fun touchUp(stroke: MaskStroke) = step { it.live.copy(background = it.live.background.let { b -> b.copy(touchUps = b.touchUps + stroke) }) }
+
+    /** Takes every touch-up off the cut-out, as one undo step. */
+    fun clearTouchUps() = step { it.live.copy(background = it.live.background.copy(touchUps = emptyList())) }
 
     /** Ends a live change: it becomes one undo step. */
     fun commit() = _state.update { s -> s.copy(edit = s.edit?.let { it.copy(history = it.history.apply(it.live)) }) }

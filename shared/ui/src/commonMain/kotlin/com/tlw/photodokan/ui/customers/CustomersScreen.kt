@@ -45,10 +45,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.library.Customer
 import com.tlw.photodokan.core.imaging.ColorAdjustment
+import com.tlw.photodokan.core.model.BackgroundMode
+import com.tlw.photodokan.core.model.BrushMode
 import com.tlw.photodokan.ui.editor.AdjustControls
 import com.tlw.photodokan.ui.editor.BackgroundControls
 import com.tlw.photodokan.ui.editor.CropControls
 import com.tlw.photodokan.ui.editor.CropEditor
+import com.tlw.photodokan.ui.editor.SMALL_BRUSH
+import com.tlw.photodokan.ui.editor.TouchUpBrush
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.photo.canDropPhotos
 import com.tlw.photodokan.ui.photo.photoDropTarget
@@ -182,6 +186,11 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
     var hovering by remember { mutableStateOf(false) }
     val borderColor = if (hovering) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
     val edit = state.edit
+    var tab by remember(edit?.preview) { mutableStateOf(EditorTab.Crop) }
+    // The touch-up brush in hand, if any: only on the background tab, while the background changes.
+    var brushMode by remember(edit?.preview) { mutableStateOf<BrushMode?>(null) }
+    var brushSize by remember { mutableStateOf(SMALL_BRUSH) }
+    val brush = brushMode?.takeIf { tab == EditorTab.Background && edit?.recipe?.background?.mode != BackgroundMode.KEEP }
     Box(
         modifier = Modifier
             .weight(1f)
@@ -200,6 +209,7 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
                 onCommit = viewModel::commit,
                 modifier = Modifier.fillMaxSize(),
                 colorMatrix = ColorAdjustment.matrix(edit.recipe),
+                brush = brush?.let { TouchUpBrush(it, brushSize, viewModel::touchUp) },
             )
             state.busy -> CircularProgressIndicator()
             else -> Text(
@@ -210,7 +220,6 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
     }
 
     if (edit != null) {
-        var tab by remember { mutableStateOf(EditorTab.Crop) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             val tabs = EditorTab.entries.filter { it != EditorTab.Background || viewModel.canChangeBackground }
             SingleChoiceSegmentedButtonRow {
@@ -247,6 +256,11 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
                 onChange = viewModel::setBackground,
                 onPreview = viewModel::previewBackground,
                 onCommit = viewModel::commit,
+                brush = brushMode,
+                brushSize = brushSize,
+                onBrush = { brushMode = it },
+                onBrushSize = { brushSize = it },
+                onClearTouchUps = viewModel::clearTouchUps,
             )
         }
     }

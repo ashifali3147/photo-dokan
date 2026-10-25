@@ -4,9 +4,13 @@ import androidx.compose.ui.graphics.ImageBitmap
 import com.tlw.photodokan.core.matte.Matte
 import com.tlw.photodokan.core.model.BackgroundConfig
 import com.tlw.photodokan.core.model.BackgroundMode
+import com.tlw.photodokan.core.model.BrushMode
+import com.tlw.photodokan.core.model.MaskPoint
+import com.tlw.photodokan.core.model.MaskStroke
 import com.tlw.photodokan.ui.platform.imageBitmapOf
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
 import kotlin.test.assertSame
 
 class BackgroundPainterTest {
@@ -44,6 +48,18 @@ class BackgroundPainterTest {
         painter.paint(photo(0xffc83c32.toInt()), matte, white)
         val green = photo(0xff28a03c.toInt())
         assertContentEquals(green.withBackground(matte, white).pixels(), painter.paint(green, matte, white).pixels())
+    }
+
+    @Test
+    fun aNewFixCutsThePersonOutAgain() {
+        val painter = BackgroundPainter()
+        val image = photo(0xffc83c32.toInt())
+        val white = BackgroundConfig(mode = BackgroundMode.REPLACE)
+        painter.paint(image, matte, white)
+        val erased = white.copy(touchUps = listOf(MaskStroke(BrushMode.ERASE, 0.2, listOf(MaskPoint(0.5, 0.5)))))
+        val painted = painter.paint(image, matte, erased).pixels()
+        assertContentEquals(image.withBackground(matte, erased).pixels(), painted)
+        assertEquals(0xffffffff.toInt(), painted[32 * size + 32], "the middle of the person, erased")
     }
 
     @Test
