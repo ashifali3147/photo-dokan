@@ -155,6 +155,17 @@ class BackgroundTest {
     }
 
     @Test
+    fun thePersonAloneOverAColourIsThatColoursBackground() {
+        val cutout = Cutout(photo, w, h, personInTheMiddle())
+        val person = Background.person(cutout)
+        assertEquals(rgb(200, 30, 30), person[200 * w + 200], "all person: as shot, opaque")
+        assertEquals(0, person[10 * w + 10] ushr 24, "all background: clear")
+        for (i in person.indices) assertEquals(cutout.alpha[i].toInt() and 0xff, person[i] ushr 24, "alpha at $i")
+        val blue = BackgroundConfig.LIGHT_BLUE.toInt()
+        assertContentEquals(Background.apply(cutout, BackgroundConfig(mode = BackgroundMode.REPLACE, replaceColorArgb = BackgroundConfig.LIGHT_BLUE)), Background.over(person, blue))
+    }
+
+    @Test
     fun oneCutoutServesEveryBackground() {
         val cutout = Cutout(photo, w, h, personInTheMiddle())
         for (config in listOf(blur, blur.copy(blurStrength = 0.3), BackgroundConfig(mode = BackgroundMode.REPLACE), BackgroundConfig(mode = BackgroundMode.KEEP))) {

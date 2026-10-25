@@ -23,6 +23,7 @@ import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.ui.editor.Adjustment
 import com.tlw.photodokan.ui.editor.renderCrop
 import com.tlw.photodokan.ui.editor.BackgroundPainter
+import com.tlw.photodokan.ui.editor.backdrop
 import com.tlw.photodokan.ui.editor.faceFit
 import com.tlw.photodokan.ui.editor.faceLight
 import com.tlw.photodokan.ui.editor.firstEdit
@@ -515,7 +516,7 @@ class CustomersViewModel(
         val rect = CropGeometry.rect(image.width, image.height, preset.aspect, edit.live.crop)
         val width = mmToPixels(preset.size.width, FINAL_DPI).roundToInt()
         val height = mmToPixels(preset.size.height, FINAL_DPI).roundToInt()
-        return timed("Make final.jpg") { encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(edit.live))) }
+        return timed("Make final.jpg") { encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(edit.live), backdrop(wanted))) }
     }
 
     private fun refresh() = launchWork { loadList() }

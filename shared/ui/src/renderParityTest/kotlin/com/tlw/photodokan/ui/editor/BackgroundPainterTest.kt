@@ -59,7 +59,7 @@ class BackgroundPainterTest {
         val erased = white.copy(touchUps = listOf(MaskStroke(BrushMode.ERASE, 0.2, listOf(MaskPoint(0.5, 0.5)))))
         val painted = painter.paint(image, matte, erased).pixels()
         assertContentEquals(image.withBackground(matte, erased).pixels(), painted)
-        assertEquals(0xffffffff.toInt(), painted[32 * size + 32], "the middle of the person, erased")
+        assertEquals(0, painted[32 * size + 32] ushr 24, "the middle of the person, erased: clear for the white to show")
     }
 
     @Test

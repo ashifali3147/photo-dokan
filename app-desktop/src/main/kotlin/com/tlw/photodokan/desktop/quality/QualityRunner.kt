@@ -18,6 +18,7 @@ import com.tlw.photodokan.core.quality.Findings
 import com.tlw.photodokan.core.quality.Problem
 import com.tlw.photodokan.core.quality.QualityChecks
 import com.tlw.photodokan.ui.editor.BackgroundPainter
+import com.tlw.photodokan.ui.editor.backdrop
 import com.tlw.photodokan.ui.editor.firstEdit
 import com.tlw.photodokan.ui.editor.renderCrop
 import com.tlw.photodokan.ui.photo.decodePreview
@@ -104,7 +105,7 @@ class QualityRunner(
         val rect = CropGeometry.rect(image.width, image.height, preset.aspect, recipe.crop)
         val height = THUMBNAIL * 2
         val width = (height * preset.aspect).roundToInt()
-        return renderCrop(shown, rect, width, height, ColorAdjustment.matrix(recipe)).toAwtImage()
+        return renderCrop(shown, rect, width, height, ColorAdjustment.matrix(recipe), backdrop(recipe.background)).toAwtImage()
     }
 
     /** The crop's frame, and a box round each face, drawn on a [thumbnail] of a photo [width] wide. */
