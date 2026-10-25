@@ -173,6 +173,51 @@ class StudioLookTest {
         assertTrue(medium > StudioLook.fairnessFor(0.55) && medium < StudioLook.fairnessFor(0.4), "$medium")
     }
 
+    // ---- Smoothing ----
+
+    /** Skin of [colour] with fine texture, ±[grain] in brightness, and a dark line (a brow) across row 40. */
+    private fun texturedSkin(colour: Int, grain: Int = 8, n: Int = 80) = IntArray(n * n) { i ->
+        val x = i % n
+        val y = i / n
+        val d = if ((x * 7 + y * 13) % 5 < 2) grain else -grain
+        if (y in 39..41) rgb(40, 28, 22) else rgb(red(colour) + d, green(colour) + d, blue(colour) + d)
+    }
+
+    private fun smoothed(photo: IntArray, retouch: Double = 1.0, portrait: Portrait? = dim, n: Int = 80) =
+        StudioLook.apply(photo, n, n, strength = 0.0, portrait = portrait, retouch = retouch)
+
+    /** How much brightness varies over rows [rows], away from the brow. */
+    private fun grain(photo: IntArray, rows: IntRange = 10..30, n: Int = 80): Double {
+        val l = rows.flatMap { y -> (10 until 70).map { x -> luma(photo[y * n + x]) } }
+        val mean = l.average()
+        return kotlin.math.sqrt(l.sumOf { (it - mean) * (it - mean) } / l.size)
+    }
+
+    @Test
+    fun smoothingSoftensTheSkinsTexture() {
+        val skin = texturedSkin(rgb(150, 98, 72))
+        val before = grain(skin)
+        assertTrue(grain(smoothed(skin)) < 0.5 * before, "at full: ${grain(smoothed(skin))} of $before")
+        val light = grain(smoothed(skin, retouch = 0.4))
+        assertTrue(light < 0.85 * before && light > grain(smoothed(skin)), "a light touch: $light of $before")
+    }
+
+    @Test
+    fun smoothingKeepsEdgesSharp() {
+        val photo = smoothed(texturedSkin(rgb(150, 98, 72)))
+        // The brow stays dark against the skin beside it.
+        assertTrue(luma(photo[40 * 80 + 40]) < 50, "the brow: ${luma(photo[40 * 80 + 40])}")
+        assertTrue(luma(photo[44 * 80 + 40]) > 85, "the skin below it: ${luma(photo[44 * 80 + 40])}")
+    }
+
+    @Test
+    fun onlySkinWithAFaceIsSmoothed() {
+        val cloth = texturedSkin(rgb(40, 80, 190))
+        assertContentEquals(cloth, smoothed(cloth), "a blue shirt keeps its weave")
+        val skin = texturedSkin(rgb(150, 98, 72))
+        assertContentEquals(skin, smoothed(skin, portrait = null))
+    }
+
     @Test
     fun aPortraitIsMeasuredFromTheFace() {
         val w = 300
@@ -192,6 +237,7 @@ class StudioLookTest {
     fun theRecipeKeepsEnhanceInRange() {
         assertFailsWith<IllegalArgumentException> { EditRecipe("studio-slot", enhance = 1.5) }
         assertFailsWith<IllegalArgumentException> { EditRecipe("studio-slot", fairness = -0.1) }
+        assertFailsWith<IllegalArgumentException> { EditRecipe("studio-slot", retouch = 1.1) }
         assertFailsWith<IllegalArgumentException> { Portrait(skinLevel = 1.2, faceHeight = 0.3) }
         assertFailsWith<IllegalArgumentException> { Portrait(skinLevel = 0.5, faceHeight = 0.0) }
         assertTrue(abs(EditRecipe("studio-slot").enhance) == 0.0, "off unless asked for")

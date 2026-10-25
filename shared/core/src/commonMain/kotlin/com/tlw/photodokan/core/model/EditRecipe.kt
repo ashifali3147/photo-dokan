@@ -64,7 +64,7 @@ data class EditRecipe(
     val tint: Double = 0.0,
     val saturation: Double = 0.0,
     val background: BackgroundConfig = BackgroundConfig(),
-    /** 0 = off (default), 1 = strongest gentle smoothing. */
+    /** How much the skin is smoothed, 0 (as shot) to 1 (as smooth as it goes, never plastic). */
     val retouch: Double = 0.0,
     /** The studio look, 0 (off) to 1 (full): bright, clean and crisp, as a studio edits a portrait. */
     val enhance: Double = 0.0,
