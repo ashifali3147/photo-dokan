@@ -97,10 +97,17 @@ object CropGeometry {
      * is drawn into a [width] × [height] image: the turn and scale the renderer applies, undone.
      * The reference the platform renderers are checked against.
      */
-    fun sourcePoint(rect: CropRect, width: Int, height: Int, x: Int, y: Int): Pair<Double, Double> {
+    fun sourcePoint(rect: CropRect, width: Int, height: Int, x: Int, y: Int): Pair<Double, Double> =
+        sourcePoint(rect, width.toDouble(), height.toDouble(), x + 0.5, y + 0.5)
+
+    /**
+     * The point of the upright photo, in its pixels, under the point ([x], [y]) of a [width] ×
+     * [height] frame that [rect] is drawn into: where a finger on the editor touches the photo.
+     */
+    fun sourcePoint(rect: CropRect, width: Double, height: Double, x: Double, y: Double): Pair<Double, Double> {
         val k = width / rect.width
-        val dx = (x + 0.5 - width / 2.0) / k
-        val dy = (y + 0.5 - height / 2.0) / k
+        val dx = (x - width / 2.0) / k
+        val dy = (y - height / 2.0) / k
         // The photo was turned clockwise (y points down); turn the offset back.
         val a = rect.rotationDegrees * PI / 180
         return Pair(rect.centerX + dx * cos(a) + dy * sin(a), rect.centerY - dx * sin(a) + dy * cos(a))

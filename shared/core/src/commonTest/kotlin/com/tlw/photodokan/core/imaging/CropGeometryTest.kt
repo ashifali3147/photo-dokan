@@ -181,4 +181,14 @@ class CropGeometryTest {
         val (tx, ty) = CropGeometry.sourcePoint(rect, 20, 20, 10, 0)
         close(90.5, tx); close(49.5, ty)
     }
+
+    @Test
+    fun aTouchOnTheFrameFindsThePointOfThePhoto() {
+        // The editor's frame is 300 × 300 on screen for a 20 × 20 crop turned a quarter clockwise.
+        val rect = CropRect(100.0, 50.0, 20.0, 20.0, 90.0)
+        val (cx, cy) = CropGeometry.sourcePoint(rect, 300.0, 300.0, 150.0, 150.0)
+        close(100.0, cx); close(50.0, cy)
+        val (x, y) = CropGeometry.sourcePoint(rect, 300.0, 300.0, 300.0, 150.0) // right edge
+        close(100.0, x); close(40.0, y)
+    }
 }
