@@ -70,6 +70,21 @@ class ColorAdjustmentTest {
     }
 
     @Test
+    fun tintMovesGreenAgainstRedAndBlueKeepingBrightness() {
+        val luma = { c: List<Double> -> 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] }
+        val pink = ColorAdjustment.matrix(neutral.copy(tint = 1.0)).apply(100.0, 100.0, 100.0)
+        assertTrue(pink[0] > 100 && pink[2] > 100 && pink[1] < 100, "$pink")
+        close(pink[0], pink[2])
+        close(100.0, luma(pink))
+        val green = ColorAdjustment.matrix(neutral.copy(tint = -1.0)).apply(100.0, 100.0, 100.0)
+        assertTrue(green[1] > 100 && green[0] < 100, "$green")
+        close(100.0, luma(green))
+        // Red and blue against green by the full range: 8 % each way.
+        close(1.08 / 0.92, pink[0] / pink[1], 1e-6)
+        assertTrue(!ColorAdjustment.isNeutral(neutral.copy(tint = 0.1)))
+    }
+
+    @Test
     fun alphaIsNeverTouched() {
         val m = ColorAdjustment.matrix(EditRecipe("studio-slot", exposure = 1.0, contrast = -1.0, warmth = 1.0, saturation = 1.0))
         assertContentEquals(floatArrayOf(0f, 0f, 0f, 1f, 0f), m.copyOfRange(15, 20))

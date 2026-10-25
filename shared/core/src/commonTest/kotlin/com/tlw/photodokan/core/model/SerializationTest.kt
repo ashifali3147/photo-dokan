@@ -21,6 +21,7 @@ class SerializationTest {
             exposure = 0.2,
             contrast = -0.15,
             warmth = 0.1,
+            tint = -0.05,
             saturation = -0.3,
             background = BackgroundConfig(BackgroundMode.REPLACE, blurStrength = 0.0, replaceColorArgb = BackgroundConfig.LIGHT_BLUE),
             retouch = 0.25,
@@ -41,7 +42,7 @@ class SerializationTest {
         // Pins field and enum names: renaming either would break every recipe.json in the library.
         val json = """
             {"presetId":"passport-35x45","crop":{"centerX":0.4,"centerY":0.6,"scale":2.0,"rotationDegrees":1.5},
-             "exposure":0.1,"contrast":0.2,"warmth":-0.1,"saturation":0.3,
+             "exposure":0.1,"contrast":0.2,"warmth":-0.1,"tint":0.15,"saturation":0.3,
              "background":{"mode":"REPLACE","blurStrength":0.5,"replaceColorArgb":4294967295},"retouch":0.2}
         """.trimIndent()
         val expected = EditRecipe(
@@ -50,6 +51,7 @@ class SerializationTest {
             exposure = 0.1,
             contrast = 0.2,
             warmth = -0.1,
+            tint = 0.15,
             saturation = 0.3,
             background = BackgroundConfig(BackgroundMode.REPLACE, 0.5, BackgroundConfig.WHITE),
             retouch = 0.2,

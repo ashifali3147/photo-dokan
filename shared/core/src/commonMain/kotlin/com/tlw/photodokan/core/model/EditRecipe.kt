@@ -58,13 +58,15 @@ data class EditRecipe(
     val exposure: Double = 0.0,
     val contrast: Double = 0.0,
     val warmth: Double = 0.0,
+    /** Green (−1) to pink (+1): the other half of white balance, with [warmth]. */
+    val tint: Double = 0.0,
     val saturation: Double = 0.0,
     val background: BackgroundConfig = BackgroundConfig(),
     /** 0 = off (default), 1 = strongest gentle smoothing. */
     val retouch: Double = 0.0,
 ) {
     init {
-        for ((name, value) in listOf("exposure" to exposure, "contrast" to contrast, "warmth" to warmth, "saturation" to saturation)) {
+        for ((name, value) in listOf("exposure" to exposure, "contrast" to contrast, "warmth" to warmth, "tint" to tint, "saturation" to saturation)) {
             require(value in -1.0..1.0) { "$name must be in -1..1, was $value" }
         }
         require(retouch in 0.0..1.0) { "retouch must be in 0..1, was $retouch" }
