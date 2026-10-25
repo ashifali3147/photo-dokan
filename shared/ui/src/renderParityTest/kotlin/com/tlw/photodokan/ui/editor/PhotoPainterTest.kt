@@ -86,6 +86,15 @@ class PhotoPainterTest {
     }
 
     @Test
+    fun fairSkinPaintsOnItsOwn() {
+        val image = photo(0xff96624a.toInt())
+        val fair = Painting(BackgroundConfig(mode = BackgroundMode.KEEP), enhance = 0.0, portrait = Portrait(skinLevel = 0.4, faceHeight = 0.3), fairness = 1.0)
+        val painted = PhotoPainter().paint(image, null, fair).pixels()
+        assertTrue((painted[32 * size + 32] and 0xff00) > (image.pixels()[32 * size + 32] and 0xff00), "fairer skin")
+        assertSame(image, PhotoPainter().paint(image, null, fair.copy(portrait = null)), "no face, nothing to make fair")
+    }
+
+    @Test
     fun theLookWorksWithTheBackgroundAsShot() {
         val image = photo(0xff96624a.toInt())
         val look = Painting(BackgroundConfig(mode = BackgroundMode.KEEP), enhance = 1.0, portrait = Portrait(skinLevel = 0.4, faceHeight = 0.3))

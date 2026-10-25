@@ -28,6 +28,15 @@ object StudioLook {
     private const val SHADOWS = 0.08
 
     private const val SKIN_CLEAN = 0.25f
+
+    /** At full fairness, skin goes this share of the way to white, and this share of the way to grey. */
+    private const val FAIR_LIFT = 0.35f
+    private const val FAIR_PALE = 0.2f
+
+    /** Skin this bright or more is left as it is by default; skin this dark or less gets [FAIR_MOST]. */
+    private const val FAIR_FROM = 0.62
+    private const val FAIR_FULL = 0.35
+    private const val FAIR_MOST = 0.7
     private const val DARK_CLEAN = 0.7f
     private const val CLARITY = 0.25f
     private const val SHARPEN = 0.6f
@@ -42,20 +51,35 @@ object StudioLook {
     }
 
     /**
-     * [argb], a [width] × [height] photo, with the studio look at [strength]; each pixel keeps its
-     * alpha. [person] says how much of each pixel is the person, 0–255, when known, so only their
-     * skin is cleaned up. Without a [portrait] there is no face to light, so the curve is left out.
+     * [argb], a [width] × [height] photo, with the studio look at [strength] and its skin made
+     * [fairness] fairer, each 0 to 1; each pixel keeps its alpha. [person] says how much of each
+     * pixel is the person, 0–255, when known, so only their skin is changed. Without a [portrait]
+     * there is no face to go by, so the curve and fair skin are left out.
      */
-    fun apply(argb: IntArray, width: Int, height: Int, strength: Double, portrait: Portrait?, person: ByteArray? = null): IntArray {
+    fun apply(
+        argb: IntArray,
+        width: Int,
+        height: Int,
+        strength: Double,
+        portrait: Portrait?,
+        person: ByteArray? = null,
+        fairness: Double = 0.0,
+    ): IntArray {
         require(argb.size == width * height) { "Need $width × $height pixels, had ${argb.size}" }
         require(person == null || person.size == argb.size) { "The person needs a value per pixel" }
-        if (strength <= 0) return argb.copyOf()
-        val s = strength.coerceAtMost(1.0).toFloat()
-        val curve = portrait?.let { curve(it.skinLevel, it.skinLevel + strength * (max(SKIN_TARGET, it.skinLevel) - it.skinLevel)) }
+        val s = strength.coerceIn(0.0, 1.0).toFloat()
+        val fair = if (portrait == null) 0f else fairness.coerceIn(0.0, 1.0).toFloat()
+        if (s <= 0 && fair <= 0) return argb.copyOf()
+        val curve = portrait?.takeIf { s > 0 }?.let { curve(it.skinLevel, it.skinLevel + s * (max(SKIN_TARGET, it.skinLevel) - it.skinLevel)) }
 
-        // Light and colour, pixel by pixel, and how much of each pixel is skin, for the detail step.
+        // Light first, and how much of each pixel is skin.
         val toned = IntArray(argb.size)
         val skin = ByteArray(argb.size)
+        // Fair skin goes by a smooth map of the skin, so it changes evenly across the face: no
+        // speckles where the skin's texture dips in and out of skin's colours. Anything much
+        // darker than the face's skin (beard, brows, hair, deep shadow) is left out of it.
+        val fairMap = if (fair > 0) SmoothMap(width, height) else null
+        val level = portrait?.let { curve?.at(it.skinLevel.toFloat()) ?: it.skinLevel.toFloat() } ?: 0f
         for (i in argb.indices) {
             val c = argb[i]
             var r = ((c shr 16) and 0xff) / 255f
@@ -69,16 +93,93 @@ object StudioLook {
                 g = 0.5f * min(g * k, 1f) + 0.5f * curve.at(g)
                 b = 0.5f * min(b * k, 1f) + 0.5f * curve.at(b)
             }
-            val y = luma(r, g, b)
-            val isSkin = skinShare(r, g, b) * (person?.let { (it[i].toInt() and 0xff) / 255f } ?: 1f)
-            val clean = s * (SKIN_CLEAN * isSkin + DARK_CLEAN * darkCast(r, g, b, y))
-            r += clean * (y - r)
-            g += clean * (y - g)
-            b += clean * (y - b)
             toned[i] = pack(c, r, g, b)
+            val isSkin = skinShare(r, g, b) * (person?.let { (it[i].toInt() and 0xff) / 255f } ?: 1f)
             skin[i] = (isSkin * 255 + 0.5f).toInt().toByte()
+            fairMap?.add(i, isSkin * ramp(luma(r, g, b), 0.55f * level, 0.8f * level))
         }
-        return detail(toned, width, height, s, portrait?.faceHeight, skin)
+        fairMap?.smooth()
+        val row = FloatArray(width)
+        for (y in 0 until height) {
+            fairMap?.row(y, row)
+            for (x in 0 until width) {
+                val i = y * width + x
+                val c = toned[i]
+                var r = ((c shr 16) and 0xff) / 255f
+                var g = ((c shr 8) and 0xff) / 255f
+                var b = (c and 0xff) / 255f
+                if (fairMap != null) {
+                    val k = fair * row[x]
+                    if (k > 0) {
+                        // Lighter, and a little paler, as fair skin is.
+                        val l = luma(r, g, b).coerceAtLeast(1e-4f)
+                        val lit = l + FAIR_LIFT * k * (1 - l)
+                        val m = lit / l
+                        r = min(r * m, 1f)
+                        g = min(g * m, 1f)
+                        b = min(b * m, 1f)
+                        val pale = FAIR_PALE * k
+                        r += pale * (lit - r)
+                        g += pale * (lit - g)
+                        b += pale * (lit - b)
+                    }
+                }
+                if (s > 0) {
+                    val l = luma(r, g, b)
+                    val isSkin = (skin[i].toInt() and 0xff) / 255f
+                    val clean = s * (SKIN_CLEAN * isSkin + DARK_CLEAN * darkCast(r, g, b, l))
+                    r += clean * (l - r)
+                    g += clean * (l - g)
+                    b += clean * (l - b)
+                }
+                toned[i] = pack(c, r, g, b)
+            }
+        }
+        return if (s > 0) detail(toned, width, height, s, portrait?.faceHeight, skin) else toned
+    }
+
+    /**
+     * How fair to make skin of [skinLevel] (how bright the face's skin was measured) by default:
+     * darker skin a good deal, as customers ask; skin already fair hardly at all.
+     */
+    fun fairnessFor(skinLevel: Double): Double = ((FAIR_FROM - skinLevel) / (FAIR_FROM - FAIR_FULL)).coerceIn(0.0, 1.0) * FAIR_MOST
+
+    /**
+     * A value per pixel of a [width] × [height] photo, smoothed: each pixel [add]ed to a grid a few
+     * times smaller, [smooth]ed with its neighbours, then read back a row at a time.
+     */
+    private class SmoothMap(private val width: Int, private val height: Int) {
+        private val step = max(1, height / 300)
+        private val w = (width + step - 1) / step
+        private val h = (height + step - 1) / step
+        private val grid = FloatArray(w * h)
+        private val columns = GridLerp(width, step, w)
+        private val rows = GridLerp(height, step, h)
+
+        /** Adds pixel [i]'s [value]. */
+        fun add(i: Int, value: Float) {
+            grid[((i / width) / step) * w + (i % width) / step] += value
+        }
+
+        /** Once every pixel is added: each grid point their average, then averaged with its neighbours. */
+        fun smooth() {
+            for (j in grid.indices) grid[j] /= (min(step, width - (j % w) * step) * min(step, height - (j / w) * step)).toFloat()
+            BoxMean(w, h, 1).let { box -> repeat(2) { box.smooth(grid) } }
+        }
+
+        fun row(y: Int, out: FloatArray) {
+            val top = rows.low[y] * w
+            val bottom = rows.high[y] * w
+            val t = rows.t[y]
+            for (x in 0 until width) {
+                val l = columns.low[x]
+                val hi = columns.high[x]
+                val tx = columns.t[x]
+                val upper = grid[top + l] * (1 - tx) + grid[top + hi] * tx
+                val lower = grid[bottom + l] * (1 - tx) + grid[bottom + hi] * tx
+                out[x] = upper * (1 - t) + lower * t
+            }
+        }
     }
 
     /**

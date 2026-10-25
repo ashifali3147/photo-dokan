@@ -126,6 +126,53 @@ class StudioLookTest {
         assertEquals(90.0, luma(out[20 * n + 2]), 2.0, "flat areas stay")
     }
 
+    // ---- Fair skin ----
+
+    private fun fair(colour: Int, fairness: Double = 1.0, portrait: Portrait? = dim): Int {
+        val n = 40
+        return StudioLook.apply(flat(colour, n), n, n, strength = 0.0, portrait = portrait, fairness = fairness)[20 * n + 20]
+    }
+
+    @Test
+    fun fairSkinIsLighterAndPaler() {
+        val skin = rgb(150, 98, 72) // the face's own skin, at its measured level
+        val fairer = fair(skin)
+        assertTrue(luma(fairer) > luma(skin) + 30, "lighter: ${luma(skin)} to ${luma(fairer)}")
+        fun colour(c: Int) = (red(c) - blue(c)).toDouble() / red(c)
+        assertTrue(colour(fairer) < colour(skin) - 0.05, "paler: ${(fairer and 0xffffff).toString(16)}")
+        assertTrue(luma(fair(skin, fairness = 0.5)) in luma(skin)..luma(fairer), "half way at half")
+    }
+
+    @Test
+    fun beardBrowsAndHairStayDark() {
+        // Much darker than the face's skin, though skin-coloured: left as it is.
+        val beard = rgb(70, 46, 34)
+        assertEquals(luma(beard), luma(fair(beard)), 1.0)
+        assertEquals(rgb(10, 10, 10), fair(rgb(10, 10, 10)))
+    }
+
+    @Test
+    fun onlySkinIsMadeFair() {
+        val blueShirt = rgb(40, 80, 190)
+        assertEquals(blueShirt, fair(blueShirt))
+        val n = 40
+        val notThePerson = StudioLook.apply(flat(rgb(150, 98, 72), n), n, n, 0.0, dim, person = ByteArray(n * n), fairness = 1.0)
+        assertEquals(rgb(150, 98, 72), notThePerson[20 * n + 20], "skin-coloured backdrop")
+    }
+
+    @Test
+    fun fairSkinNeedsAFace() {
+        assertEquals(rgb(150, 98, 72), fair(rgb(150, 98, 72), portrait = null))
+    }
+
+    @Test
+    fun darkerSkinIsMadeFairerByDefault() {
+        assertEquals(0.7, StudioLook.fairnessFor(0.3), 1e-9)
+        assertEquals(0.0, StudioLook.fairnessFor(0.7))
+        val medium = StudioLook.fairnessFor(0.45)
+        assertTrue(medium > StudioLook.fairnessFor(0.55) && medium < StudioLook.fairnessFor(0.4), "$medium")
+    }
+
     @Test
     fun aPortraitIsMeasuredFromTheFace() {
         val w = 300
@@ -144,6 +191,7 @@ class StudioLookTest {
     @Test
     fun theRecipeKeepsEnhanceInRange() {
         assertFailsWith<IllegalArgumentException> { EditRecipe("studio-slot", enhance = 1.5) }
+        assertFailsWith<IllegalArgumentException> { EditRecipe("studio-slot", fairness = -0.1) }
         assertFailsWith<IllegalArgumentException> { Portrait(skinLevel = 1.2, faceHeight = 0.3) }
         assertFailsWith<IllegalArgumentException> { Portrait(skinLevel = 0.5, faceHeight = 0.0) }
         assertTrue(abs(EditRecipe("studio-slot").enhance) == 0.0, "off unless asked for")

@@ -68,6 +68,8 @@ data class EditRecipe(
     val retouch: Double = 0.0,
     /** The studio look, 0 (off) to 1 (full): bright, clean and crisp, as a studio edits a portrait. */
     val enhance: Double = 0.0,
+    /** How much fairer the skin is made, 0 (as it is) to 1 (much fairer). */
+    val fairness: Double = 0.0,
     /** The face as measured when the photo was opened, which the studio look works from; null without one. */
     val portrait: Portrait? = null,
 ) {
@@ -77,6 +79,7 @@ data class EditRecipe(
         }
         require(retouch in 0.0..1.0) { "retouch must be in 0..1, was $retouch" }
         require(enhance in 0.0..1.0) { "enhance must be in 0..1, was $enhance" }
+        require(fairness in 0.0..1.0) { "fairness must be in 0..1, was $fairness" }
     }
 }
 
