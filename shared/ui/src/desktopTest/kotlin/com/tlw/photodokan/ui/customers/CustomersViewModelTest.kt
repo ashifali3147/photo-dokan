@@ -9,7 +9,10 @@ import com.tlw.photodokan.core.library.StudioDate
 import com.tlw.photodokan.core.matte.Matte
 import com.tlw.photodokan.core.model.BackgroundConfig
 import com.tlw.photodokan.core.model.BackgroundMode
+import com.tlw.photodokan.core.model.BrushMode
 import com.tlw.photodokan.core.model.CropConfig
+import com.tlw.photodokan.core.model.MaskPoint
+import com.tlw.photodokan.core.model.MaskStroke
 import com.tlw.photodokan.core.model.PhotoSizePreset
 import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.ui.editor.Adjustment
@@ -588,11 +591,12 @@ class CustomersViewModelTest {
     private class FakeMatter(var failure: Exception? = null) : PortraitMatter {
         var calls = 0
         var during: () -> Unit = {}
+        var result = Matte(4, 2, byteArrayOf(0, 0, -1, -1, 0, 0, -1, -1))
         override fun matte(argb: IntArray, width: Int, height: Int): Matte {
             calls++
             during()
             failure?.let { throw it }
-            return Matte(4, 2, byteArrayOf(0, 0, -1, -1, 0, 0, -1, -1))
+            return result
         }
     }
 
@@ -765,6 +769,71 @@ class CustomersViewModelTest {
         vm.commit()
         vm.undo()
         assertEquals(BackgroundConfig(), state.edit!!.recipe.background)
+    }
+
+    // ---- Fixing the cut-out by hand ----
+
+    private fun dab(mode: BrushMode, x: Double) = MaskStroke(mode, 0.25, listOf(MaskPoint(x, 0.5)))
+
+    /** The person on the right again, as finely as the 40 × 20 photo, so a brush shows exactly. */
+    private fun withFineMatter() {
+        matter.result = Matte(40, 20, ByteArray(40 * 20) { if (it % 40 >= 20) -1 else 0 })
+        withMatter()
+    }
+
+    @Test
+    fun erasingTakesTheBackgroundThatWasLeftBehind() {
+        withFineMatter()
+        vm.import(photo())
+        vm.setBackground(white)
+        assertEquals(0x808080, shownAt(37, 10))
+
+        vm.touchUp(dab(BrushMode.ERASE, 0.9))
+        assertEquals(0xffffff, shownAt(37, 10), "erased")
+        assertEquals(0x808080, shownAt(25, 10), "the rest of the person stays")
+        vm.undo()
+        assertEquals(0x808080, shownAt(37, 10), "one undo step")
+    }
+
+    @Test
+    fun keepingBringsBackWhatWasCutOff() {
+        withFineMatter()
+        vm.import(photo())
+        vm.setBackground(white)
+        vm.touchUp(dab(BrushMode.KEEP, 0.1))
+        assertEquals(0x808080, shownAt(2, 10), "kept")
+        assertEquals(0xffffff, shownAt(15, 10), "the rest of the background is still replaced")
+    }
+
+    @Test
+    fun fixesStayThroughBackgroundChangesAndAreSaved() {
+        withFineMatter()
+        vm.import(photo())
+        vm.setBackground(white)
+        vm.touchUp(dab(BrushMode.ERASE, 0.7))
+        vm.setBackground(state.edit!!.recipe.background.copy(replaceColorArgb = BackgroundConfig.LIGHT_BLUE))
+        assertEquals(BackgroundConfig.LIGHT_BLUE.toInt() and 0xffffff, shownAt(28, 10))
+
+        vm.saveDraft()
+        val saved = assertNotNull(library.readRecipe(library.customersOn(now).single()))
+        assertEquals(listOf(dab(BrushMode.ERASE, 0.7)), saved.background.touchUps)
+        val final = ImageIO.read(ByteArrayInputStream(assertNotNull(library.readFinal(library.customersOn(now).single()))))
+        // The slot crop shows x 9 to 31 of the photo: its right edge is in the erased part.
+        assertTrue((final.getRGB(final.width - 2, final.height / 2) and 0xff) > 240, "erased in final.jpg too")
+    }
+
+    @Test
+    fun clearingTheFixesIsOneStep() {
+        withFineMatter()
+        vm.import(photo())
+        vm.setBackground(white)
+        vm.touchUp(dab(BrushMode.ERASE, 0.9))
+        vm.touchUp(dab(BrushMode.KEEP, 0.1))
+        vm.clearTouchUps()
+        assertEquals(white, state.edit!!.recipe.background)
+        assertEquals(0x808080, shownAt(37, 10))
+        vm.undo()
+        assertEquals(2, state.edit!!.recipe.background.touchUps.size)
     }
 
     @Test

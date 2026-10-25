@@ -21,6 +21,8 @@ data class BackgroundConfig(
     val blurStrength: Double = 0.35,
     /** ARGB, e.g. 0xFFFFFFFF for white. Used when [mode] is REPLACE. */
     val replaceColorArgb: Long = WHITE,
+    /** The operator's fixes to the cut-out, in the order they were painted. */
+    val touchUps: List<MaskStroke> = emptyList(),
 ) {
     init {
         require(blurStrength in 0.0..1.0) { "Blur strength must be in 0..1, was $blurStrength" }

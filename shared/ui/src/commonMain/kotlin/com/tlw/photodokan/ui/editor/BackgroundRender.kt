@@ -4,8 +4,10 @@ import androidx.compose.ui.graphics.ImageBitmap
 import com.tlw.photodokan.core.matte.Background
 import com.tlw.photodokan.core.matte.Cutout
 import com.tlw.photodokan.core.matte.Matte
+import com.tlw.photodokan.core.matte.touchedUp
 import com.tlw.photodokan.core.model.BackgroundConfig
 import com.tlw.photodokan.core.model.BackgroundMode
+import com.tlw.photodokan.core.model.MaskStroke
 import com.tlw.photodokan.ui.platform.imageBitmapOf
 import com.tlw.photodokan.ui.platform.timed
 import kotlin.concurrent.Volatile
@@ -19,11 +21,11 @@ fun ImageBitmap.withBackground(matte: Matte?, config: BackgroundConfig): ImageBi
 
 /**
  * Paints photos with their background changed, remembering the last photo's [Cutout] so that
- * changing only the background's settings, as the editor does, redoes just the background.
- * Blocking, and safe to use from several threads at once.
+ * changing only the background's settings, as the editor does, redoes just the background. A new
+ * touch-up cuts the person out again. Blocking, and safe to use from several threads at once.
  */
 class BackgroundPainter {
-    private class Last(val image: ImageBitmap, val matte: Matte, val cutout: Cutout)
+    private class Last(val image: ImageBitmap, val matte: Matte, val touchUps: List<MaskStroke>, val cutout: Cutout)
 
     @Volatile
     private var last: Last? = null
@@ -33,10 +35,11 @@ class BackgroundPainter {
         if (matte == null || config.mode == BackgroundMode.KEEP) return image
         val width = image.width
         val height = image.height
-        val cutout = last?.takeIf { it.image === image && it.matte === matte }?.cutout
+        val touchUps = config.touchUps
+        val cutout = last?.takeIf { it.image === image && it.matte === matte && it.touchUps == touchUps }?.cutout
             ?: timed("Cut out the person ${width}x$height") {
-                Cutout(IntArray(width * height).also { image.readPixels(it) }, width, height, matte)
-            }.also { last = Last(image, matte, it) }
+                Cutout(IntArray(width * height).also { image.readPixels(it) }, width, height, matte.touchedUp(touchUps, width.toDouble() / height))
+            }.also { last = Last(image, matte, touchUps, it) }
         val changed = timed("Background ${config.mode.name.lowercase()} ${width}x$height") { Background.apply(cutout, config) }
         return imageBitmapOf(changed, width, height)
     }
