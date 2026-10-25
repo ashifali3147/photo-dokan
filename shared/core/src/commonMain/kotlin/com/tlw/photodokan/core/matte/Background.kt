@@ -9,7 +9,8 @@ import kotlin.math.roundToInt
 /**
  * Changes the background of a photo behind the person in its [Matte]: blurred softly (the studio's
  * backdrop kept, its creases and seams gone) or replaced by a solid colour. The same maths for
- * the editor, final.jpg and print, at whatever size the photo is decoded.
+ * the editor, final.jpg and print, at whatever size the photo is decoded. The matte's edges are
+ * first fitted to the photo ([MatteEdges]), so they follow its hair at full sharpness.
  */
 object Background {
     /** The blur radius at full strength, as a share of the photo's height. */
@@ -25,7 +26,7 @@ object Background {
         val radius = config.blurStrength * MAX_BLUR * height
         if (config.mode == BackgroundMode.BLUR && radius < 0.5) return argb.copyOf()
 
-        val alpha = matte.resized(width, height)
+        val alpha = MatteEdges.fit(argb, width, height, matte)
         val out = IntArray(width * height)
         val blurred = if (config.mode == BackgroundMode.BLUR) BlurredBackground(argb, width, height, alpha, radius) else null
         val colour = config.replaceColorArgb.toInt()
