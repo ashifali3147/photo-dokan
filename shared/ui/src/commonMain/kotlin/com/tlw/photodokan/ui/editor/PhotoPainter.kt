@@ -18,17 +18,21 @@ import kotlin.concurrent.Volatile
 
 /**
  * The part of a recipe that changes the photo's pixels, rather than how it is cropped or drawn:
- * its background and the studio look. When only the rest changes, the painted photo is reused.
+ * its background, the studio look and fair skin. When only the rest changes, the painted photo is
+ * reused.
  */
-data class Painting(val background: BackgroundConfig, val enhance: Double, val portrait: Portrait?) {
+data class Painting(val background: BackgroundConfig, val enhance: Double, val portrait: Portrait?, val fairness: Double = 0.0) {
+    /** The look or fair skin changes the photo's pixels. */
+    val looks: Boolean get() = enhance > 0 || (fairness > 0 && portrait != null)
+
     /** The photo looks different from how it was shot. */
-    val changesPhoto: Boolean get() = background.mode != BackgroundMode.KEEP || enhance > 0
+    val changesPhoto: Boolean get() = background.mode != BackgroundMode.KEEP || looks
 
     /** The person must be cut out first. */
     val needsMatte: Boolean get() = background.mode != BackgroundMode.KEEP
 }
 
-val EditRecipe.painting: Painting get() = Painting(background, enhance, portrait)
+val EditRecipe.painting: Painting get() = Painting(background, enhance, portrait, fairness)
 
 /**
  * This photo painted as [painting] says, behind and on the person in [matte]: the same for the
@@ -52,7 +56,7 @@ class PhotoPainter {
     fun paint(image: ImageBitmap, matte: Matte?, painting: Painting): ImageBitmap {
         val config = painting.background
         val cutBackground = matte != null && config.mode != BackgroundMode.KEEP
-        if (!cutBackground && painting.enhance <= 0) return image
+        if (!cutBackground && !painting.looks) return image
         val width = image.width
         val height = image.height
 
@@ -63,9 +67,9 @@ class PhotoPainter {
                 if (config.mode == BackgroundMode.REPLACE) Background.person(cutout) else Background.apply(cutout, config)
             }
         }
-        val looked = if (painting.enhance <= 0) pixels else timed("Studio look ${width}x$height") {
+        val looked = if (!painting.looks) pixels else timed("Studio look ${width}x$height") {
             // With the background as shot, print has no matte to go by, so neither does the editor.
-            StudioLook.apply(pixels, width, height, painting.enhance, painting.portrait, person = cutout?.alpha)
+            StudioLook.apply(pixels, width, height, painting.enhance, painting.portrait, person = cutout?.alpha, fairness = painting.fairness)
         }
         return imageBitmapOf(looked, width, height)
     }

@@ -252,6 +252,8 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
                 onReset = viewModel::resetAdjustments,
                 onAuto = if (viewModel.canAutoLight) viewModel::autoLight else null,
                 onEnhance = viewModel::enhance,
+                // Fair skin goes by the face, so only a photo with one has it.
+                onFairness = if (edit.recipe.portrait != null) viewModel::fairness else null,
             )
             EditorTab.Background -> BackgroundControls(
                 background = edit.recipe.background,

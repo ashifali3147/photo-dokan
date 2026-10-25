@@ -42,9 +42,9 @@ enum class Adjustment(val label: String) {
 }
 
 /**
- * The studio look's Enhance slider, then one slider per [Adjustment]. Dragging updates the photo
- * live through [onEnhance] or [onPreview]; letting go calls [onCommit], so a whole drag is one undo
- * step. [onAuto], when given, sets the light and colour from the face.
+ * The studio look's Enhance slider, Fair skin when the photo has a face ([onFairness]), then one
+ * slider per [Adjustment]. Dragging updates the photo live; letting go calls [onCommit], so a
+ * whole drag is one undo step. [onAuto], when given, sets the light and colour from the face.
  */
 @Composable
 fun AdjustControls(
@@ -54,18 +54,10 @@ fun AdjustControls(
     onReset: () -> Unit,
     onAuto: (() -> Unit)? = null,
     onEnhance: (Double) -> Unit = {},
+    onFairness: ((Double) -> Unit)? = null,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("Enhance", Modifier.width(96.dp))
-        Slider(
-            value = recipe.enhance.toFloat(),
-            onValueChange = { onEnhance((it * 20).roundToInt() / 20.0) },
-            onValueChangeFinished = onCommit,
-            valueRange = 0f..1f,
-            modifier = Modifier.weight(1f),
-        )
-        Text("${(recipe.enhance * 100).roundToInt()}", Modifier.width(44.dp))
-    }
+    StrengthSlider("Enhance", recipe.enhance, onEnhance, onCommit)
+    if (onFairness != null) StrengthSlider("Fair skin", recipe.fairness, onFairness, onCommit)
     for (adjustment in Adjustment.entries) {
         val value = adjustment.valueIn(recipe)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -83,6 +75,22 @@ fun AdjustControls(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         onAuto?.let { TextButton(onClick = it) { Text("Auto") } }
         TextButton(onClick = onReset) { Text("Reset light and colour") }
+    }
+}
+
+/** A 0–100 slider, in steps of 5, for a strength 0..1. */
+@Composable
+private fun StrengthSlider(label: String, value: Double, onChange: (Double) -> Unit, onCommit: () -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.width(96.dp))
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { onChange((it * 20).roundToInt() / 20.0) },
+            onValueChangeFinished = onCommit,
+            valueRange = 0f..1f,
+            modifier = Modifier.weight(1f),
+        )
+        Text("${(value * 100).roundToInt()}", Modifier.width(44.dp))
     }
 }
 

@@ -538,6 +538,7 @@ class CustomersViewModelTest {
         // The studio look's curve brightens the dim face, so the brightness slider stays put.
         assertEquals(1.0, recipe.enhance)
         assertEquals(0.49, assertNotNull(recipe.portrait).skinLevel, 0.03)
+        assertEquals(0.35, recipe.fairness, 0.051, "brown skin is made a little fairer")
         assertEquals(0.0, recipe.exposure)
         assertTrue(recipe.tint > 0.3, "less green: $recipe")
         assertEquals(0.0, recipe.contrast)
@@ -561,6 +562,24 @@ class CustomersViewModelTest {
         assertEquals(0.0, state.edit!!.recipe.enhance, "reset turns the look off")
         vm.autoLight()
         assertEquals(1.0, state.edit!!.recipe.enhance, "and Auto turns it back on")
+    }
+
+    @Test
+    fun fairSkinIsOneUndoStepAndResetsWithTheLight() {
+        finder.faces = listOf(face())
+        withFinder()
+        vm.import(PhotoSource("IMG_3.jpg") { greenishPortrait })
+        val usual = state.edit!!.recipe.fairness
+        val face = shownAt(200, 270)
+        vm.fairness(1.0)
+        assertTrue((shownAt(200, 270) and 0xff00) > (face and 0xff00), "fairer: ${shownAt(200, 270).toString(16)} against ${face.toString(16)}")
+        vm.commit()
+        vm.undo()
+        assertEquals(usual, state.edit!!.recipe.fairness)
+        vm.resetAdjustments()
+        assertEquals(0.0, state.edit!!.recipe.fairness)
+        vm.autoLight()
+        assertEquals(usual, state.edit!!.recipe.fairness, "Auto sets the usual again")
     }
 
     @Test

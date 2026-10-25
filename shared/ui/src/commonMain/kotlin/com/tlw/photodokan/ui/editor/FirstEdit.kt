@@ -11,6 +11,7 @@ import com.tlw.photodokan.core.model.PhotoSizePreset
 import com.tlw.photodokan.core.model.Portrait
 import com.tlw.photodokan.ui.photo.PhotoPreview
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** How strong the studio look is on a new photo with a face, 0 to 1. */
 const val FIRST_ENHANCE = 1.0
@@ -31,14 +32,20 @@ fun firstEdit(preview: PhotoPreview, preset: PhotoSizePreset, faces: List<Face>?
 }
 
 /**
- * [recipe] with [light]'s colour balance and, with a [portrait], the studio look at full strength.
- * The look's curve lights the face, so then the brightness slider is only used to take down a
- * photo that is too bright.
+ * [recipe] with [light]'s colour balance and, with a [portrait], the studio look at full strength
+ * and skin as fair as is usual for its shade (see [StudioLook.fairnessFor]). The look's curve
+ * lights the face, so then the brightness slider is only used to take down a photo that is too
+ * bright.
  */
 fun studioLight(recipe: EditRecipe, light: AutoLight.Suggestion?, portrait: Portrait?): EditRecipe {
     val balanced = light?.applyTo(recipe) ?: recipe
     if (portrait == null) return balanced
-    return balanced.copy(exposure = min(0.0, balanced.exposure), enhance = FIRST_ENHANCE, portrait = portrait)
+    return balanced.copy(
+        exposure = min(0.0, balanced.exposure),
+        enhance = FIRST_ENHANCE,
+        fairness = (StudioLook.fairnessFor(portrait.skinLevel) * 20).roundToInt() / 20.0,
+        portrait = portrait,
+    )
 }
 
 /** A new photo's [recipe], with the crop [fit] and [light] it was made from, if any. */
