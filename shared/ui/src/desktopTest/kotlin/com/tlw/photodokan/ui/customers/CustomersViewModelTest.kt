@@ -273,10 +273,12 @@ class CustomersViewModelTest {
         vm.import(photo())
         vm.adjust(Adjustment.Brightness, 0.5); vm.commit()
         vm.adjust(Adjustment.Colour, -0.5); vm.commit()
+        vm.adjust(Adjustment.Tint, 0.3); vm.commit()
         vm.resetAdjustments()
         assertTrue(ColorAdjustment.isNeutral(state.edit!!.recipe))
         vm.undo()
         assertEquals(-0.5, state.edit!!.recipe.saturation)
+        assertEquals(0.3, state.edit!!.recipe.tint)
     }
 
     @Test
@@ -507,6 +509,76 @@ class CustomersViewModelTest {
         importPortrait()
         vm.fitFace()
         assertEquals(CropConfig(), state.edit?.recipe?.crop)
+        assertNull(state.message)
+    }
+
+    // ---- Light and colour from the face ----
+
+    /** Brown skin, shot half a stop dark under greenish light, filling a 400 × 600 photo. */
+    private val greenishPortrait = ByteArrayOutputStream().also {
+        val image = BufferedImage(400, 600, BufferedImage.TYPE_INT_RGB)
+        for (y in 0 until 600) for (x in 0 until 400) image.setRGB(x, y, (145 shl 16) or (125 shl 8) or 76)
+        ImageIO.write(image, "jpg", it)
+    }.toByteArray()
+
+    @Test
+    fun aNewPhotoOpensWithTheFaceLitAndBalanced() {
+        finder.faces = listOf(face())
+        withFinder()
+        assertTrue(vm.canAutoLight)
+        vm.import(PhotoSource("IMG_3.jpg") { greenishPortrait })
+
+        val recipe = assertNotNull(state.edit).recipe
+        assertTrue(recipe.exposure > 0.3, "brighter: $recipe")
+        assertTrue(recipe.tint > 0.3, "less green: $recipe")
+        assertEquals(0.0, recipe.contrast)
+        assertNull(state.message)
+        assertEquals(1, finder.searches)
+    }
+
+    @Test
+    fun autoUndoesHandWorkOnLightInOneStep() {
+        finder.faces = listOf(face())
+        withFinder()
+        vm.import(PhotoSource("IMG_3.jpg") { greenishPortrait })
+        val auto = state.edit!!.recipe
+        vm.adjust(Adjustment.Brightness, -0.4); vm.commit()
+        vm.adjust(Adjustment.Contrast, 0.2); vm.commit()
+
+        vm.autoLight()
+        assertEquals(auto.copy(contrast = 0.2), state.edit!!.recipe, "contrast is the operator's own")
+        assertEquals(1, finder.searches, "the faces found on opening are used again")
+        vm.undo()
+        assertEquals(-0.4, state.edit!!.recipe.exposure)
+    }
+
+    @Test
+    fun autoSaysWhenThereIsNoFaceToGoBy() {
+        withFinder()
+        importPortrait()
+        vm.adjust(Adjustment.Warmth, 0.2); vm.commit()
+        vm.autoLight()
+        assertEquals("Auto needs a clear face in the photo. Set the light and colour with the sliders.", state.message)
+        assertEquals(0.2, state.edit!!.recipe.warmth, "left as it was")
+    }
+
+    @Test
+    fun aReopenedCustomerKeepsTheirLight() {
+        finder.faces = listOf(face())
+        vm.import(PhotoSource("IMG_3.jpg") { greenishPortrait })
+        vm.saveDraft()
+        val customer = library.customersOn(now).single()
+        withFinder()
+        vm.select(customer)
+        assertTrue(ColorAdjustment.isNeutral(state.edit!!.recipe), "as saved, without a finder then")
+    }
+
+    @Test
+    fun withoutAFinderThereIsNoAuto() {
+        assertFalse(vm.canAutoLight)
+        vm.import(PhotoSource("IMG_3.jpg") { greenishPortrait })
+        vm.autoLight()
+        assertTrue(ColorAdjustment.isNeutral(state.edit!!.recipe))
         assertNull(state.message)
     }
 

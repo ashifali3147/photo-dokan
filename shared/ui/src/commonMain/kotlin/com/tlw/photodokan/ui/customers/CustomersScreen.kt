@@ -239,6 +239,7 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
                 onPreview = viewModel::adjust,
                 onCommit = viewModel::commit,
                 onReset = viewModel::resetAdjustments,
+                onAuto = if (viewModel.canAutoLight) viewModel::autoLight else null,
             )
             EditorTab.Background -> BackgroundControls(
                 background = edit.recipe.background,

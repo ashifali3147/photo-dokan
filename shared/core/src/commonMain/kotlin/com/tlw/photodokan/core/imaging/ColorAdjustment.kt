@@ -8,15 +8,17 @@ import kotlin.math.pow
  * 0..255), the layout Compose and Android use. Drawing through it is instant at any photo size,
  * and the same matrix is used for the screen, final.jpg and printing.
  *
- * Gentle studio corrections, applied in order: warmth, exposure, colour, contrast.
+ * Gentle studio corrections, applied in order: warmth and tint, exposure, colour, contrast.
  */
 object ColorAdjustment {
     /** ±1 stop of light at the slider ends. */
-    private const val EXPOSURE_STOPS = 1.0
+    const val EXPOSURE_STOPS = 1.0
     /** Contrast ×0.5 … ×1.5 around mid-grey. */
     private const val CONTRAST_RANGE = 0.5
     /** Red up and blue down by up to 12 %. */
-    private const val WARMTH_RANGE = 0.12
+    const val WARMTH_RANGE = 0.12
+    /** Green down and red and blue up (pinker), or the other way, by up to 8 % each. */
+    const val TINT_RANGE = 0.08
     private const val MID_GREY = 128.0
 
     // Rec. 709 luma: how bright each channel looks to the eye.
@@ -27,16 +29,28 @@ object ColorAdjustment {
     val IDENTITY: FloatArray = Affine.identity().toColorMatrix()
 
     fun isNeutral(recipe: EditRecipe): Boolean =
-        recipe.exposure == 0.0 && recipe.contrast == 0.0 && recipe.warmth == 0.0 && recipe.saturation == 0.0
+        recipe.exposure == 0.0 && recipe.contrast == 0.0 && recipe.warmth == 0.0 && recipe.tint == 0.0 && recipe.saturation == 0.0
 
     fun matrix(recipe: EditRecipe): FloatArray {
-        val warmth = Affine.scale(1 + WARMTH_RANGE * recipe.warmth, 1.0, 1 - WARMTH_RANGE * recipe.warmth)
+        val balance = gains(recipe.warmth, recipe.tint)
+        val warmth = Affine.scale(balance[0], balance[1], balance[2])
         val gain = 2.0.pow(EXPOSURE_STOPS * recipe.exposure)
         val exposure = Affine.scale(gain, gain, gain)
         val saturation = saturation(1 + recipe.saturation)
         val k = 1 + CONTRAST_RANGE * recipe.contrast
         val contrast = Affine.scale(k, k, k).withOffset(MID_GREY * (1 - k))
         return (contrast * saturation * exposure * warmth).toColorMatrix()
+    }
+
+    /**
+     * The red, green and blue gains of [warmth] and [tint]. Tint keeps a grey's brightness, so
+     * moving it changes only the colour.
+     */
+    fun gains(warmth: Double, tint: Double): DoubleArray {
+        val pink = 1 + TINT_RANGE * tint
+        val green = 1 - TINT_RANGE * tint
+        val keep = 1 / ((LUMA_R + LUMA_B) * pink + LUMA_G * green)
+        return doubleArrayOf((1 + WARMTH_RANGE * warmth) * pink * keep, green * keep, (1 - WARMTH_RANGE * warmth) * pink * keep)
     }
 
     /**

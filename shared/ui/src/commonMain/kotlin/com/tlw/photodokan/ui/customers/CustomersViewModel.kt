@@ -7,6 +7,7 @@ import com.tlw.photodokan.core.face.Face
 import com.tlw.photodokan.core.face.FaceCrop
 import com.tlw.photodokan.core.face.FaceFit
 import com.tlw.photodokan.core.geometry.mmToPixels
+import com.tlw.photodokan.core.imaging.AutoLight
 import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropGeometry
 import com.tlw.photodokan.core.library.Customer
@@ -146,6 +147,9 @@ class CustomersViewModel(
     /** Photos can be cropped to the face automatically. */
     val canFitFace: Boolean get() = faces != null
 
+    /** Light and colour can be set from the face. */
+    val canAutoLight: Boolean get() = faces != null
+
     /** The background behind the person can be blurred or replaced. */
     val canChangeBackground: Boolean get() = matter != null
 
@@ -206,7 +210,8 @@ class CustomersViewModel(
             val preset = presets.first()
             val found = findFaces(preview)
             val fit = found?.let { fitFace(preview, preset, it) }
-            val recipe = EditRecipe(presetId = preset.id, crop = fit?.crop ?: CropConfig())
+            val light = found?.let { autoLight(preview, it) }
+            val recipe = EditRecipe(presetId = preset.id, crop = fit?.crop ?: CropConfig()).let { light?.applyTo(it) ?: it }
             val edit = EditSession.start(preview, recipe, saved = null, faces = found)
             _state.update { it.copy(draft = draft, selected = null, edit = edit, message = found?.let { faceMessage(fit) }, messageIsError = false) }
             findMatte(preview, customer = null)
@@ -259,6 +264,27 @@ class CustomersViewModel(
             val fit = fitFace(edit.preview, presetOf(edit.live), found)
             _state.update { s -> s.copy(edit = s.edit?.copy(faces = found), message = faceMessage(fit), messageIsError = false) }
             if (fit != null) step { it.live.copy(crop = fit.crop) }
+        }
+    }
+
+    /**
+     * Sets brightness and white balance from the face's skin, as one undo step. Contrast and
+     * colour are left as they are.
+     */
+    fun autoLight() {
+        val edit = _state.value.edit ?: return
+        if (faces == null) return
+        launchWork {
+            val found = edit.faces ?: findFaces(edit.preview).orEmpty()
+            val light = autoLight(edit.preview, found)
+            _state.update { s ->
+                s.copy(
+                    edit = s.edit?.copy(faces = found),
+                    message = if (light == null) "Auto needs a clear face in the photo. Set the light and colour with the sliders." else null,
+                    messageIsError = false,
+                )
+            }
+            if (light != null) step { light.applyTo(it.live) }
         }
     }
 
@@ -330,6 +356,14 @@ class CustomersViewModel(
     private fun fitFace(preview: PhotoPreview, preset: PhotoSizePreset, faces: List<Face>): FaceFit? =
         FaceCrop.main(faces)?.let { FaceCrop.fit(preview.image.width, preview.image.height, preset, it) }
 
+    /** Light and colour for the main face on [preview], or null without one clear enough to judge. */
+    private fun autoLight(preview: PhotoPreview, faces: List<Face>): AutoLight.Suggestion? {
+        val face = FaceCrop.main(faces) ?: return null
+        val image = preview.image
+        val argb = IntArray(image.width * image.height).also { image.readPixels(it) }
+        return AutoLight.suggest(argb, image.width, image.height, face)
+    }
+
     /** What the operator should know about the automatic crop; nothing when it simply worked. */
     private fun faceMessage(fit: FaceFit?): String? = when {
         fit == null -> "No face found. Move and zoom the photo to fit the guide."
@@ -339,7 +373,7 @@ class CustomersViewModel(
 
     fun resetCrop() = step { it.live.copy(crop = CropConfig()) }
 
-    fun resetAdjustments() = step { it.live.copy(exposure = 0.0, contrast = 0.0, warmth = 0.0, saturation = 0.0) }
+    fun resetAdjustments() = step { it.live.copy(exposure = 0.0, contrast = 0.0, warmth = 0.0, tint = 0.0, saturation = 0.0) }
 
     /** Shows a background change live, e.g. while the softness slider moves; call [commit] when let go. */
     fun previewBackground(background: BackgroundConfig) = preview { it.live.copy(background = background) }
