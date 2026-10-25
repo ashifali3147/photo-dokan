@@ -23,6 +23,7 @@ dependencies {
     implementation(project(":shared:station"))
     implementation(project(":shared:vision"))
     implementation(compose.desktop.currentOs)
+    testImplementation(kotlin("test"))
 }
 
 compose.desktop {
@@ -47,4 +48,15 @@ compose.desktop {
             }
         }
     }
+}
+
+// Checks a folder of photos the way the editor opens them, and writes a quality report:
+// ./gradlew :app-desktop:qualityReport -Pphotos=/path/to/photos [-Preport=/path/to/report]
+tasks.register<JavaExec>("qualityReport") {
+    group = "verification"
+    description = "Writes a quality report for a folder of photos (-Pphotos=..., optional -Preport=...)."
+    mainClass.set("com.tlw.photodokan.desktop.quality.QualityMainKt")
+    classpath = sourceSets.main.get().runtimeClasspath
+    jvmArgs("-Xmx1536m", "-Djava.awt.headless=true")
+    args = listOfNotNull(findProperty("photos")?.toString(), findProperty("report")?.toString())
 }
