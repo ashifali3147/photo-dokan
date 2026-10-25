@@ -19,13 +19,15 @@ import com.tlw.photodokan.core.imaging.CropRect
 
 /**
  * Draws the [rect] part of [image] to fill this scope, the photo turned clockwise by the crop's
- * rotation and its colours passed through [colorMatrix] (see ColorAdjustment). The editor and
- * [renderCrop] both use it, so what the operator sees is what is saved.
+ * rotation and its colours passed through [colorMatrix] (see ColorAdjustment). Where the image is
+ * clear (a person cut out for a plain background) the [backdrop] shows, exactly as chosen: the
+ * light and colour sliders change the person, not the background. The editor and [renderCrop]
+ * both use it, so what the operator sees is what is saved.
  */
-fun DrawScope.drawCrop(image: ImageBitmap, rect: CropRect, colorMatrix: FloatArray = ColorAdjustment.IDENTITY) {
+fun DrawScope.drawCrop(image: ImageBitmap, rect: CropRect, colorMatrix: FloatArray = ColorAdjustment.IDENTITY, backdrop: Color = Color.White) {
     val filter = if (colorMatrix.contentEquals(ColorAdjustment.IDENTITY)) null else ColorFilter.colorMatrix(ColorMatrix(colorMatrix))
     val k = (size.width / rect.width).toFloat()
-    drawRect(Color.White)
+    drawRect(backdrop)
     withTransform({
         translate(size.width / 2, size.height / 2)
         scale(k, k, pivot = Offset.Zero)
@@ -43,10 +45,17 @@ fun DrawScope.drawCrop(image: ImageBitmap, rect: CropRect, colorMatrix: FloatArr
 }
 
 /** Renders a crop into a new [width] × [height] image, the same on every platform. */
-fun renderCrop(image: ImageBitmap, rect: CropRect, width: Int, height: Int, colorMatrix: FloatArray = ColorAdjustment.IDENTITY): ImageBitmap {
+fun renderCrop(
+    image: ImageBitmap,
+    rect: CropRect,
+    width: Int,
+    height: Int,
+    colorMatrix: FloatArray = ColorAdjustment.IDENTITY,
+    backdrop: Color = Color.White,
+): ImageBitmap {
     val out = ImageBitmap(width, height)
     CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(out), Size(width.toFloat(), height.toFloat())) {
-        drawCrop(image, rect, colorMatrix)
+        drawCrop(image, rect, colorMatrix, backdrop)
     }
     return out
 }

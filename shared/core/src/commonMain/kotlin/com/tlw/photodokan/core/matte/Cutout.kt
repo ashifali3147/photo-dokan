@@ -12,8 +12,8 @@ class Cutout(internal val argb: IntArray, val width: Int, val height: Int, matte
         require(width > 0 && height > 0 && argb.size == width * height) { "Need $width × $height pixels, had ${argb.size}" }
     }
 
-    /** How much of each pixel is the person, 0–255. */
-    internal val alpha = MatteEdges.fit(argb, width, height, matte)
+    /** How much of each pixel is the person, 0–255, fitted to the photo; shared, so not to be changed. */
+    val alpha: ByteArray = MatteEdges.fit(argb, width, height, matte)
 
     /** The old backdrop and the person's own colours just around each edge, to tell them apart there. */
     internal val oldBackdrop = NearbyColour(argb, width, height, alpha, EDGE * height)

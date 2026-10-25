@@ -22,9 +22,14 @@ import com.tlw.photodokan.core.model.PhotoSizePreset
 import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.ui.editor.Adjustment
 import com.tlw.photodokan.ui.editor.renderCrop
-import com.tlw.photodokan.ui.editor.BackgroundPainter
+import com.tlw.photodokan.ui.editor.Painting
+import com.tlw.photodokan.ui.editor.PhotoPainter
+import com.tlw.photodokan.ui.editor.painting
+import com.tlw.photodokan.ui.editor.studioLight
+import com.tlw.photodokan.ui.editor.backdrop
 import com.tlw.photodokan.ui.editor.faceFit
 import com.tlw.photodokan.ui.editor.faceLight
+import com.tlw.photodokan.ui.editor.facePortrait
 import com.tlw.photodokan.ui.editor.firstEdit
 import com.tlw.photodokan.ui.photo.PhotoPreview
 import com.tlw.photodokan.ui.photo.PhotoSource
@@ -75,22 +80,22 @@ data class EditSession(
     val faces: List<Face>? = null,
     /** Which part of the photo is the person, once worked out; it takes a moment, so it comes later. */
     val matte: Matte? = null,
-    /** [preview] with its background changed as [backgroundFor] says, once worked out. */
-    val background: ImageBitmap? = null,
-    val backgroundFor: BackgroundConfig? = null,
+    /** [preview] painted as [paintedFor] says (background and studio look), once worked out. */
+    val painted: ImageBitmap? = null,
+    val paintedFor: Painting? = null,
 ) {
     val recipe: EditRecipe get() = live
 
     /**
-     * What the editor shows: the photo with the background as [live] says when that is ready,
-     * else the last one worked out, else the photo as shot.
+     * What the editor shows: the photo painted as [live] says when that is ready, else the last
+     * one worked out, else the photo as shot.
      */
     val shown: ImageBitmap
-        get() = if (live.background.mode == BackgroundMode.KEEP || matte == null) preview.image else background ?: preview.image
+        get() = if (!live.painting.changesPhoto) preview.image else painted ?: preview.image
 
     /** The background as chosen isn't shown yet: the person is still being separated, or it is being redrawn. */
     val backgroundPending: Boolean
-        get() = live.background.mode != BackgroundMode.KEEP && (matte == null || backgroundFor != live.background)
+        get() = live.background.mode != BackgroundMode.KEEP && (matte == null || paintedFor?.background != live.background)
     val changed: Boolean get() = live != saved
     val canUndo: Boolean get() = history.canUndo || live != history.present
     val canRedo: Boolean get() = history.canRedo && live == history.present
@@ -158,7 +163,7 @@ class CustomersViewModel(
     private var backgroundJob: Job? = null
 
     /** Keeps the open photo's person cut out, so changing the background's settings is quick. */
-    private val painter = BackgroundPainter()
+    private val painter = PhotoPainter()
 
     fun presetOf(recipe: EditRecipe): PhotoSizePreset = presets.firstOrNull { it.id == recipe.presetId } ?: presets.first()
 
@@ -191,6 +196,7 @@ class CustomersViewModel(
         } else {
             val recipe = library.readRecipe(customer) ?: EditRecipe(presetId = presets.first().id)
             _state.update { it.copy(selected = customer, draft = null, edit = EditSession.start(preview, recipe, saved = recipe), message = null) }
+            redrawBackground() // the studio look, if it needs no matte
             findMatte(preview, customer)
         }
     }
@@ -214,6 +220,7 @@ class CustomersViewModel(
             val first = firstEdit(preview, preset, found)
             val edit = EditSession.start(preview, first.recipe, saved = null, faces = found)
             _state.update { it.copy(draft = draft, selected = null, edit = edit, message = found?.let { faceMessage(first.fit) }, messageIsError = false) }
+            redrawBackground()
             findMatte(preview, customer = null)
         }
     }
@@ -268,8 +275,8 @@ class CustomersViewModel(
     }
 
     /**
-     * Sets brightness and white balance from the face's skin, as one undo step. Contrast and
-     * colour are left as they are.
+     * Sets white balance from the face's skin and the studio look at full strength, as one undo
+     * step. Contrast and colour are left as they are.
      */
     fun autoLight() {
         val edit = _state.value.edit ?: return
@@ -277,6 +284,7 @@ class CustomersViewModel(
         launchWork {
             val found = edit.faces ?: findFaces(edit.preview).orEmpty()
             val light = faceLight(edit.preview, found)
+            val portrait = edit.live.portrait ?: facePortrait(edit.preview, found)
             _state.update { s ->
                 s.copy(
                     edit = s.edit?.copy(faces = found),
@@ -284,7 +292,7 @@ class CustomersViewModel(
                     messageIsError = false,
                 )
             }
-            if (light != null) step { light.applyTo(it.live) }
+            if (light != null) step { studioLight(it.live, light, portrait) }
         }
     }
 
@@ -362,7 +370,11 @@ class CustomersViewModel(
 
     fun resetCrop() = step { it.live.copy(crop = CropConfig()) }
 
-    fun resetAdjustments() = step { it.live.copy(exposure = 0.0, contrast = 0.0, warmth = 0.0, tint = 0.0, saturation = 0.0) }
+    /** Light and colour as shot, the studio look off, as one undo step. */
+    fun resetAdjustments() = step { it.live.copy(exposure = 0.0, contrast = 0.0, warmth = 0.0, tint = 0.0, saturation = 0.0, enhance = 0.0) }
+
+    /** Shows a change to the studio look's strength live; call [commit] when the slider is let go. */
+    fun enhance(strength: Double) = preview { it.live.copy(enhance = strength.coerceIn(0.0, 1.0)) }
 
     /** Shows a background change live, e.g. while the softness slider moves; call [commit] when let go. */
     fun previewBackground(background: BackgroundConfig) = preview { it.live.copy(background = background) }
@@ -436,13 +448,15 @@ class CustomersViewModel(
      */
     private fun redrawBackground() {
         val edit = _state.value.edit ?: return
-        val matte = edit.matte ?: return
-        val wanted = edit.live.background
-        if (wanted.mode == BackgroundMode.KEEP || wanted == edit.backgroundFor) return
+        val wanted = edit.live.painting
+        if (!wanted.changesPhoto || wanted == edit.paintedFor) return
+        // A new background waits for the person to be separated (findMatte asks again then); with
+        // nothing to separate them, the look is painted on the photo as shot.
+        if (wanted.needsMatte && edit.matte == null && matter != null) return
         backgroundJob?.cancel()
         backgroundJob = viewModelScope.launch(work) {
             val image = try {
-                painter.paint(edit.preview.image, matte, wanted)
+                painter.paint(edit.preview.image, edit.matte, wanted)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -450,7 +464,7 @@ class CustomersViewModel(
             }
             _state.update { s ->
                 val now = s.edit
-                if (now == null || now.preview !== edit.preview) s else s.copy(edit = now.copy(background = image, backgroundFor = wanted))
+                if (now == null || now.preview !== edit.preview) s else s.copy(edit = now.copy(painted = image, paintedFor = wanted))
             }
         }
     }
@@ -506,16 +520,16 @@ class CustomersViewModel(
      */
     private fun renderFinal(edit: EditSession, matte: Matte?): ByteArray {
         val preset = presetOf(edit.live)
-        val wanted = edit.live.background
+        val wanted = edit.live.painting
         val image = when {
-            wanted.mode == BackgroundMode.KEEP -> edit.preview.image
-            edit.backgroundFor == wanted && edit.background != null -> edit.background
+            !wanted.changesPhoto -> edit.preview.image
+            edit.paintedFor == wanted && edit.painted != null -> edit.painted
             else -> painter.paint(edit.preview.image, matte, wanted)
         }
         val rect = CropGeometry.rect(image.width, image.height, preset.aspect, edit.live.crop)
         val width = mmToPixels(preset.size.width, FINAL_DPI).roundToInt()
         val height = mmToPixels(preset.size.height, FINAL_DPI).roundToInt()
-        return timed("Make final.jpg") { encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(edit.live))) }
+        return timed("Make final.jpg") { encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(edit.live), backdrop(wanted.background))) }
     }
 
     private fun refresh() = launchWork { loadList() }

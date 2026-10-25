@@ -53,6 +53,7 @@ import com.tlw.photodokan.ui.editor.CropControls
 import com.tlw.photodokan.ui.editor.CropEditor
 import com.tlw.photodokan.ui.editor.SMALL_BRUSH
 import com.tlw.photodokan.ui.editor.TouchUpBrush
+import com.tlw.photodokan.ui.editor.backdrop
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.photo.canDropPhotos
 import com.tlw.photodokan.ui.photo.photoDropTarget
@@ -209,6 +210,7 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
                 onCommit = viewModel::commit,
                 modifier = Modifier.fillMaxSize(),
                 colorMatrix = ColorAdjustment.matrix(edit.recipe),
+                backdrop = backdrop(edit.recipe.background),
                 brush = brush?.let { TouchUpBrush(it, brushSize, viewModel::touchUp) },
             )
             state.busy -> CircularProgressIndicator()
@@ -249,6 +251,7 @@ private fun ColumnScope.Detail(state: CustomersState, viewModel: CustomersViewMo
                 onCommit = viewModel::commit,
                 onReset = viewModel::resetAdjustments,
                 onAuto = if (viewModel.canAutoLight) viewModel::autoLight else null,
+                onEnhance = viewModel::enhance,
             )
             EditorTab.Background -> BackgroundControls(
                 background = edit.recipe.background,

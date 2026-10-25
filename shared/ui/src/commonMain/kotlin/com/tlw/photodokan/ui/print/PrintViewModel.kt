@@ -32,7 +32,9 @@ import com.tlw.photodokan.station.StationConnector
 import com.tlw.photodokan.station.StationException
 import com.tlw.photodokan.station.StationLinkStore
 import com.tlw.photodokan.ui.editor.renderCrop
-import com.tlw.photodokan.ui.editor.withBackground
+import com.tlw.photodokan.ui.editor.backdrop
+import com.tlw.photodokan.ui.editor.painted
+import com.tlw.photodokan.ui.editor.painting
 import com.tlw.photodokan.ui.photo.decodePreview
 import com.tlw.photodokan.ui.photo.photoSize
 import com.tlw.photodokan.ui.platform.encodeJpeg
@@ -518,9 +520,9 @@ class PrintViewModel(
         val (fullWidth, fullHeight) = photoSize(original) ?: throw unreadable
         val needed = CropGeometry.sourceSideFor(fullWidth, fullHeight, aspect, recipe.crop, width)
         val photo = decodePreview(original, maxSide = minOf(needed, maxSide)) ?: throw unreadable
-        val image = photo.image.withBackground(matteFor(order, photo.image, recipe), recipe.background)
+        val image = photo.image.painted(matteFor(order, photo.image, recipe), recipe.painting)
         val rect = CropGeometry.rect(image.width, image.height, aspect, recipe.crop)
-        return encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(recipe)), quality = PRINT_JPEG_QUALITY)
+        return encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(recipe), backdrop(recipe.background)), quality = PRINT_JPEG_QUALITY)
     }
 
     /**
