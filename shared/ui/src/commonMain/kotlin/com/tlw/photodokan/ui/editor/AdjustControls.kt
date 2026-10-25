@@ -18,12 +18,14 @@ enum class Adjustment(val label: String) {
     Brightness("Brightness"),
     Contrast("Contrast"),
     Warmth("Warmth"),
+    Tint("Tint"),
     Colour("Colour");
 
     fun valueIn(recipe: EditRecipe): Double = when (this) {
         Brightness -> recipe.exposure
         Contrast -> recipe.contrast
         Warmth -> recipe.warmth
+        Tint -> recipe.tint
         Colour -> recipe.saturation
     }
 
@@ -33,6 +35,7 @@ enum class Adjustment(val label: String) {
             Brightness -> recipe.copy(exposure = v)
             Contrast -> recipe.copy(contrast = v)
             Warmth -> recipe.copy(warmth = v)
+            Tint -> recipe.copy(tint = v)
             Colour -> recipe.copy(saturation = v)
         }
     }
@@ -40,7 +43,8 @@ enum class Adjustment(val label: String) {
 
 /**
  * One slider per [Adjustment]. Dragging updates the photo live through [onPreview]; letting go
- * calls [onCommit], so a whole drag is one undo step.
+ * calls [onCommit], so a whole drag is one undo step. [onAuto], when given, sets the light and
+ * colour from the face.
  */
 @Composable
 fun AdjustControls(
@@ -48,6 +52,7 @@ fun AdjustControls(
     onPreview: (Adjustment, Double) -> Unit,
     onCommit: () -> Unit,
     onReset: () -> Unit,
+    onAuto: (() -> Unit)? = null,
 ) {
     for (adjustment in Adjustment.entries) {
         val value = adjustment.valueIn(recipe)
@@ -63,7 +68,10 @@ fun AdjustControls(
             Text(formatAmount(value), Modifier.width(44.dp))
         }
     }
-    TextButton(onClick = onReset) { Text("Reset light and colour") }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        onAuto?.let { TextButton(onClick = it) { Text("Auto") } }
+        TextButton(onClick = onReset) { Text("Reset light and colour") }
+    }
 }
 
 /** −1..1 shown as −100..+100. */
