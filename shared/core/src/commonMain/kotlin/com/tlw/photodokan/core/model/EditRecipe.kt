@@ -66,11 +66,33 @@ data class EditRecipe(
     val background: BackgroundConfig = BackgroundConfig(),
     /** 0 = off (default), 1 = strongest gentle smoothing. */
     val retouch: Double = 0.0,
+    /** The studio look, 0 (off) to 1 (full): bright, clean and crisp, as a studio edits a portrait. */
+    val enhance: Double = 0.0,
+    /** The face as measured when the photo was opened, which the studio look works from; null without one. */
+    val portrait: Portrait? = null,
 ) {
     init {
         for ((name, value) in listOf("exposure" to exposure, "contrast" to contrast, "warmth" to warmth, "tint" to tint, "saturation" to saturation)) {
             require(value in -1.0..1.0) { "$name must be in -1..1, was $value" }
         }
         require(retouch in 0.0..1.0) { "retouch must be in 0..1, was $retouch" }
+        require(enhance in 0.0..1.0) { "enhance must be in 0..1, was $enhance" }
+    }
+}
+
+/**
+ * A portrait's face, measured once when the photo is opened and kept with the recipe, so the
+ * studio look comes out the same on the preview, final.jpg and the full-size print.
+ */
+@Serializable
+data class Portrait(
+    /** How bright the face's skin is in the middle, 0 to 1. */
+    val skinLevel: Double,
+    /** The face's height as a share of the photo's height. */
+    val faceHeight: Double,
+) {
+    init {
+        require(skinLevel in 0.0..1.0) { "Skin level must be in 0..1, was $skinLevel" }
+        require(faceHeight > 0 && faceHeight <= 1) { "Face height must be in (0, 1] of the photo, was $faceHeight" }
     }
 }

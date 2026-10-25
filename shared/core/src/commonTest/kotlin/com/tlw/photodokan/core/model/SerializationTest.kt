@@ -28,6 +28,8 @@ class SerializationTest {
                 touchUps = listOf(MaskStroke(BrushMode.ERASE, 0.02, listOf(MaskPoint(0.25, 0.5), MaskPoint(0.3, 0.55)))),
             ),
             retouch = 0.25,
+            enhance = 0.8,
+            portrait = Portrait(skinLevel = 0.42, faceHeight = 0.27),
         )
         assertEquals(recipe, roundTrip(recipe))
     }
@@ -47,7 +49,8 @@ class SerializationTest {
             {"presetId":"passport-35x45","crop":{"centerX":0.4,"centerY":0.6,"scale":2.0,"rotationDegrees":1.5},
              "exposure":0.1,"contrast":0.2,"warmth":-0.1,"tint":0.15,"saturation":0.3,
              "background":{"mode":"REPLACE","blurStrength":0.5,"replaceColorArgb":4294967295,
-               "touchUps":[{"mode":"KEEP","radius":0.03,"points":[{"x":0.1,"y":0.2}]}]},"retouch":0.2}
+               "touchUps":[{"mode":"KEEP","radius":0.03,"points":[{"x":0.1,"y":0.2}]}]},"retouch":0.2,
+             "enhance":0.7,"portrait":{"skinLevel":0.45,"faceHeight":0.25}}
         """.trimIndent()
         val expected = EditRecipe(
             presetId = "passport-35x45",
@@ -59,6 +62,8 @@ class SerializationTest {
             saturation = 0.3,
             background = BackgroundConfig(BackgroundMode.REPLACE, 0.5, BackgroundConfig.WHITE, listOf(MaskStroke(BrushMode.KEEP, 0.03, listOf(MaskPoint(0.1, 0.2))))),
             retouch = 0.2,
+            enhance = 0.7,
+            portrait = Portrait(0.45, 0.25),
         )
         assertEquals(expected, Json.decodeFromString<EditRecipe>(json))
     }
