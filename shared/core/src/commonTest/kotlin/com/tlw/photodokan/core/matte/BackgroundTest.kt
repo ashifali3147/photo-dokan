@@ -2,6 +2,9 @@ package com.tlw.photodokan.core.matte
 
 import com.tlw.photodokan.core.model.BackgroundConfig
 import com.tlw.photodokan.core.model.BackgroundMode
+import com.tlw.photodokan.core.model.BrushMode
+import com.tlw.photodokan.core.model.MaskPoint
+import com.tlw.photodokan.core.model.MaskStroke
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -138,6 +141,17 @@ class BackgroundTest {
             val difference = abs(blue(big[y * w + x]) - blue(half[(y / 2) * (w / 2) + x / 2]))
             assertTrue(difference <= 3, "$difference apart at ($x, $y)")
         }
+    }
+
+    @Test
+    fun touchUpsChangeWhatIsReplaced() {
+        val erased = BackgroundConfig(
+            mode = BackgroundMode.REPLACE,
+            touchUps = listOf(MaskStroke(BrushMode.ERASE, 0.05, listOf(MaskPoint(0.5, 0.5)))),
+        )
+        val out = Background.apply(photo, w, h, personInTheMiddle(), erased)
+        assertEquals(rgb(255, 255, 255), out[200 * w + 200], "erased from the person")
+        assertEquals(rgb(200, 30, 30), out[150 * w + 150], "the rest of the person stays")
     }
 
     @Test

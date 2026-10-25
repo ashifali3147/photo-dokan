@@ -17,18 +17,20 @@ object Background {
     const val MAX_BLUR = 0.04
 
     /**
-     * [argb], a [width] × [height] photo row by row, with its background changed as [config] says.
-     * KEEP gives the photo back unchanged.
+     * [argb], a [width] × [height] photo row by row, with its background changed as [config] says,
+     * behind the person in [matte] with the config's touch-ups painted on. KEEP gives the photo back
+     * unchanged.
      */
     fun apply(argb: IntArray, width: Int, height: Int, matte: Matte, config: BackgroundConfig): IntArray {
         require(width > 0 && height > 0 && argb.size == width * height) { "Need $width × $height pixels, had ${argb.size}" }
         if (changesNothing(config, height)) return argb.copyOf()
-        return apply(Cutout(argb, width, height, matte), config)
+        return apply(Cutout(argb, width, height, matte.touchedUp(config.touchUps, width.toDouble() / height)), config)
     }
 
     /**
      * The [cutout]'s photo with its background changed as [config] says: quicker than starting
-     * from the matte when only the background's settings change, as they do in the editor.
+     * from the matte when only the background's settings change, as they do in the editor. The
+     * cutout must already have [config]'s touch-ups painted on (see [touchedUp]).
      */
     fun apply(cutout: Cutout, config: BackgroundConfig): IntArray {
         val argb = cutout.argb

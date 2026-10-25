@@ -23,7 +23,10 @@ class SerializationTest {
             warmth = 0.1,
             tint = -0.05,
             saturation = -0.3,
-            background = BackgroundConfig(BackgroundMode.REPLACE, blurStrength = 0.0, replaceColorArgb = BackgroundConfig.LIGHT_BLUE),
+            background = BackgroundConfig(
+                BackgroundMode.REPLACE, blurStrength = 0.0, replaceColorArgb = BackgroundConfig.LIGHT_BLUE,
+                touchUps = listOf(MaskStroke(BrushMode.ERASE, 0.02, listOf(MaskPoint(0.25, 0.5), MaskPoint(0.3, 0.55)))),
+            ),
             retouch = 0.25,
         )
         assertEquals(recipe, roundTrip(recipe))
@@ -43,7 +46,8 @@ class SerializationTest {
         val json = """
             {"presetId":"passport-35x45","crop":{"centerX":0.4,"centerY":0.6,"scale":2.0,"rotationDegrees":1.5},
              "exposure":0.1,"contrast":0.2,"warmth":-0.1,"tint":0.15,"saturation":0.3,
-             "background":{"mode":"REPLACE","blurStrength":0.5,"replaceColorArgb":4294967295},"retouch":0.2}
+             "background":{"mode":"REPLACE","blurStrength":0.5,"replaceColorArgb":4294967295,
+               "touchUps":[{"mode":"KEEP","radius":0.03,"points":[{"x":0.1,"y":0.2}]}]},"retouch":0.2}
         """.trimIndent()
         val expected = EditRecipe(
             presetId = "passport-35x45",
@@ -53,7 +57,7 @@ class SerializationTest {
             warmth = -0.1,
             tint = 0.15,
             saturation = 0.3,
-            background = BackgroundConfig(BackgroundMode.REPLACE, 0.5, BackgroundConfig.WHITE),
+            background = BackgroundConfig(BackgroundMode.REPLACE, 0.5, BackgroundConfig.WHITE, listOf(MaskStroke(BrushMode.KEEP, 0.03, listOf(MaskPoint(0.1, 0.2))))),
             retouch = 0.2,
         )
         assertEquals(expected, Json.decodeFromString<EditRecipe>(json))
