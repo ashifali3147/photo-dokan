@@ -16,6 +16,9 @@ import kotlin.math.roundToInt
 /** How strong the studio look is on a new photo with a face, 0 to 1. */
 const val FIRST_ENHANCE = 1.0
 
+/** How much a new photo's skin is smoothed: a light touch, as every customer expects. */
+const val FIRST_RETOUCH = 0.4
+
 /**
  * How a new photo opens in the editor: cropped to the customer's face on [preset]'s guide, its
  * colour balanced from the skin and given the studio look; or whole and as shot without a face.
@@ -32,8 +35,8 @@ fun firstEdit(preview: PhotoPreview, preset: PhotoSizePreset, faces: List<Face>?
 }
 
 /**
- * [recipe] with [light]'s colour balance and, with a [portrait], the studio look at full strength
- * and skin as fair as is usual for its shade (see [StudioLook.fairnessFor]). The look's curve
+ * [recipe] with [light]'s colour balance and, with a [portrait], the studio look at full strength,
+ * skin as fair as is usual for its shade (see [StudioLook.fairnessFor]) and lightly smoothed. The look's curve
  * lights the face, so then the brightness slider is only used to take down a photo that is too
  * bright.
  */
@@ -44,6 +47,7 @@ fun studioLight(recipe: EditRecipe, light: AutoLight.Suggestion?, portrait: Port
         exposure = min(0.0, balanced.exposure),
         enhance = FIRST_ENHANCE,
         fairness = (StudioLook.fairnessFor(portrait.skinLevel) * 20).roundToInt() / 20.0,
+        retouch = FIRST_RETOUCH,
         portrait = portrait,
     )
 }

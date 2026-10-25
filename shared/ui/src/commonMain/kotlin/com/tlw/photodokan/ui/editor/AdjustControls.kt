@@ -42,7 +42,7 @@ enum class Adjustment(val label: String) {
 }
 
 /**
- * The studio look's Enhance slider, Fair skin when the photo has a face ([onFairness]), then one
+ * The studio look's Enhance slider, Fair skin and Smooth skin when the photo has a face, then one
  * slider per [Adjustment]. Dragging updates the photo live; letting go calls [onCommit], so a
  * whole drag is one undo step. [onAuto], when given, sets the light and colour from the face.
  */
@@ -55,9 +55,11 @@ fun AdjustControls(
     onAuto: (() -> Unit)? = null,
     onEnhance: (Double) -> Unit = {},
     onFairness: ((Double) -> Unit)? = null,
+    onRetouch: ((Double) -> Unit)? = null,
 ) {
     StrengthSlider("Enhance", recipe.enhance, onEnhance, onCommit)
     if (onFairness != null) StrengthSlider("Fair skin", recipe.fairness, onFairness, onCommit)
+    if (onRetouch != null) StrengthSlider("Smooth skin", recipe.retouch, onRetouch, onCommit)
     for (adjustment in Adjustment.entries) {
         val value = adjustment.valueIn(recipe)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

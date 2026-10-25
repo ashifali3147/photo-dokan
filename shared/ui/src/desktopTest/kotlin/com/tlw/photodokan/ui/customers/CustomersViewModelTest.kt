@@ -539,6 +539,7 @@ class CustomersViewModelTest {
         assertEquals(1.0, recipe.enhance)
         assertEquals(0.49, assertNotNull(recipe.portrait).skinLevel, 0.03)
         assertEquals(0.35, recipe.fairness, 0.051, "brown skin is made a little fairer")
+        assertEquals(0.4, recipe.retouch, "and lightly smoothed")
         assertEquals(0.0, recipe.exposure)
         assertTrue(recipe.tint > 0.3, "less green: $recipe")
         assertEquals(0.0, recipe.contrast)
@@ -565,7 +566,7 @@ class CustomersViewModelTest {
     }
 
     @Test
-    fun fairSkinIsOneUndoStepAndResetsWithTheLight() {
+    fun fairAndSmoothSkinAreUndoStepsAndResetWithTheLight() {
         finder.faces = listOf(face())
         withFinder()
         vm.import(PhotoSource("IMG_3.jpg") { greenishPortrait })
@@ -576,10 +577,14 @@ class CustomersViewModelTest {
         vm.commit()
         vm.undo()
         assertEquals(usual, state.edit!!.recipe.fairness)
+        vm.retouch(1.0); vm.commit()
+        assertEquals(1.0, state.edit!!.recipe.retouch)
         vm.resetAdjustments()
         assertEquals(0.0, state.edit!!.recipe.fairness)
+        assertEquals(0.0, state.edit!!.recipe.retouch)
         vm.autoLight()
         assertEquals(usual, state.edit!!.recipe.fairness, "Auto sets the usual again")
+        assertEquals(0.4, state.edit!!.recipe.retouch)
     }
 
     @Test

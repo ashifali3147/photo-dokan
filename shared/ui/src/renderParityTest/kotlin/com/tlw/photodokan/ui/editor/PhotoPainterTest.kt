@@ -95,6 +95,13 @@ class PhotoPainterTest {
     }
 
     @Test
+    fun smoothingPaintsOnItsOwn() {
+        val look = Painting(BackgroundConfig(mode = BackgroundMode.KEEP), enhance = 0.0, portrait = Portrait(skinLevel = 0.4, faceHeight = 0.3), retouch = 1.0)
+        assertTrue(look.looks)
+        assertTrue(!look.copy(portrait = null).looks, "no face, nothing to smooth")
+    }
+
+    @Test
     fun theLookWorksWithTheBackgroundAsShot() {
         val image = photo(0xff96624a.toInt())
         val look = Painting(BackgroundConfig(mode = BackgroundMode.KEEP), enhance = 1.0, portrait = Portrait(skinLevel = 0.4, faceHeight = 0.3))
