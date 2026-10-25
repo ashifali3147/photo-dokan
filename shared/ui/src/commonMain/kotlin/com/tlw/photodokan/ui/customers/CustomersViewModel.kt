@@ -22,7 +22,7 @@ import com.tlw.photodokan.core.model.PhotoSizePreset
 import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.ui.editor.Adjustment
 import com.tlw.photodokan.ui.editor.renderCrop
-import com.tlw.photodokan.ui.editor.withBackground
+import com.tlw.photodokan.ui.editor.BackgroundPainter
 import com.tlw.photodokan.ui.photo.PhotoPreview
 import com.tlw.photodokan.ui.photo.PhotoSource
 import com.tlw.photodokan.ui.photo.decodePreview
@@ -150,6 +150,9 @@ class CustomersViewModel(
     val canChangeBackground: Boolean get() = matter != null
 
     private var backgroundJob: Job? = null
+
+    /** Keeps the open photo's person cut out, so changing the background's settings is quick. */
+    private val painter = BackgroundPainter()
 
     fun presetOf(recipe: EditRecipe): PhotoSizePreset = presets.firstOrNull { it.id == recipe.presetId } ?: presets.first()
 
@@ -410,7 +413,7 @@ class CustomersViewModel(
         backgroundJob?.cancel()
         backgroundJob = viewModelScope.launch(work) {
             val image = try {
-                edit.preview.image.withBackground(matte, wanted)
+                painter.paint(edit.preview.image, matte, wanted)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -478,7 +481,7 @@ class CustomersViewModel(
         val image = when {
             wanted.mode == BackgroundMode.KEEP -> edit.preview.image
             edit.backgroundFor == wanted && edit.background != null -> edit.background
-            else -> edit.preview.image.withBackground(matte, wanted)
+            else -> painter.paint(edit.preview.image, matte, wanted)
         }
         val rect = CropGeometry.rect(image.width, image.height, preset.aspect, edit.live.crop)
         val width = mmToPixels(preset.size.width, FINAL_DPI).roundToInt()
