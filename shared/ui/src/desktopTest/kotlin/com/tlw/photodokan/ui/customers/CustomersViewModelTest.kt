@@ -535,11 +535,32 @@ class CustomersViewModelTest {
         vm.import(PhotoSource("IMG_3.jpg") { greenishPortrait })
 
         val recipe = assertNotNull(state.edit).recipe
-        assertTrue(recipe.exposure > 0.3, "brighter: $recipe")
+        // The studio look's curve brightens the dim face, so the brightness slider stays put.
+        assertEquals(1.0, recipe.enhance)
+        assertEquals(0.49, assertNotNull(recipe.portrait).skinLevel, 0.03)
+        assertEquals(0.0, recipe.exposure)
         assertTrue(recipe.tint > 0.3, "less green: $recipe")
         assertEquals(0.0, recipe.contrast)
         assertNull(state.message)
         assertEquals(1, finder.searches)
+    }
+
+    @Test
+    fun theStudioLookBrightensTheFaceAndCanBeTurnedDown() {
+        finder.faces = listOf(face())
+        withFinder()
+        vm.import(PhotoSource("IMG_3.jpg") { greenishPortrait })
+        val lit = shownAt(200, 270) // the face
+        vm.enhance(0.0)
+        val asShot = shownAt(200, 270)
+        assertTrue((lit and 0xff00) > (asShot and 0xff00), "the look is brighter: ${lit.toString(16)} against ${asShot.toString(16)}")
+        vm.commit()
+        vm.undo()
+        assertEquals(1.0, state.edit!!.recipe.enhance, "a whole slide is one undo step")
+        vm.resetAdjustments()
+        assertEquals(0.0, state.edit!!.recipe.enhance, "reset turns the look off")
+        vm.autoLight()
+        assertEquals(1.0, state.edit!!.recipe.enhance, "and Auto turns it back on")
     }
 
     @Test
@@ -722,7 +743,7 @@ class CustomersViewModelTest {
         val edit = assertNotNull(state.edit)
         assertEquals(BackgroundConfig(), edit.recipe.background)
         assertEquals(BackgroundMode.BLUR, edit.recipe.background.mode)
-        assertEquals(edit.recipe.background, edit.backgroundFor, "worked out once the person was separated")
+        assertEquals(edit.recipe.background, edit.paintedFor?.background, "worked out once the person was separated")
         assertFalse(edit.backgroundPending)
         assertTrue(vm.canChangeBackground)
     }
@@ -778,7 +799,7 @@ class CustomersViewModelTest {
         vm.setBackground(white)
         vm.undo()
         assertEquals(BackgroundConfig(), state.edit!!.recipe.background)
-        assertEquals(BackgroundConfig(), state.edit!!.backgroundFor, "the blur is shown again")
+        assertEquals(BackgroundConfig(), state.edit!!.paintedFor?.background, "the blur is shown again")
         assertEquals(0x808080, shownAt(2, 10))
         vm.redo()
         assertEquals(0xffffff, shownAt(2, 10))
@@ -791,7 +812,7 @@ class CustomersViewModelTest {
         val softer = BackgroundConfig(blurStrength = 0.8)
         vm.previewBackground(BackgroundConfig(blurStrength = 0.6))
         vm.previewBackground(softer)
-        assertEquals(softer, state.edit!!.backgroundFor)
+        assertEquals(softer, state.edit!!.paintedFor?.background)
         vm.commit()
         vm.undo()
         assertEquals(BackgroundConfig(), state.edit!!.recipe.background)

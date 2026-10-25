@@ -42,9 +42,9 @@ enum class Adjustment(val label: String) {
 }
 
 /**
- * One slider per [Adjustment]. Dragging updates the photo live through [onPreview]; letting go
- * calls [onCommit], so a whole drag is one undo step. [onAuto], when given, sets the light and
- * colour from the face.
+ * The studio look's Enhance slider, then one slider per [Adjustment]. Dragging updates the photo
+ * live through [onEnhance] or [onPreview]; letting go calls [onCommit], so a whole drag is one undo
+ * step. [onAuto], when given, sets the light and colour from the face.
  */
 @Composable
 fun AdjustControls(
@@ -53,7 +53,19 @@ fun AdjustControls(
     onCommit: () -> Unit,
     onReset: () -> Unit,
     onAuto: (() -> Unit)? = null,
+    onEnhance: (Double) -> Unit = {},
 ) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("Enhance", Modifier.width(96.dp))
+        Slider(
+            value = recipe.enhance.toFloat(),
+            onValueChange = { onEnhance((it * 20).roundToInt() / 20.0) },
+            onValueChangeFinished = onCommit,
+            valueRange = 0f..1f,
+            modifier = Modifier.weight(1f),
+        )
+        Text("${(recipe.enhance * 100).roundToInt()}", Modifier.width(44.dp))
+    }
     for (adjustment in Adjustment.entries) {
         val value = adjustment.valueIn(recipe)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
