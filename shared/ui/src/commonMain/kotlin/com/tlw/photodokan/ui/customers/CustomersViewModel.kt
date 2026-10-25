@@ -4,10 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.viewModelScope
 import com.tlw.photodokan.core.face.Face
-import com.tlw.photodokan.core.face.FaceCrop
 import com.tlw.photodokan.core.face.FaceFit
 import com.tlw.photodokan.core.geometry.mmToPixels
-import com.tlw.photodokan.core.imaging.AutoLight
 import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropGeometry
 import com.tlw.photodokan.core.library.Customer
@@ -25,6 +23,9 @@ import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.ui.editor.Adjustment
 import com.tlw.photodokan.ui.editor.renderCrop
 import com.tlw.photodokan.ui.editor.BackgroundPainter
+import com.tlw.photodokan.ui.editor.faceFit
+import com.tlw.photodokan.ui.editor.faceLight
+import com.tlw.photodokan.ui.editor.firstEdit
 import com.tlw.photodokan.ui.photo.PhotoPreview
 import com.tlw.photodokan.ui.photo.PhotoSource
 import com.tlw.photodokan.ui.photo.decodePreview
@@ -210,11 +211,9 @@ class CustomersViewModel(
             val draft = Draft(source.name, original, number = library.nextNumber(clock()))
             val preset = presets.first()
             val found = findFaces(preview)
-            val fit = found?.let { fitFace(preview, preset, it) }
-            val light = found?.let { autoLight(preview, it) }
-            val recipe = EditRecipe(presetId = preset.id, crop = fit?.crop ?: CropConfig()).let { light?.applyTo(it) ?: it }
-            val edit = EditSession.start(preview, recipe, saved = null, faces = found)
-            _state.update { it.copy(draft = draft, selected = null, edit = edit, message = found?.let { faceMessage(fit) }, messageIsError = false) }
+            val first = firstEdit(preview, preset, found)
+            val edit = EditSession.start(preview, first.recipe, saved = null, faces = found)
+            _state.update { it.copy(draft = draft, selected = null, edit = edit, message = found?.let { faceMessage(first.fit) }, messageIsError = false) }
             findMatte(preview, customer = null)
         }
     }
@@ -250,8 +249,8 @@ class CustomersViewModel(
     fun setPreset(preset: PhotoSizePreset) = step { edit ->
         val image = edit.preview.image
         val faces = edit.faces
-        val fittedBefore = faces != null && fitFace(edit.preview, presetOf(edit.live), faces)?.crop == edit.live.crop
-        val crop = (if (fittedBefore) fitFace(edit.preview, preset, faces!!)?.crop else null)
+        val fittedBefore = faces != null && faceFit(edit.preview, presetOf(edit.live), faces)?.crop == edit.live.crop
+        val crop = (if (fittedBefore) faceFit(edit.preview, preset, faces!!)?.crop else null)
             ?: CropGeometry.clamp(image.width, image.height, preset.aspect, edit.live.crop)
         edit.live.copy(presetId = preset.id, crop = crop)
     }
@@ -262,7 +261,7 @@ class CustomersViewModel(
         if (faces == null) return
         launchWork {
             val found = edit.faces ?: findFaces(edit.preview).orEmpty()
-            val fit = fitFace(edit.preview, presetOf(edit.live), found)
+            val fit = faceFit(edit.preview, presetOf(edit.live), found)
             _state.update { s -> s.copy(edit = s.edit?.copy(faces = found), message = faceMessage(fit), messageIsError = false) }
             if (fit != null) step { it.live.copy(crop = fit.crop) }
         }
@@ -277,7 +276,7 @@ class CustomersViewModel(
         if (faces == null) return
         launchWork {
             val found = edit.faces ?: findFaces(edit.preview).orEmpty()
-            val light = autoLight(edit.preview, found)
+            val light = faceLight(edit.preview, found)
             _state.update { s ->
                 s.copy(
                     edit = s.edit?.copy(faces = found),
@@ -352,17 +351,6 @@ class CustomersViewModel(
         } catch (e: Exception) {
             null // cropping by hand still works
         }
-    }
-
-    private fun fitFace(preview: PhotoPreview, preset: PhotoSizePreset, faces: List<Face>): FaceFit? =
-        FaceCrop.main(faces)?.let { FaceCrop.fit(preview.image.width, preview.image.height, preset, it) }
-
-    /** Light and colour for the main face on [preview], or null without one clear enough to judge. */
-    private fun autoLight(preview: PhotoPreview, faces: List<Face>): AutoLight.Suggestion? {
-        val face = FaceCrop.main(faces) ?: return null
-        val image = preview.image
-        val argb = IntArray(image.width * image.height).also { image.readPixels(it) }
-        return AutoLight.suggest(argb, image.width, image.height, face)
     }
 
     /** What the operator should know about the automatic crop; nothing when it simply worked. */
