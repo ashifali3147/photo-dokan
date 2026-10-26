@@ -73,13 +73,13 @@ class PhoneEditorTest {
     @Test
     fun tappingTheOpenToolFoldsItsControlsAway() = runComposeUiTest {
         openFirstCustomerOnAPhone()
-        assertTrue(shows("Zoom"))
+        assertTrue(shows("Zoom in"))
         onNodeWithText("Crop").performClick()
         waitForIdle()
-        assertTrue(!shows("Zoom"), "the crop controls fold away")
+        assertTrue(!shows("Zoom in"), "the crop controls fold away")
         onNodeWithText("Crop").performClick()
         waitForIdle()
-        assertTrue(shows("Zoom"), "and come back")
+        assertTrue(shows("Zoom in"), "and come back")
     }
 
     @Test

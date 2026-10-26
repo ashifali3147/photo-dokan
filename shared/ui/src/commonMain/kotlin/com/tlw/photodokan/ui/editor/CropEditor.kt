@@ -6,15 +6,11 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +48,9 @@ import com.tlw.photodokan.core.model.PhotoSizePreset
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import com.tlw.photodokan.ui.components.StudioSlider
+import com.tlw.photodokan.ui.components.QuietButton
+import com.tlw.photodokan.ui.components.ChoiceRow
+import com.tlw.photodokan.ui.components.ChoiceChip
 
 /** How one photo-size crop changes, given the photo's size and the frame's aspect. */
 typealias CropChange = (imageWidth: Int, imageHeight: Int, aspect: Double, crop: CropConfig) -> CropConfig
@@ -213,17 +212,14 @@ fun CropControls(
         onCropChange(change)
         onCommit()
     }
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (p in presets) {
-            FilterChip(selected = p.id == preset.id, onClick = { onPreset(p) }, label = { Text(p.name) })
-        }
+    ChoiceRow {
+        for (p in presets) ChoiceChip(p.name, selected = p.id == preset.id, onClick = { onPreset(p) })
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("Zoom")
-        OutlinedButton(onClick = { step { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1 / 1.2) } }) { Text("−") }
-        OutlinedButton(onClick = { step { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1.2) } }) { Text("+") }
-        onFitFace?.let { TextButton(onClick = it) { Text("Fit face") } }
-        TextButton(onClick = onReset) { Text("Reset") }
+    ChoiceRow {
+        onFitFace?.let { QuietButton(it) { Text("Fit face") } }
+        QuietButton({ step { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1 / 1.2) } }) { Text("Zoom out") }
+        QuietButton({ step { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1.2) } }) { Text("Zoom in") }
+        QuietButton(onReset) { Text("Reset") }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("Straighten ${formatDegrees(crop.rotationDegrees)}", Modifier.width(120.dp))
