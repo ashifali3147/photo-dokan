@@ -99,6 +99,37 @@ class PrintProfileTest {
     }
 
     @Test
+    fun keepsTheToneWithTheSettings() {
+        val calibration = PrintCalibration(scaleX = 0.992)
+        val tone = PrintTone(brightness = 3, colour = 1)
+        FilePrintProfileStore(file).save(PrintProfile("EPSON L3360 Series", devMode(), calibration, tone))
+        val loaded = FilePrintProfileStore(file).load()!!
+        assertEquals(tone, loaded.tone)
+        assertEquals(calibration, loaded.calibration)
+        assertEquals(PrintTone.NONE, PrintProfile("EPSON L3360 Series", devMode()).tone)
+    }
+
+    @Test
+    fun loadsProfilesSavedBeforeTheToneExisted() {
+        val bytes = devMode()
+        file.parentFile.mkdirs()
+        DataOutputStream(file.outputStream()).use { out ->
+            out.writeInt(0x50445050)
+            out.writeInt(2)
+            out.writeUTF("EPSON L3360 Series")
+            out.writeInt(bytes.size)
+            out.write(bytes)
+            out.writeDouble(1.01)
+            out.writeDouble(0.99)
+            out.writeDouble(0.5)
+            out.writeDouble(-0.5)
+        }
+        val loaded = FilePrintProfileStore(file).load()!!
+        assertEquals(PrintCalibration(1.01, 0.99, 0.5, -0.5), loaded.calibration)
+        assertEquals(PrintTone.NONE, loaded.tone)
+    }
+
+    @Test
     fun loadsProfilesSavedBeforeCalibrationExisted() {
         val bytes = devMode()
         file.parentFile.mkdirs()

@@ -16,6 +16,8 @@ import com.tlw.photodokan.print.PdfSheetReader
 import com.tlw.photodokan.print.PrintPage
 import com.tlw.photodokan.print.PhotoSettings
 import com.tlw.photodokan.print.PrintCalibration
+import com.tlw.photodokan.print.PrintTone
+import com.tlw.photodokan.print.ToneStrip
 import com.tlw.photodokan.print.PrintDocument
 import com.tlw.photodokan.print.PrintException
 import com.tlw.photodokan.print.SheetPrinter
@@ -67,7 +69,7 @@ class PrintViewModelTest {
     /**
      * Records what it is asked to print, or fails with [failure]. Its settings window "saves"
      * when [operatorSaves] is set, and cancels otherwise. Like the Windows printer, it keeps a
-     * size correction only once photo settings are saved.
+     * size correction and print tone only once photo settings are saved.
      */
     private class FakePrinter(val dpi: Double = 100.0, var failure: String? = null) : SheetPrinter {
         val jobs = mutableListOf<Pair<PrintDocument, String>>()
@@ -86,6 +88,12 @@ class PrintViewModelTest {
         override fun saveCalibration(calibration: PrintCalibration) {
             if (settings != PhotoSettings.Saved) throw PrintException("Save the Photo settings first: the size correction goes with them.")
             savedCalibration = calibration
+        }
+        var savedTone = PrintTone.NONE
+        override fun tone() = savedTone.takeIf { settings == PhotoSettings.Saved }
+        override fun saveTone(tone: PrintTone) {
+            if (settings != PhotoSettings.Saved) throw PrintException("Save the Photo settings first: the print colours go with them.")
+            savedTone = tone
         }
         override fun choosePhotoSettings(): Boolean {
             settingsFailure?.let { throw PrintException(it) }
@@ -542,6 +550,75 @@ class PrintViewModelTest {
         assertEquals(PrintCalibration.NONE, state.calibration)
         assertEquals("Size correction removed.", state.message)
         assertFalse(state.calibrating)
+    }
+
+    /** A printer with photo settings saved, and the Match colours window open. */
+    private fun startMatchingTone(saved: PrintTone = PrintTone.NONE) {
+        printer.settings = PhotoSettings.Saved
+        printer.savedTone = saved
+        start(PrintQueue().add(customer(), 5))
+        vm.refresh()
+        vm.openTone()
+    }
+
+    @Test
+    fun matchingColoursIsOfferedOnceThePhotoSettingsAreSaved() {
+        start()
+        vm.refresh()
+        assertNull(state.tone)
+        vm.openTone()
+        assertFalse(state.matchingTone, "nothing to match without photo settings")
+
+        vm.choosePhotoSettings()
+        assertEquals(PrintTone.NONE, state.tone)
+        vm.openTone()
+        assertTrue(state.matchingTone)
+    }
+
+    @Test
+    fun theColourStripPrintsWithoutTheSavedToneOrTouchingTheQueue() {
+        startMatchingTone(saved = PrintTone(brightness = 2))
+        val before = store.saved
+        vm.printToneStrip()
+
+        val (document, jobName) = printer.jobs.single()
+        assertEquals("Photo Dokan colour strip", jobName)
+        assertFalse(document.applyTone, "the patches carry their own tones")
+        assertEquals(ToneStrip.PATCHES, document.pages.single().items.count { it is PageItem.Image })
+        assertEquals(before, store.saved)
+        assertTrue(state.matchingTone)
+        assertFalse(state.printing)
+    }
+
+    @Test
+    fun thePatchNumberBecomesTheSavedTone() {
+        startMatchingTone()
+        vm.saveTone(" 9 ")
+
+        assertEquals(ToneStrip.toneOf(9), printer.savedTone)
+        assertEquals(ToneStrip.toneOf(9), state.tone)
+        assertFalse(state.matchingTone)
+        assertEquals("Print colours saved: brighter +2, more colour +1.", state.message)
+    }
+
+    @Test
+    fun aNumberNotOnTheStripIsRefused() {
+        startMatchingTone()
+        for (typed in listOf("", "0", "25", "x")) {
+            vm.saveTone(typed)
+            assertEquals("Enter the number under the patch, from 1 to 24.", state.toneError, "typed \"$typed\"")
+        }
+        assertTrue(state.matchingTone)
+        assertEquals(PrintTone.NONE, printer.savedTone)
+    }
+
+    @Test
+    fun theToneCanBeRemoved() {
+        startMatchingTone(saved = PrintTone(3, 1))
+        vm.removeTone()
+        assertEquals(PrintTone.NONE, printer.savedTone)
+        assertEquals(PrintTone.NONE, state.tone)
+        assertFalse(state.matchingTone)
     }
 
     @Test
