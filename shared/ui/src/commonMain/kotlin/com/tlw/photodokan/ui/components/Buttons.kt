@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,52 +38,37 @@ import com.tlw.photodokan.ui.theme.StudioTheme
 
 private val ButtonShape = RoundedCornerShape(14.dp)
 
+/** What a [PrimaryButton] says by its colour: the main action (accent) or that something is done (ok). */
+enum class ButtonTone { Accent, Ok }
+
 /**
- * The one physical action on a screen, shoot or print: a lit safelight. Use at most one per
- * screen, so it is always obvious what to press.
+ * The one main action on a screen: Print, Add to sheet, Save. It is lit very slightly from above
+ * and has a soft glow, so it is always obvious what to press. Use at most one per screen.
+ * [ButtonTone.Ok] turns it green once the action is already done ("On the sheet").
  */
 @Composable
-fun SafelightButton(
+fun PrimaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    tone: ButtonTone = ButtonTone.Accent,
     content: @Composable RowScope.() -> Unit,
 ) {
     val c = StudioTheme.colors
+    val top = if (tone == ButtonTone.Ok) c.okTop else c.accentTop
+    val bottom = if (tone == ButtonTone.Ok) c.okBottom else c.accentBottom
     StudioButton(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
-        fill = Brush.verticalGradient(listOf(c.safelightTop, c.safelight, c.safelightBottom)),
-        contentColor = c.onSafelight,
-        highlight = Color.White.copy(alpha = 0.28f),
-        glow = c.safelightTop,
+        fill = Brush.verticalGradient(listOf(top, bottom)),
+        contentColor = if (tone == ButtonTone.Ok) c.onOk else c.onAccent,
+        glow = if (tone == ButtonTone.Ok) c.okGlow else c.accentGlow,
         content = content,
     )
 }
 
-/** Moves on without printing ("Next", "Add to sheet"): bright, but not the safelight. */
-@Composable
-fun GoButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    content: @Composable RowScope.() -> Unit,
-) {
-    val c = StudioTheme.colors
-    StudioButton(
-        onClick = onClick,
-        modifier = modifier,
-        enabled = enabled,
-        fill = Brush.verticalGradient(listOf(c.goTop, c.goBottom)),
-        contentColor = c.onGo,
-        highlight = Color.White.copy(alpha = if (c.isDark) 0.8f else 0.15f),
-        glow = null,
-        content = content,
-    )
-}
-
-/** Everything else a screen offers: an outline in the colour of the text. */
+/** Everything else a screen offers: a white button with a thin outline. */
 @Composable
 fun QuietButton(
     onClick: () -> Unit,
@@ -92,19 +79,18 @@ fun QuietButton(
     val c = StudioTheme.colors
     StudioButton(
         onClick = onClick,
-        modifier = modifier.border(BorderStroke(1.dp, c.line), ButtonShape),
+        modifier = modifier.border(BorderStroke(1.dp, c.outline), ButtonShape),
         enabled = enabled,
-        fill = SolidColor(Color.Transparent),
+        fill = SolidColor(c.surface),
         contentColor = c.text,
-        highlight = null,
         glow = null,
-        minHeight = 44.dp,
+        minHeight = 48.dp,
         textStyle = MaterialTheme.typography.labelLarge,
         content = content,
     )
 }
 
-/** A round button floating over a photo or the window, e.g. Back; [label] is read out instead of the icon. */
+/** A round button floating over a photo or the camera, e.g. Close; [label] is read out instead of the icon. */
 @Composable
 fun GlassIconButton(
     onClick: () -> Unit,
@@ -113,14 +99,14 @@ fun GlassIconButton(
     icon: @Composable () -> Unit,
 ) {
     val c = StudioTheme.colors
+    val source = remember { MutableInteractionSource() }
     Box(
         modifier
-            .size(44.dp)
+            .size(48.dp)
+            .pressScale(source)
             .clip(CircleShape)
             .background(c.glass)
-            .border(1.dp, c.line, CircleShape)
-            .topHighlight(c.edgeHighlight)
-            .clickable(role = Role.Button, onClick = onClick)
+            .clickable(interactionSource = source, indication = null, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
@@ -135,23 +121,23 @@ private fun StudioButton(
     enabled: Boolean,
     fill: Brush,
     contentColor: Color,
-    highlight: Color?,
     glow: Color?,
-    minHeight: Dp = 52.dp,
+    minHeight: Dp = 56.dp,
     shape: Shape = ButtonShape,
     textStyle: TextStyle = MaterialTheme.typography.titleMedium,
     content: @Composable RowScope.() -> Unit,
 ) {
     val c = StudioTheme.colors
+    val source = remember { MutableInteractionSource() }
     val lit = enabled && glow != null
     Row(
         modifier
+            .pressScale(source)
             .defaultMinSize(minHeight = minHeight)
             .then(if (lit) Modifier.shadow(14.dp, shape, ambientColor = glow!!, spotColor = glow) else Modifier)
             .clip(shape)
-            .background(if (enabled) fill else SolidColor(c.surfaceHigh))
-            .then(if (enabled && highlight != null) Modifier.topHighlight(highlight) else Modifier)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .background(if (enabled) fill else SolidColor(c.well))
+            .clickable(interactionSource = source, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 20.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,

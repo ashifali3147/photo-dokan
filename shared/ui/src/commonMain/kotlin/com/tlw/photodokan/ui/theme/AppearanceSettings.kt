@@ -21,7 +21,7 @@ fun AppearanceSettings(settings: ThemeSettings = koinInject()) = Column(vertical
     val mode by settings.mode.collectAsState()
     Text("Appearance", style = MaterialTheme.typography.titleLarge)
     Text(
-        "Dark is easier on the eyes in a dim studio, light suits a bright shop counter. Auto follows the device.",
+        "Light is easiest in a bright shop, dark suits a dim studio or the evening. Auto follows the device.",
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

@@ -34,11 +34,11 @@ import kotlin.test.assertEquals
 class ComponentsTest {
 
     @Test
-    fun aDisabledSafelightCannotBePressed() = runComposeUiTest {
+    fun aDisabledMainButtonCannotBePressed() = runComposeUiTest {
         var prints = 0
         var enabled by mutableIntStateOf(1)
         setContent {
-            PhotoDokanTheme { SafelightButton(onClick = { prints++ }, enabled = enabled == 1) { Text("Print") } }
+            PhotoDokanTheme { PrimaryButton(onClick = { prints++ }, enabled = enabled == 1) { Text("Print") } }
         }
         onNodeWithText("Print").performClick()
         assertEquals(1, prints)
@@ -82,17 +82,30 @@ class ComponentsTest {
     }
 
     @Test
-    fun numbersReadLikeFilmFrames() = runComposeUiTest {
-        assertEquals("▸0012", frameNumber("0012"))
-        setContent { PhotoDokanTheme { FrameNumber("0012") } }
+    fun customerNumbersAreAnnounced() = runComposeUiTest {
+        setContent { PhotoDokanTheme { CustomerNumber("0012") } }
         onNodeWithContentDescription("Number 0012").assertExists()
+    }
+
+    @Test
+    fun theChosenCopyCountIsSelected() = runComposeUiTest {
+        setContent {
+            PhotoDokanTheme {
+                var copies by remember { mutableIntStateOf(5) }
+                CopyChoices(copies, listOf(4, 5, 10), { copies = it })
+            }
+        }
+        onNodeWithContentDescription("5 copies").assertIsSelected()
+        onNodeWithContentDescription("10 copies").performClick()
+        onNodeWithContentDescription("10 copies").assertIsSelected()
+        onNodeWithContentDescription("5 copies").assertIsNotSelected()
     }
 
     /** Saved to build/reports/components for checking by eye; fails only if something can't draw. */
     @Test
     fun galleryDrawsInBothThemes() {
         for (mode in listOf(ThemeMode.Dark, ThemeMode.Light)) runComposeUiTest {
-            setContent { Box(Modifier.size(1180.dp, 470.dp)) { ComponentGallery(mode) } }
+            setContent { Box(Modifier.size(1180.dp, 560.dp)) { ComponentGallery(mode) } }
             val image = onRoot().captureToImage().toAwtImage()
             val folder = File("build/reports/components").apply { mkdirs() }
             ImageIO.write(image, "png", File(folder, "gallery-${mode.name.lowercase()}.png"))

@@ -9,14 +9,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import com.tlw.photodokan.ui.components.Notice
+import com.tlw.photodokan.ui.components.PrimaryButton
+import com.tlw.photodokan.ui.components.QuietButton
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,12 +46,12 @@ fun StationSettings(viewModel: StationViewModel = koinViewModel()) {
 
 @Composable
 private fun HostSettings(state: StationState, viewModel: StationViewModel) = Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Text("Print Station", style = MaterialTheme.typography.titleLarge)
+    Text("Print from the phone", style = MaterialTheme.typography.titleLarge)
     Text(
         if (state.running) "Phones on the shop's Wi-Fi can send sheets to this PC." else "Not running: phones can't send sheets to this PC.",
         style = MaterialTheme.typography.bodyLarge,
     )
-    Button(onClick = viewModel::showInvite) { Text("Pair a phone") }
+    QuietButton(onClick = viewModel::showInvite) { Text("Pair a phone") }
     Message(state)
 
     var removing by remember { mutableStateOf<PairedDevice?>(null) }
@@ -94,16 +95,16 @@ private fun HostSettings(state: StationState, viewModel: StationViewModel) = Col
 
 @Composable
 private fun PhoneSettings(state: StationState, viewModel: StationViewModel) = Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Text("Print Station", style = MaterialTheme.typography.titleLarge)
+    Text("Print from the phone", style = MaterialTheme.typography.titleLarge)
     val scan = rememberQrScanner(viewModel::pair)
     val link = state.link
     if (link == null) {
         Text("Pair this phone with the studio PC to send sheets to it over the shop's Wi-Fi.", style = MaterialTheme.typography.bodyLarge)
-        Button(onClick = { scan?.invoke() }, enabled = scan != null && !state.busy) { Text("Pair with the PC") }
+        PrimaryButton(onClick = { scan?.invoke() }, enabled = scan != null && !state.busy) { Text("Pair with the PC") }
     } else {
         Text("Paired with ${link.stationName}.", style = MaterialTheme.typography.bodyLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = viewModel::check, enabled = !state.busy) { Text("Check connection") }
+            QuietButton(onClick = viewModel::check, enabled = !state.busy) { Text("Check connection") }
             TextButton(onClick = viewModel::forget, enabled = !state.busy) { Text("Forget this PC") }
         }
     }
@@ -118,7 +119,7 @@ private fun PhoneSettings(state: StationState, viewModel: StationViewModel) = Co
 
 @Composable
 private fun Message(state: StationState) {
-    state.message?.let { Text(it, color = if (state.messageIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
+    state.message?.let { Notice(it, state.messageIsError) }
 }
 
 /** Dark modules on white, with the white border of four modules scanners need around a QR code. */

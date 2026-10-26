@@ -15,17 +15,17 @@ private val LocalStudioColors = staticCompositionLocalOf { StudioPalette.Dark }
 private val LocalStudioType = staticCompositionLocalOf<StudioType> { error("No PhotoDokanTheme") }
 
 /**
- * The app's "Darkroom & Print" theme in dark or light, as [mode] and the device decide. Material
- * components get the same colours and Instrument Sans, so existing screens follow it; new ones
- * also use [StudioTheme] for the roles Material has no name for.
+ * The app's "Calm workspace" theme in dark or light, as [mode] and the device decide. Material
+ * components get the same colours and Figtree, so existing screens follow it; new ones also use
+ * [StudioTheme] for the roles Material has no name for.
  */
 @Composable
 fun PhotoDokanTheme(mode: ThemeMode = ThemeMode.System, content: @Composable () -> Unit) {
     val colors = if (mode.isDark(isSystemInDarkTheme())) StudioPalette.Dark else StudioPalette.Light
-    val sans = instrumentSans()
-    val mono = dmMono()
-    val typography = remember(sans) { studioTypography(sans) }
-    val type = remember(mono) { studioType(mono) }
+    val sans = figtree()
+    val display = bricolage()
+    val typography = remember(sans, display) { studioTypography(sans, display) }
+    val type = remember(display) { studioType(display) }
     CompositionLocalProvider(LocalStudioColors provides colors, LocalStudioType provides type) {
         MaterialTheme(colorScheme = colors.toColorScheme(), typography = typography, content = content)
     }
@@ -41,45 +41,45 @@ object StudioTheme {
 }
 
 /**
- * Material's roles in Darkroom & Print colours: primary is Cyanotype, secondary Fixer, tertiary
- * Safelight, and error Caution, so a problem never looks like the Print button. Material marks
- * what is selected (rail item, segment, chip) with the secondary container; selection is
- * Cyanotype's job, so that container is a Cyanotype wash.
+ * Material's roles in Calm workspace colours: primary is the accent, secondary is Ok, and error is
+ * Warn, so a problem never looks like the main action. Material marks what is selected (rail item,
+ * segment, chip) with the secondary container; selection is the accent's job, so that container is
+ * an accent wash.
  */
 internal fun StudioColors.toColorScheme(): ColorScheme {
     val scheme = if (isDark) darkColorScheme() else lightColorScheme()
     return scheme.copy(
-        primary = cyanotype,
-        onPrimary = onCyanotype,
-        primaryContainer = cyanotypeWash,
-        onPrimaryContainer = cyanotype,
-        inversePrimary = cyanotype,
-        secondary = fixer,
-        onSecondary = onFixer,
-        secondaryContainer = cyanotypeWash,
-        onSecondaryContainer = cyanotype,
-        tertiary = safelight,
-        onTertiary = onSafelight,
-        tertiaryContainer = safelight,
-        onTertiaryContainer = onSafelight,
-        error = caution,
-        onError = onCaution,
-        errorContainer = cautionWash,
-        onErrorContainer = caution,
+        primary = accent,
+        onPrimary = onAccent,
+        primaryContainer = accentWash,
+        onPrimaryContainer = accentText,
+        inversePrimary = accent,
+        secondary = ok,
+        onSecondary = onOk,
+        secondaryContainer = accentWash,
+        onSecondaryContainer = accentText,
+        tertiary = accent,
+        onTertiary = onAccent,
+        tertiaryContainer = accentWash,
+        onTertiaryContainer = accentText,
+        error = warn,
+        onError = onWarn,
+        errorContainer = warnWash,
+        onErrorContainer = warn,
         background = base,
         onBackground = text,
         surface = base,
         onSurface = text,
-        surfaceVariant = surfaceHigh,
+        surfaceVariant = well,
         onSurfaceVariant = textMuted,
         surfaceTint = base,
         surfaceDim = base,
-        surfaceBright = surfaceHigh,
+        surfaceBright = surface,
         surfaceContainerLowest = base,
-        surfaceContainerLow = surface,
+        surfaceContainerLow = rail,
         surfaceContainer = surface,
-        surfaceContainerHigh = surfaceRaised,
-        surfaceContainerHighest = surfaceHigh,
+        surfaceContainerHigh = surface,
+        surfaceContainerHighest = well,
         outline = outline,
         outlineVariant = line,
         scrim = base.copy(alpha = 0.6f),

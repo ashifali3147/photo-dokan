@@ -108,4 +108,60 @@ class PrintQueueTest {
         val queue = PrintQueue(sheet = SheetState(setOf(0, 1, 2))).add(c1.copy(name = "Ramesh"), 5).add(c2, 10)
         assertEquals(queue, Json.decodeFromString<PrintQueue>(Json.encodeToString(queue)))
     }
+
+    @Test
+    fun aSlotCanBeLeftBlankAndFilledAgain() {
+        val queue = PrintQueue().add(c1, 4)
+        val blank = queue.toggleBlank(template, 0, 2)
+        assertEquals(mapOf(0 to setOf(2)), blank.blanks)
+        assertEquals(listOf(0, 1, 3, 4), blank.pack(template).sheets[0].placements.map { it.slotIndex })
+        assertEquals(queue, blank.toggleBlank(template, 0, 2))
+    }
+
+    @Test
+    fun aPrintedSlotCannotBeLeftBlank() {
+        val queue = PrintQueue(sheet = SheetState(setOf(0, 1)))
+        assertEquals(queue, queue.toggleBlank(template, 0, 1))
+    }
+
+    @Test
+    fun theLastSlotASheetCanPrintOnCannotBeLeftBlank() {
+        val queue = PrintQueue(sheet = SheetState((0..37).toSet())).toggleBlank(template, 0, 38)
+        assertEquals(mapOf(0 to setOf(38)), queue.blanks)
+        assertEquals(queue, queue.toggleBlank(template, 0, 39))
+    }
+
+    @Test
+    fun printedSlotsOfTheSheetInThePrinterDontLimitTheNextSheet() {
+        val queue = PrintQueue(sheet = SheetState(setOf(0, 1))).toggleBlank(template, 1, 0)
+        assertEquals(mapOf(1 to setOf(0)), queue.blanks)
+    }
+
+    @Test
+    fun printingClearsTheBlanksAndLeavesThoseSlotsFree() {
+        val queue = PrintQueue().add(c1, 4).toggleBlank(template, 0, 2)
+        val after = queue.printed(template)
+        assertEquals(SheetState(setOf(0, 1, 3, 4)), after.sheet)
+        assertEquals(emptyMap(), after.blanks)
+    }
+
+    @Test
+    fun aNewSheetClearsTheBlanks() {
+        val queue = PrintQueue(sheet = SheetState(setOf(0))).add(c1, 4).toggleBlank(template, 0, 3)
+        val fresh = queue.newSheet()
+        assertEquals(emptyMap(), fresh.blanks)
+        assertEquals(queue.orders, fresh.orders)
+    }
+
+    @Test
+    fun blanksSurviveJson() {
+        val queue = PrintQueue().add(c1, 5).toggleBlank(template, 0, 4).toggleBlank(template, 1, 0)
+        assertEquals(queue, Json.decodeFromString<PrintQueue>(Json.encodeToString(queue)))
+    }
+
+    @Test
+    fun aQueueSavedBeforeBlanksExistedStillLoads() {
+        val saved = """{"orders":[],"sheet":{"usedSlots":[1,2]}}"""
+        assertEquals(PrintQueue(sheet = SheetState(setOf(1, 2))), Json.decodeFromString<PrintQueue>(saved))
+    }
 }

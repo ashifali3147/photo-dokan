@@ -25,7 +25,7 @@ class PhotoDokanThemeTest {
         }
         waitForIdle()
         assertEquals(StudioPalette.Light, studio)
-        assertEquals(StudioPalette.Light.cyanotype, primary)
+        assertEquals(StudioPalette.Light.accent, primary)
     }
 
     @Test

@@ -103,7 +103,10 @@ data class PrintState(
      * operator still sees which slots are used.
      */
     val sheets: List<PackedSheet>
-        get() = pack.sheets.ifEmpty { listOf(PackedSheet(emptyList(), queue.sheet.usedSlots, queue.sheet.usedSlots.isNotEmpty())) }
+        get() = pack.sheets.ifEmpty {
+            val used = queue.sheet.usedSlots
+            listOf(PackedSheet(emptyList(), used, used.isNotEmpty(), queue.blanks[0].orEmpty() - used))
+        }
 
     val shownSheet: PackedSheet get() = sheets[sheetIndex.coerceIn(sheets.indices)]
 }
@@ -159,7 +162,9 @@ class PrintViewModel(
     init {
         viewModelScope.launch {
             orders.queue.collect { queue ->
-                _state.update { it.copy(queue = queue, pack = queue.pack(template), sheetIndex = 0) }
+                val pack = queue.pack(template)
+                // Stay on the sheet shown, e.g. while leaving its slots blank, as long as it is still there.
+                _state.update { it.copy(queue = queue, pack = pack, sheetIndex = it.sheetIndex.coerceIn(0, maxOf(pack.sheets.size - 1, 0))) }
                 loadPhotos(reload = false)
             }
         }
@@ -171,6 +176,21 @@ class PrintViewModel(
     fun remove(order: QueuedOrder) = orders.update { it.remove(order.customer) }
 
     fun showSheet(index: Int) = _state.update { it.copy(sheetIndex = index.coerceIn(it.sheets.indices)) }
+
+    /**
+     * Leaves [slot] of sheet [sheetIndex] blank on this print, or fills it again. Not while a
+     * sheet is printing, so what prints and what is remembered afterwards stay the same.
+     */
+    fun toggleBlank(sheetIndex: Int, slot: Int) {
+        if (_state.value.printing || _state.value.choosingSettings) return
+        val before = orders.queue.value
+        orders.update { it.toggleBlank(template, sheetIndex, slot) }
+        if (orders.queue.value == before) {
+            error(if (sheetIndex == 0 && slot in before.sheet.usedSlots) "That slot is already printed." else "Keep at least one slot free to print on.")
+        } else if (_state.value.messageIsError) {
+            _state.update { it.copy(message = null, messageIsError = false) }
+        }
+    }
 
     /**
      * Prints the queue: each photo rendered from the full-resolution original with its saved edit,

@@ -1,38 +1,40 @@
 package com.tlw.photodokan.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import com.tlw.photodokan.core.packing.PackedSheet
+import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.model.SheetTemplate
+import com.tlw.photodokan.core.packing.PackedSheet
+import com.tlw.photodokan.ui.theme.StudioTheme
 import kotlin.math.roundToInt
 
-private val OrderColors = listOf(
-    Color(0xFF2457A6),
-    Color(0xFF14808A),
-    Color(0xFFB06A00),
-    Color(0xFF7B4BB5),
-    Color(0xFF3F7D20),
-)
-private val PaperColor = Color(0xFFFFFFFF)
-private val LineColor = Color(0xFFB8C2CF)
-private val UsedColor = Color(0xFFD5DAE1)
-
-/** The colour that marks the [index]th order, on the sheet and next to it in lists. */
-fun orderColor(index: Int): Color = OrderColors[index.mod(OrderColors.size)]
-
 /**
- * Draws a sheet to scale: printed slots per customer, already-used slots, and free slots.
- * A slot shows its order's photo from [photos] (by order id) when there is one, framed in the
- * order's colour from [colorOf].
+ * Draws a sheet to scale from the template's millimetres: white paper, slots already printed in
+ * warm grey, free slots as quiet fills, slots left blank as a dashed outline, and each copy to
+ * print as its customer's photo from [photos] (by order id), or an accent wash while the photo is
+ * still loading. The paper is white in both themes, as the real sheet is.
+ *
+ * With [onSlotTap], every slot not yet printed can be tapped (to leave it blank, or fill it
+ * again) and is read out by [describe] for a screen reader.
  */
 @Composable
 fun SheetPreview(
@@ -40,38 +42,64 @@ fun SheetPreview(
     sheet: PackedSheet,
     modifier: Modifier = Modifier,
     photos: Map<String, ImageBitmap> = emptyMap(),
-    colorOf: ((orderId: String) -> Color)? = null,
+    onSlotTap: ((slot: Int) -> Unit)? = null,
+    describe: (slot: Int) -> String = { "Slot ${it + 1}" },
 ) {
-    val orderIds = sheet.placements.map { it.orderId }.distinct()
-    val color = colorOf ?: { id -> orderColor(orderIds.indexOf(id)) }
+    val c = StudioTheme.colors
     val bySlot = sheet.placements.associateBy { it.slotIndex }
+    val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 5f))
 
-    Canvas(modifier.aspectRatio((template.paper.width / template.paper.height).toFloat())) {
-        val scale = (size.width / template.paper.width).toFloat()
-        drawRect(PaperColor)
-        drawRect(LineColor, style = Stroke(width = 1.5f))
+    BoxWithConstraints(modifier.aspectRatio((template.paper.width / template.paper.height).toFloat())) {
+        Canvas(Modifier.fillMaxSize()) {
+            val scale = (size.width / template.paper.width).toFloat()
+            drawRect(c.paper)
 
-        for (index in 0 until template.capacity) {
-            val r = template.slotRect(index)
-            val topLeft = Offset((r.x * scale).toFloat(), (r.y * scale).toFloat())
-            val slotSize = Size((r.width * scale).toFloat(), (r.height * scale).toFloat())
-            val placement = bySlot[index]
-            when {
-                placement != null -> {
-                    val c = color(placement.orderId)
-                    val photo = photos[placement.orderId]
-                    if (photo != null) drawPhoto(photo, topLeft, slotSize) else drawRect(c.copy(alpha = 0.22f), topLeft, slotSize)
-                    drawRect(c, topLeft, slotSize, style = Stroke(width = 1.5f))
+            for (index in 0 until template.capacity) {
+                val r = template.slotRect(index)
+                val topLeft = Offset((r.x * scale).toFloat(), (r.y * scale).toFloat())
+                val slotSize = Size((r.width * scale).toFloat(), (r.height * scale).toFloat())
+                val placement = bySlot[index]
+                when {
+                    placement != null -> {
+                        val photo = photos[placement.orderId]
+                        if (photo != null) drawPhoto(photo, topLeft, slotSize) else drawRect(c.accentWash, topLeft, slotSize)
+                        drawRect(c.accent, topLeft, slotSize, style = Stroke(width = 1.5f))
+                    }
+                    index in sheet.previouslyUsedSlots -> drawRect(c.slotPrinted, topLeft, slotSize)
+                    index in sheet.blankSlots -> {
+                        val inset = 1.5f
+                        drawRect(
+                            c.slotBlank,
+                            topLeft + Offset(inset, inset),
+                            Size(slotSize.width - 2 * inset, slotSize.height - 2 * inset),
+                            style = Stroke(width = 1.5f, pathEffect = dash),
+                        )
+                    }
+                    else -> drawRect(c.slotFree, topLeft, slotSize)
                 }
-                index in sheet.previouslyUsedSlots -> drawRect(UsedColor, topLeft, slotSize)
-                else -> drawRect(LineColor, topLeft, slotSize, style = Stroke(width = 1f))
+            }
+        }
+
+        if (onSlotTap != null) {
+            // One tappable box over each slot not yet printed, so taps and screen readers both reach it.
+            val scale = maxWidth.value / template.paper.width.toFloat()
+            for (index in 0 until template.capacity) {
+                if (index in sheet.previouslyUsedSlots) continue
+                val r = template.slotRect(index)
+                Box(
+                    Modifier
+                        .offset((r.x * scale).toFloat().dp, (r.y * scale).toFloat().dp)
+                        .size((r.width * scale).toFloat().dp, (r.height * scale).toFloat().dp)
+                        .clickable(role = Role.Button) { onSlotTap(index) }
+                        .semantics { contentDescription = describe(index) },
+                )
             }
         }
     }
 }
 
 /** Fills the slot with the photo, trimming its centre if the shapes differ slightly. */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPhoto(photo: ImageBitmap, topLeft: Offset, slot: Size) {
+private fun DrawScope.drawPhoto(photo: ImageBitmap, topLeft: Offset, slot: Size) {
     val slotAspect = slot.width / slot.height
     val photoAspect = photo.width.toFloat() / photo.height
     val (srcWidth, srcHeight) = if (photoAspect > slotAspect) {

@@ -8,9 +8,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -20,84 +21,58 @@ import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.ui.theme.StudioTheme
 import kotlin.math.max
 
-/** A one-pixel line along the top edge, as if light from above catches it. Draw inside a clip. */
-fun Modifier.topHighlight(color: Color): Modifier = drawWithContent {
-    drawContent()
-    val y = 0.5.dp.toPx()
-    drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
-}
-
-/**
- * The window behind a screen. In the dark theme a faint safelight spills in from the top, as in a
- * darkroom; in the light theme it is plain paper.
- */
+/** The window behind a screen: plain warm paper-grey in light, near-black in dark. */
 @Composable
 fun StudioBackground(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
-    val c = StudioTheme.colors
-    Box(
-        modifier
-            .background(c.base)
-            .then(
-                if (c.isDark) Modifier.drawBehind {
-                    drawRect(
-                        Brush.radialGradient(
-                            listOf(c.safelight.copy(alpha = 0.11f), Color.Transparent),
-                            center = Offset(size.width / 2, -size.height * 0.08f),
-                            radius = max(size.width * 0.5f, size.height * 0.45f),
-                        ),
-                    )
-                } else Modifier,
-            ),
-        content = content,
-    )
+    Box(modifier.background(StudioTheme.colors.base), content = content)
 }
 
-/** A card or panel, lit from above: a soft top-to-bottom shade, a border, and a highlight on its top edge. */
+/** A white card with a thin border; the unit every screen is built from. */
 @Composable
-fun Panel(
+fun Card(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(20.dp),
     content: @Composable BoxScope.() -> Unit,
 ) {
     val c = StudioTheme.colors
-    Box(
-        modifier
-            .clip(shape)
-            .background(Brush.verticalGradient(listOf(c.panelTop, c.panelBottom)))
-            .border(1.dp, c.line, shape)
-            .topHighlight(c.edgeHighlight),
-        content = content,
-    )
+    Box(modifier.clip(shape).background(c.surface).border(1.dp, c.line, shape), content = content)
 }
 
 /**
- * Where a photo is judged: the 18% grey card photographers meter against, the same in both
- * themes so skin and backdrop look the same in both, with a soft light falling on the middle as
- * from a studio softbox.
+ * Where a photo is judged: a neutral mid grey, the same in both themes so skin and backdrop look
+ * the same in both, with a very soft light falling on the middle.
  */
 @Composable
-fun GreyCardStage(
+fun GreyStage(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(22.dp),
+    shape: Shape = RoundedCornerShape(20.dp),
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val grey = StudioTheme.colors.greyCard
+    val grey = StudioTheme.colors.stage
     Box(
         modifier
             .clip(shape)
             .drawBehind {
-                val centre = Offset(size.width / 2, size.height * 0.42f)
-                val reach = max(size.width, size.height) * 0.7f
+                val centre = Offset(size.width / 2, size.height * 0.4f)
                 drawRect(
                     Brush.radialGradient(
-                        listOf(lerp(grey, Color.White, 0.06f), grey, lerp(grey, Color.Black, 0.14f)),
+                        listOf(lerp(grey, Color.White, 0.08f), grey, lerp(grey, Color.Black, 0.12f)),
                         center = centre,
-                        radius = reach,
+                        radius = max(size.width, size.height) * 0.7f,
                     ),
                 )
-                drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.2f), Color.Transparent), center = centre, radius = reach * 0.6f))
             },
         contentAlignment = Alignment.Center,
         content = content,
     )
+}
+
+/** The glow around the selected photo: a ring that leaves a gap, then a soft halo. */
+fun Modifier.selectionGlow(selected: Boolean, shape: Shape = RoundedCornerShape(14.dp)): Modifier {
+    if (!selected) return this
+    return composed {
+        val c = StudioTheme.colors
+        this.shadow(16.dp, shape, ambientColor = c.accentGlow, spotColor = c.accentGlow)
+            .border(3.dp, c.accent, shape)
+    }
 }

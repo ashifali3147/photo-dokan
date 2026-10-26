@@ -7,7 +7,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,15 +31,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.tlw.photodokan.ui.theme.StudioTheme
 
 /**
- * A small light that says how something stands: Cyanotype for ready, Fixer for done, Caution for
- * a problem, muted for not started. Lit dots [glow]; a muted one should not.
+ * A small light that says how something stands: ok for done or ready, warn for a problem, muted
+ * for not started. Lit dots [glow]; a muted one should not.
  */
 @Composable
-fun StatusDot(color: Color, modifier: Modifier = Modifier, size: Dp = 7.dp, glow: Boolean = true) {
+fun StatusDot(color: Color, modifier: Modifier = Modifier, size: Dp = 8.dp, glow: Boolean = true) {
     Canvas(modifier.size(size * 2)) {
         val r = size.toPx() / 2
         if (glow) drawCircle(Brush.radialGradient(listOf(color.copy(alpha = 0.5f), Color.Transparent), center, r * 2), r * 2)
@@ -46,7 +47,7 @@ fun StatusDot(color: Color, modifier: Modifier = Modifier, size: Dp = 7.dp, glow
 }
 
 /**
- * One adjustment with its value, e.g. "Fair skin 40". The selected one glows in Cyanotype and
+ * One adjustment with its value, e.g. "Fair skin 40". The selected one is washed in the accent and
  * drives the slider under it, so only one slider shows at a time.
  */
 @Composable
@@ -61,47 +62,49 @@ fun ValueChip(
     val shape = RoundedCornerShape(12.dp)
     Column(
         modifier
-            .defaultMinSize(minHeight = 52.dp)
-            .then(if (selected) Modifier.shadow(10.dp, shape, ambientColor = c.cyanotype, spotColor = c.cyanotype) else Modifier)
+            .defaultMinSize(minHeight = 56.dp)
+            .selectionGlow(selected, shape)
             .clip(shape)
-            .background(if (selected) c.cyanotypeWash else c.surfaceHigh)
-            .border(1.dp, if (selected) c.cyanotype else Color.Transparent, shape)
+            .background(if (selected) c.accentWash else c.surface)
+            .border(1.dp, if (selected) c.accent else c.outline, shape)
             .clickable(role = Role.Tab, onClick = onClick)
             .semantics { this.selected = selected }
             .padding(horizontal = 8.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        val color = if (selected) c.cyanotype else c.text
+        val color = if (selected) c.accentText else c.text
         Text(label, style = MaterialTheme.typography.labelSmall, color = color, textAlign = TextAlign.Center, maxLines = 1)
-        Text(value, style = StudioTheme.type.number.copy(fontSize = 15.sp), color = color)
+        Text(value, style = StudioTheme.type.numberSmall, color = color)
     }
 }
 
-/** A customer's number as it is printed on the edge of film: ▸0012. */
+/** A customer's number as it is filed and printed: 0012. */
 @Composable
-fun FrameNumber(label: String, modifier: Modifier = Modifier, color: Color = StudioTheme.colors.text) {
+fun CustomerNumber(
+    label: String,
+    modifier: Modifier = Modifier,
+    large: Boolean = false,
+    color: Color = StudioTheme.colors.text,
+) {
     Text(
-        frameNumber(label),
+        label,
         modifier.semantics { contentDescription = "Number $label" },
-        style = StudioTheme.type.number,
+        style = if (large) StudioTheme.type.numberLarge else StudioTheme.type.number,
         color = color,
     )
 }
 
-/** "0012" → "▸0012". */
-fun frameNumber(label: String): String = "▸$label"
-
-/** How many copies: − ×5 +, never below [range]'s first or above its last. */
+/** How many copies: − 5 +, never below [range]'s first or above its last. */
 @Composable
 fun CopyStepper(copies: Int, onChange: (Int) -> Unit, modifier: Modifier = Modifier, range: IntRange = 1..40) {
     val c = StudioTheme.colors
     val shape = RoundedCornerShape(12.dp)
-    Row(modifier.height(52.dp).border(1.dp, c.line, shape), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.height(56.dp).border(1.dp, c.outline, shape), verticalAlignment = Alignment.CenterVertically) {
         StepperButton("−", "Fewer copies", enabled = copies > range.first) { onChange(copies - 1) }
         Text(
-            "×$copies",
-            Modifier.width(44.dp).semantics { contentDescription = "$copies copies" },
+            "$copies",
+            Modifier.width(40.dp).semantics { contentDescription = "$copies copies" },
             style = StudioTheme.type.number,
             color = c.text,
             textAlign = TextAlign.Center,
@@ -116,7 +119,7 @@ private fun StepperButton(symbol: String, label: String, enabled: Boolean, onCli
     Text(
         symbol,
         Modifier
-            .size(width = 44.dp, height = 50.dp)
+            .size(width = 48.dp, height = 54.dp)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label }
             .padding(top = 12.dp),
@@ -124,4 +127,90 @@ private fun StepperButton(symbol: String, label: String, enabled: Boolean, onCli
         color = if (enabled) c.text else c.line,
         textAlign = TextAlign.Center,
     )
+}
+
+/** The usual copy counts as large buttons; the chosen one is washed in the accent with a glow. */
+@Composable
+fun CopyChoices(
+    copies: Int,
+    choices: List<Int>,
+    onChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (n in choices) {
+            val chosen = copies == n
+            val c = StudioTheme.colors
+            val shape = RoundedCornerShape(12.dp)
+            Text(
+                "$n",
+                Modifier
+                    .weight(1f)
+                    .height(56.dp)
+                    .selectionGlow(chosen, shape)
+                    .clip(shape)
+                    .background(if (chosen) c.accentWash else c.surface)
+                    .border(1.dp, if (chosen) c.accent else c.outline, shape)
+                    .clickable(role = Role.RadioButton) { onChange(n) }
+                    .semantics { this.selected = chosen; contentDescription = "$n copies" }
+                    .padding(top = 14.dp),
+                style = StudioTheme.type.number,
+                color = if (chosen) c.accentText else c.text,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+/** One tab in a [ToolDock]. */
+@Composable
+fun RowScope.DockTab(label: String, selected: Boolean, onClick: () -> Unit, icon: @Composable () -> Unit) {
+    val c = StudioTheme.colors
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        Modifier
+            .weight(1f)
+            .height(60.dp)
+            .then(if (selected) Modifier.shadow(10.dp, shape, ambientColor = c.accentGlow, spotColor = c.accentGlow) else Modifier)
+            .clip(shape)
+            .background(if (selected) (if (c.isDark) c.accentWash else c.surface) else Color.Transparent)
+            .clickable(role = Role.Tab, onClick = onClick)
+            .semantics { this.selected = selected },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides if (selected) c.accentText else c.textMuted,
+        ) {
+            icon()
+            Text(label, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+/** The editor's tools in a recessed track: Crop, Look, Retouch, Backdrop. Any order, one at a time. */
+@Composable
+fun ToolDock(modifier: Modifier = Modifier, tabs: @Composable RowScope.() -> Unit) {
+    val c = StudioTheme.colors
+    Row(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.well).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        content = tabs,
+    )
+}
+
+/** A short message after something happened: green with a tick when it went well, warn with "!" when it did not. */
+@Composable
+fun Notice(text: String, isError: Boolean, modifier: Modifier = Modifier) {
+    val c = StudioTheme.colors
+    val wash = if (isError) c.warnWash else c.okWash
+    val colour = if (isError) c.warn else c.ok
+    Row(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(wash).padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(if (isError) "!" else "✓", color = colour, style = StudioTheme.type.numberSmall)
+        Text(text, color = colour, style = MaterialTheme.typography.bodyMedium)
+    }
 }

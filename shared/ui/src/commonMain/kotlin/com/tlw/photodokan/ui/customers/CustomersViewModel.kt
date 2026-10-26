@@ -147,6 +147,28 @@ class CustomersViewModel(
     private val _state = MutableStateFlow(CustomersState(today = clock()))
     val state: StateFlow<CustomersState> = _state.asStateFlow()
 
+    private val _thumbnails = MutableStateFlow<Map<Customer, ImageBitmap>>(emptyMap())
+
+    /** Small pictures of the customers' photos for the grid, filled in by [loadThumbnail]. */
+    val thumbnails: StateFlow<Map<Customer, ImageBitmap>> = _thumbnails.asStateFlow()
+    private val loadingThumbnails = mutableSetOf<Customer>()
+
+    /** Loads [customer]'s picture for the grid once, off the UI thread; the grid shows it when it arrives. */
+    fun loadThumbnail(customer: Customer) {
+        if (customer in _thumbnails.value || !loadingThumbnails.add(customer)) return
+        viewModelScope.launch {
+            val image = try {
+                withContext(work) { decodePreview(library.readFinal(customer) ?: library.readOriginal(customer), THUMBNAIL_SIDE)?.image }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null // the grid keeps its placeholder; opening the customer reports the real problem
+            }
+            loadingThumbnails.remove(customer)
+            if (image != null) _thumbnails.update { it + (customer to image) }
+        }
+    }
+
     init {
         refresh()
     }
@@ -493,6 +515,7 @@ class CustomersViewModel(
             val matte = matteForSaving(edit)
             library.saveEdit(customer, edit.recipe, renderFinal(edit, matte))
             matte?.let { saveMatte(customer, it) }
+            _thumbnails.update { it - customer }
             _state.update { s ->
                 s.copy(
                     today = date, date = date, query = "", draft = null,
@@ -513,6 +536,7 @@ class CustomersViewModel(
             val matte = matteForSaving(edit)
             library.saveEdit(customer, edit.live, renderFinal(edit, matte))
             if (edit.matte == null) matte?.let { saveMatte(customer, it) }
+            _thumbnails.update { it - customer }
             _state.update { s ->
                 s.copy(
                     edit = s.edit?.let { it.copy(saved = edit.live, matte = it.matte ?: matte) },
@@ -568,6 +592,9 @@ class CustomersViewModel(
 
     companion object {
         const val FINAL_DPI = 300.0
+
+        /** The grid's pictures are about this many pixels on the longer side. */
+        private const val THUMBNAIL_SIDE = 300
 
         private fun copiesText(n: Int) = if (n == 1) "1 copy" else "$n copies"
 
