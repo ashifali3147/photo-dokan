@@ -54,7 +54,7 @@ import com.tlw.photodokan.core.library.Customer
 import com.tlw.photodokan.core.model.PrintQueue
 import com.tlw.photodokan.ui.components.ButtonTone
 import com.tlw.photodokan.ui.components.CopyChoices
-import com.tlw.photodokan.ui.components.CopyStepper
+import com.tlw.photodokan.ui.components.CopyNudge
 import com.tlw.photodokan.ui.components.Notice
 import com.tlw.photodokan.ui.components.PrimaryButton
 import com.tlw.photodokan.ui.components.QuietButton
@@ -149,7 +149,7 @@ internal fun PhoneEditor(
         ) {
             when {
                 draft != null -> {
-                    QuietButton(viewModel::discardDraft, enabled = !state.busy) { Text("Discard") }
+                    QuietButton(viewModel::discardDraft, enabled = !state.busy, tall = true) { Text("Discard") }
                     PrimaryButton(viewModel::saveDraft, Modifier.weight(1f), enabled = !state.busy) { Text("Save as ${draft.numberLabel}") }
                 }
                 selected != null -> {
@@ -167,7 +167,7 @@ internal fun PhoneEditor(
 
     if (showCopies && selected != null) {
         ModalBottomSheet(onDismissRequest = { showCopies = false }, containerColor = c.surface) {
-            CopiesSheet(selected, queued != null, copies, chooseCopies, viewModel, onDone = { showCopies = false })
+            CopiesSheet(selected, queued != null, canAdd = !edit.changed && !state.busy, copies, chooseCopies, viewModel, onDone = { showCopies = false })
         }
     }
 }
@@ -266,6 +266,7 @@ private fun CopiesButton(copies: Int, enabled: Boolean, onClick: () -> Unit) {
 private fun CopiesSheet(
     customer: Customer,
     queued: Boolean,
+    canAdd: Boolean,
     shown: Int,
     choose: (Int) -> Unit,
     viewModel: CustomersViewModel,
@@ -279,13 +280,19 @@ private fun CopiesSheet(
         Text("Copies for ${customer.label}", style = MaterialTheme.typography.titleLarge, color = c.text)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             CopyChoices(shown, CommonCopies, choose, Modifier.weight(1f))
-            CopyStepper(shown, choose)
+            CopyNudge(shown, choose)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             if (queued) {
                 TextButton({ viewModel.removeFromPrint(); onDone() }) { Text("Remove from sheet", color = c.warn) }
             }
-            PrimaryButton(onDone, Modifier.weight(1f)) { Text(if (queued) "Done" else "Done · $shown copies") }
+            // Not on the sheet yet: choosing the copies and adding them is one tap. Unsaved changes
+            // must be saved first (the main button says so), so then it only closes.
+            if (!queued && canAdd) {
+                PrimaryButton({ viewModel.addToPrint(shown); onDone() }, Modifier.weight(1f)) { Text("Add to sheet · $shown copies") }
+            } else {
+                PrimaryButton(onDone, Modifier.weight(1f)) { Text("Done") }
+            }
         }
     }
 }

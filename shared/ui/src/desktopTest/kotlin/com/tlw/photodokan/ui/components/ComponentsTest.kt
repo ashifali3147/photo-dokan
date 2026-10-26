@@ -101,6 +101,26 @@ class ComponentsTest {
         onNodeWithContentDescription("5 copies").assertIsNotSelected()
     }
 
+    @Test
+    fun aCountOutsideTheUsualOnesShowsAsItsOwnChosenButton() = runComposeUiTest {
+        setContent {
+            PhotoDokanTheme {
+                var copies by remember { mutableIntStateOf(5) }
+                Row(Modifier.size(420.dp, 56.dp)) {
+                    // As on the screens: the choices share the room left beside the − and + buttons.
+                    CopyChoices(copies, listOf(4, 5, 10), { copies = it }, Modifier.weight(1f))
+                    CopyNudge(copies, { copies = it })
+                }
+            }
+        }
+        onNodeWithContentDescription("More copies").performClick()
+        onNodeWithContentDescription("6 copies").assertIsSelected()
+        onNodeWithContentDescription("5 copies").assertIsNotSelected()
+        onNodeWithContentDescription("Fewer copies").performClick()
+        onNodeWithContentDescription("5 copies").assertIsSelected()
+        onNodeWithContentDescription("6 copies").assertDoesNotExist()
+    }
+
     /** Saved to build/reports/components for checking by eye; fails only if something can't draw. */
     @Test
     fun galleryDrawsInBothThemes() {

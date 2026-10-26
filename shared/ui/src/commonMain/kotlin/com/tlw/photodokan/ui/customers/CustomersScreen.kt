@@ -132,7 +132,7 @@ private fun PhoneNewPhoto(state: CustomersState, pickPhoto: () -> Unit, takePhot
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (takePhoto != null) {
                 PrimaryButton(takePhoto, Modifier.weight(1f), enabled = !state.busy) { Text("Take photo") }
-                QuietButton(pickPhoto, enabled = !state.busy) { Text("Choose photo") }
+                QuietButton(pickPhoto, enabled = !state.busy, tall = true) { Text("Choose photo") }
             } else {
                 PrimaryButton(pickPhoto, Modifier.weight(1f), enabled = !state.busy) { Text("Choose photo") }
             }

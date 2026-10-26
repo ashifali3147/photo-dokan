@@ -68,12 +68,16 @@ fun PrimaryButton(
     )
 }
 
-/** Everything else a screen offers: a white button with a thin outline. */
+/**
+ * Everything else a screen offers: a white button with a thin outline. Beside a [PrimaryButton],
+ * pass [tall] so the two line up.
+ */
 @Composable
 fun QuietButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    tall: Boolean = false,
     content: @Composable RowScope.() -> Unit,
 ) {
     val c = StudioTheme.colors
@@ -84,7 +88,7 @@ fun QuietButton(
         fill = SolidColor(c.surface),
         contentColor = c.text,
         glow = null,
-        minHeight = 48.dp,
+        minHeight = if (tall) 56.dp else 48.dp,
         textStyle = MaterialTheme.typography.labelLarge,
         content = content,
     )

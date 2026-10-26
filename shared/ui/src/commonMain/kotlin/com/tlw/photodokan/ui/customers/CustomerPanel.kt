@@ -31,7 +31,7 @@ import com.tlw.photodokan.core.library.Customer
 import com.tlw.photodokan.core.model.PrintQueue
 import com.tlw.photodokan.ui.components.ButtonTone
 import com.tlw.photodokan.ui.components.CopyChoices
-import com.tlw.photodokan.ui.components.CopyStepper
+import com.tlw.photodokan.ui.components.CopyNudge
 import com.tlw.photodokan.ui.components.CustomerNumber
 import com.tlw.photodokan.ui.components.Notice
 import com.tlw.photodokan.ui.components.PrimaryButton
@@ -156,7 +156,7 @@ private fun Actions(
     val c = StudioTheme.colors
     if (isDraft) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            QuietButton(viewModel::discardDraft, enabled = !state.busy) { Text("Discard") }
+            QuietButton(viewModel::discardDraft, enabled = !state.busy, tall = true) { Text("Discard") }
             PrimaryButton(viewModel::saveDraft, Modifier.weight(1f), enabled = !state.busy) { Text("Save as customer ${state.draft?.numberLabel}") }
         }
         return
@@ -167,12 +167,12 @@ private fun Actions(
 
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         CopyChoices(shown, CommonCopies, choose, Modifier.weight(1f))
-        CopyStepper(shown, choose)
+        CopyNudge(shown, choose)
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         val newPhoto = if (takePhoto != null) takePhoto else pickPhoto
-        QuietButton(newPhoto, enabled = !state.busy) { Text(if (takePhoto != null) "Retake" else "New photo") }
-        if (queued != null) QuietButton(viewModel::removeFromPrint, enabled = !state.busy) { Text("Remove") }
+        QuietButton(newPhoto, enabled = !state.busy, tall = true) { Text(if (takePhoto != null) "Retake" else "New photo") }
+        if (queued != null) QuietButton(viewModel::removeFromPrint, enabled = !state.busy, tall = true) { Text("Remove") }
         when {
             // Saving comes first: the sheet prints what was saved.
             edit.changed -> PrimaryButton(viewModel::saveChanges, Modifier.weight(1f), enabled = !state.busy) { Text("Save changes") }
@@ -216,7 +216,7 @@ private fun EmptyPanel(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (takePhoto != null) {
                 PrimaryButton(takePhoto, Modifier.weight(1f), enabled = !state.busy) { Text("Take photo") }
-                QuietButton(pickPhoto, enabled = !state.busy) { Text("Choose photo") }
+                QuietButton(pickPhoto, enabled = !state.busy, tall = true) { Text("Choose photo") }
             } else {
                 PrimaryButton(pickPhoto, Modifier.weight(1f), enabled = !state.busy) { Text("Choose photo") }
             }
