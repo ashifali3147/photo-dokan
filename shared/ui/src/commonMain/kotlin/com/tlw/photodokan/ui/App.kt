@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
@@ -38,6 +37,8 @@ import com.tlw.photodokan.ui.platform.SystemBackHandler
 import com.tlw.photodokan.ui.print.PrintScreen
 import com.tlw.photodokan.ui.screens.SettingsScreen
 import com.tlw.photodokan.ui.station.IncomingInvites
+import com.tlw.photodokan.ui.theme.PhotoDokanTheme
+import com.tlw.photodokan.ui.theme.ThemeSettings
 import org.koin.compose.koinInject
 
 /** Root of the app on both platforms: a side rail on wide windows, a bottom bar on phones. */
@@ -71,7 +72,8 @@ private fun AppContent() {
     // Back from Print or Settings returns to Customers; Back there leaves the app.
     SystemBackHandler(enabled = current != Destination.Customers) { current = Destination.Customers }
 
-    MaterialTheme {
+    val theme by koinInject<ThemeSettings>().mode.collectAsState()
+    PhotoDokanTheme(theme) {
         Surface(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
             BoxWithConstraints {
                 if (maxWidth >= 600.dp) {

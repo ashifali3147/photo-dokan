@@ -31,6 +31,8 @@ import com.tlw.photodokan.ui.App
 import com.tlw.photodokan.ui.di.initKoin
 import com.tlw.photodokan.ui.platform.today
 import com.tlw.photodokan.ui.print.StationJobPrinter
+import com.tlw.photodokan.ui.theme.FileThemeModeStore
+import com.tlw.photodokan.ui.theme.ThemeModeStore
 import com.tlw.photodokan.vision.FaceFinder
 import com.tlw.photodokan.vision.ModelFiles
 import com.tlw.photodokan.vision.OnnxFaceFinder
@@ -50,6 +52,7 @@ import kotlin.concurrent.thread
 private val desktopModule = module {
     single<PhotoLibrary> { FilePhotoLibrary(Path(System.getProperty("user.home"), "Pictures", "Photo Dokan")) }
     single<PrintQueueStore> { FilePrintQueueStore(Path(appDataDir(), "print-queue.json")) }
+    single<ThemeModeStore> { FileThemeModeStore(Path(appDataDir(), "theme.txt")) }
     // Away from Windows (developing on a Mac) Print saves an actual-size PDF instead.
     single<SheetPrinter> {
         if (WindowsGdiPrinter.isAvailable) {

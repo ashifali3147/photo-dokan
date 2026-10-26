@@ -14,6 +14,8 @@ import com.tlw.photodokan.ui.di.appModule
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.photo.PhotoSource
 import com.tlw.photodokan.ui.print.InMemoryPrintQueueStore
+import com.tlw.photodokan.ui.theme.InMemoryThemeModeStore
+import com.tlw.photodokan.ui.theme.ThemeModeStore
 import org.koin.compose.KoinIsolatedContext
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
@@ -30,6 +32,7 @@ class SharedPhotoTest {
         val koin = koinApplication { modules(appModule, module {
                 single<PhotoLibrary> { InMemoryPhotoLibrary() }
                 single<PrintQueueStore> { InMemoryPrintQueueStore() }
+                single<ThemeModeStore> { InMemoryThemeModeStore() }
             }) }
         setContent { KoinIsolatedContext(context = koin) { App() } }
 

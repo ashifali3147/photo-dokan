@@ -7,6 +7,9 @@ import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.print.InMemoryPrintQueueStore
 import com.tlw.photodokan.ui.print.PrintOrders
+import com.tlw.photodokan.ui.theme.InMemoryThemeModeStore
+import com.tlw.photodokan.ui.theme.ThemeModeStore
+import com.tlw.photodokan.ui.theme.ThemeSettings
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
 import kotlin.test.Test
@@ -15,7 +18,10 @@ import kotlin.test.assertSame
 
 class AppModuleTest {
 
-    private val koin = koinApplication { modules(appModule, module { single<PrintQueueStore> { InMemoryPrintQueueStore() } }) }.koin
+    private val koin = koinApplication { modules(appModule, module {
+        single<PrintQueueStore> { InMemoryPrintQueueStore() }
+        single<ThemeModeStore> { InMemoryThemeModeStore() }
+    }) }.koin
 
     @Test
     fun everyDefinitionResolves() {
@@ -29,5 +35,6 @@ class AppModuleTest {
         assertSame(koin.get<LibraryLayout>(), koin.get<LibraryLayout>())
         assertSame(koin.get<IncomingPhotos>(), koin.get<IncomingPhotos>())
         assertSame(koin.get<PrintOrders>(), koin.get<PrintOrders>(), "both screens share one queue")
+        assertSame(koin.get<ThemeSettings>(), koin.get<ThemeSettings>(), "one theme for the whole app")
     }
 }

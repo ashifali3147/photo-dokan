@@ -7,12 +7,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.ui.station.StationSettings
+import com.tlw.photodokan.ui.theme.AppearanceSettings
 
 @Composable
 private fun Screen(title: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
@@ -28,4 +30,6 @@ private fun Screen(title: String, modifier: Modifier = Modifier, content: @Compo
 @Composable
 fun SettingsScreen(modifier: Modifier = Modifier) = Screen("Settings", modifier.verticalScroll(rememberScrollState())) {
     StationSettings()
+    HorizontalDivider(Modifier.padding(vertical = 12.dp))
+    AppearanceSettings()
 }

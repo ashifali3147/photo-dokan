@@ -11,6 +11,7 @@ import com.tlw.photodokan.ui.station.IncomingInvites
 import com.tlw.photodokan.ui.station.PhoneName
 import com.tlw.photodokan.ui.station.StationViewModel
 import com.tlw.photodokan.ui.platform.today
+import com.tlw.photodokan.ui.theme.ThemeSettings
 import org.koin.core.KoinApplication
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
@@ -26,7 +27,7 @@ import org.koin.dsl.module
  * instead adds a [com.tlw.photodokan.ui.print.SheetSharer], and one that prints them adds a
  * [com.tlw.photodokan.print.PdfSheetReader]. A [com.tlw.photodokan.vision.FaceFinder] crops new
  * photos to the face, and a [com.tlw.photodokan.vision.PortraitMatter] separates the person from
- * the background.
+ * the background. A [com.tlw.photodokan.ui.theme.ThemeModeStore] keeps this device's theme.
  */
 val appModule = module {
     single { SheetTemplate.STUDIO_A4_5X8 }
@@ -35,6 +36,7 @@ val appModule = module {
     single { IncomingPhotos() }
     single { IncomingInvites() }
     single { PrintOrders(get()) }
+    single { ThemeSettings(get()) }
     viewModel { CustomersViewModel(get(), ::today, orders = get(), template = get(), presets = get(), faces = getOrNull(), matter = getOrNull()) }
     viewModel {
         PrintViewModel(
