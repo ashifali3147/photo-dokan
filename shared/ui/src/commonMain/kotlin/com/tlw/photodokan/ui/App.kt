@@ -31,6 +31,8 @@ import com.tlw.photodokan.ui.print.PrintOrders
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.customers.CustomersScreen
 import com.tlw.photodokan.ui.platform.SystemBackHandler
+import com.tlw.photodokan.ui.platform.SystemBarsFollowTheme
+import com.tlw.photodokan.ui.theme.StudioTheme
 import com.tlw.photodokan.ui.print.PrintScreen
 import com.tlw.photodokan.ui.screens.SettingsScreen
 import com.tlw.photodokan.ui.station.IncomingInvites
@@ -73,8 +75,10 @@ private fun AppContent() {
     val fullScreen = remember { mutableStateOf(false) }
     PhotoDokanTheme(theme) {
       CompositionLocalProvider(LocalFullScreen provides fullScreen) {
-        Surface(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-            BoxWithConstraints {
+        SystemBarsFollowTheme(StudioTheme.colors.isDark)
+        // The app's colour runs behind the status and navigation bars; only its content keeps clear of them.
+        Surface(Modifier.fillMaxSize()) {
+            BoxWithConstraints(Modifier.windowInsetsPadding(WindowInsets.safeDrawing)) {
                 val waiting by koinInject<PrintOrders>().queue.collectAsState()
                 val select = { destination: Destination -> current = destination }
                 if (maxWidth >= 600.dp) {

@@ -36,3 +36,10 @@ expect fun logTiming(what: String, millis: Long)
  */
 @Composable
 expect fun SystemBackHandler(enabled: Boolean, onBack: () -> Unit)
+
+/**
+ * Draws the phone's status and navigation bar icons dark on a light app, light on a dark one,
+ * following the app's own theme rather than the phone's. Nothing on the PC.
+ */
+@Composable
+expect fun SystemBarsFollowTheme(dark: Boolean)
