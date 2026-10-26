@@ -64,6 +64,8 @@ fun CustomersScreen(modifier: Modifier = Modifier, viewModel: CustomersViewModel
     StudioBackground(modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val wide = maxWidth >= 720.dp
+            // The editor gets more of a wider window; the grid only needs a few columns.
+            val panelWidth = (maxWidth * 0.4f).coerceIn(420.dp, 600.dp)
             // On a phone Back closes the editor and shows the grid again; side by side the grid is
             // already showing, so Back only steps in to protect unsaved work.
             SystemBackHandler(enabled = state.edit != null && !state.busy && (!wide || state.hasUnsavedWork), onBack = close)
@@ -88,7 +90,7 @@ fun CustomersScreen(modifier: Modifier = Modifier, viewModel: CustomersViewModel
             if (wide) {
                 Row(Modifier.fillMaxSize()) {
                     grid(GridCells.Adaptive(148.dp), Modifier.weight(1f).fillMaxHeight().padding(start = 28.dp, top = 28.dp, end = 12.dp, bottom = 12.dp), pickPhoto)
-                    SidePanel(Modifier.width(420.dp).fillMaxHeight()) {
+                    SidePanel(Modifier.width(panelWidth).fillMaxHeight()) {
                         CustomerPanel(state, viewModel, queue, pickPhoto, takePhoto, Modifier.fillMaxSize())
                     }
                 }

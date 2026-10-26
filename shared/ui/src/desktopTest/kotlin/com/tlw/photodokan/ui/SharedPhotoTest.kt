@@ -42,7 +42,7 @@ class SharedPhotoTest {
         koin.koin.get<IncomingPhotos>().send(PhotoSource("shared.jpg") { jpeg })
 
         // Decoding runs off the UI thread, so wait for the result.
-        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("40 × 20 px", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("New photo · shared.jpg", substring = true).fetchSemanticsNodes().isNotEmpty() }
         onNode(hasText("Customers") and hasClickAction()).assertIsSelected()
     }
 }
