@@ -8,8 +8,11 @@ import com.tlw.photodokan.core.geometry.SizeMm
 /**
  * What to print, in millimetres with the origin at the top-left of the paper.
  * Renderers convert to points or pixels only when they draw.
+ *
+ * A printer that keeps a [PrintTone] puts its photos through it when [applyTone] is set; the
+ * [ToneStrip], whose patches carry their own tones, is printed without it.
  */
-data class PrintDocument(val pages: List<PrintPage>) {
+data class PrintDocument(val pages: List<PrintPage>, val applyTone: Boolean = true) {
     init {
         require(pages.isNotEmpty()) { "A print document needs at least one page" }
     }
@@ -25,7 +28,7 @@ data class PrintPage(val paper: SizeMm, val items: List<PageItem>)
  */
 fun PrintDocument.onWholePoints(widthPt: Int, heightPt: Int): PrintDocument {
     val paper = SizeMm(widthPt * MM_PER_INCH / POINTS_PER_INCH, heightPt * MM_PER_INCH / POINTS_PER_INCH)
-    return PrintDocument(pages.map { it.copy(paper = paper) })
+    return copy(pages = pages.map { it.copy(paper = paper) })
 }
 
 private const val POINTS_PER_INCH = 72.0
