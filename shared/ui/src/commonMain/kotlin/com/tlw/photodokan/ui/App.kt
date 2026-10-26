@@ -31,6 +31,7 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.tlw.photodokan.ui.navigation.Destination
+import com.tlw.photodokan.ui.navigation.LocalFullScreen
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.customers.CustomersScreen
 import com.tlw.photodokan.ui.platform.SystemBackHandler
@@ -73,7 +74,9 @@ private fun AppContent() {
     SystemBackHandler(enabled = current != Destination.Customers) { current = Destination.Customers }
 
     val theme by koinInject<ThemeSettings>().mode.collectAsState()
+    val fullScreen = remember { mutableStateOf(false) }
     PhotoDokanTheme(theme) {
+      CompositionLocalProvider(LocalFullScreen provides fullScreen) {
         Surface(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
             BoxWithConstraints {
                 if (maxWidth >= 600.dp) {
@@ -94,7 +97,8 @@ private fun AppContent() {
                     Scaffold(
                         contentWindowInsets = WindowInsets(0),
                         bottomBar = {
-                            NavigationBar(windowInsets = WindowInsets(0)) {
+                            // The photo editor needs the whole phone screen; Back brings the bar back.
+                            if (!fullScreen.value) NavigationBar(windowInsets = WindowInsets(0)) {
                                 for (destination in Destination.entries) {
                                     NavigationBarItem(
                                         selected = destination == current,
@@ -111,6 +115,7 @@ private fun AppContent() {
                 }
             }
         }
+      }
     }
 }
 

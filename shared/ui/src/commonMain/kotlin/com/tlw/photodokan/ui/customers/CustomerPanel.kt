@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -15,7 +14,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -28,43 +26,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.library.Customer
-import com.tlw.photodokan.core.model.BackgroundMode
-import com.tlw.photodokan.core.model.BrushMode
 import com.tlw.photodokan.core.model.PrintQueue
 import com.tlw.photodokan.ui.components.ButtonTone
 import com.tlw.photodokan.ui.components.CopyChoices
 import com.tlw.photodokan.ui.components.CopyStepper
 import com.tlw.photodokan.ui.components.CustomerNumber
-import com.tlw.photodokan.ui.components.DockTab
-import com.tlw.photodokan.ui.components.GreyStage
 import com.tlw.photodokan.ui.components.Notice
 import com.tlw.photodokan.ui.components.PrimaryButton
 import com.tlw.photodokan.ui.components.QuietButton
-import com.tlw.photodokan.ui.components.ToolDock
-import com.tlw.photodokan.ui.editor.BackgroundControls
-import com.tlw.photodokan.ui.editor.CropControls
-import com.tlw.photodokan.ui.editor.CropEditor
-import com.tlw.photodokan.ui.editor.EditorIcons
-import com.tlw.photodokan.ui.editor.LookControls
-import com.tlw.photodokan.ui.editor.RetouchControls
-import com.tlw.photodokan.ui.editor.SMALL_BRUSH
-import com.tlw.photodokan.ui.editor.TouchUpBrush
-import com.tlw.photodokan.ui.editor.backdrop
 import com.tlw.photodokan.ui.photo.canDropPhotos
 import com.tlw.photodokan.ui.photo.photoDropTarget
 import com.tlw.photodokan.ui.theme.StudioTheme
 
-private enum class EditorTab(val label: String) { Crop("Crop"), Look("Look"), Retouch("Retouch"), Backdrop("Backdrop") }
-
-/** Copies to print: orders are usually 5 or 10, sometimes 4; the Print screen takes any number. */
-private val CommonCopies = listOf(4, 5, 10)
-
 /**
- * The selected customer or new photo: the photo on a grey stage, the four tools, and the one
- * main action for where the customer stands (save the new photo, save the changes, or add to the
- * sheet). With no photo it is the place to drop or choose one.
+ * The selected customer or new photo beside the grid on a wide window: the photo on a grey
+ * stage, the four tools, and the one main action for where the customer stands (save the new
+ * photo, save the changes, or add to the sheet). With no photo it is the place to drop or choose
+ * one. A phone uses [PhoneEditor] instead.
  */
 @Composable
 internal fun CustomerPanel(
@@ -74,7 +53,6 @@ internal fun CustomerPanel(
     pickPhoto: () -> Unit,
     takePhoto: (() -> Unit)?,
     modifier: Modifier = Modifier,
-    onBack: (() -> Unit)? = null,
 ) {
     val edit = state.edit
     if (edit == null) {
@@ -82,18 +60,12 @@ internal fun CustomerPanel(
         return
     }
     val c = StudioTheme.colors
-    var hovering by remember { mutableStateOf(false) }
-    var tab by remember(edit.preview) { mutableStateOf(EditorTab.Crop) }
-    // The touch-up brush in hand, if any: only on the backdrop tab, while the background changes.
-    var brushMode by remember(edit.preview) { mutableStateOf<BrushMode?>(null) }
-    var brushSize by remember { mutableStateOf(SMALL_BRUSH) }
-    val brush = brushMode?.takeIf { tab == EditorTab.Backdrop && edit.recipe.background.mode != BackgroundMode.KEEP }
+    val tools = rememberEditorTools(edit.preview)
     val draft = state.draft
     val selected = state.selected
 
     Column(modifier.padding(horizontal = 24.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            onBack?.let { QuietButton(it) { Text("Back") } }
             CustomerNumber(draft?.numberLabel ?: selected?.label.orEmpty(), large = true)
             Column(Modifier.weight(1f)) {
                 Text(
@@ -112,25 +84,7 @@ internal fun CustomerPanel(
             if (state.busy) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
         }
 
-        GreyStage(
-            Modifier
-                .weight(1.4f)
-                .heightIn(min = 220.dp)
-                .fillMaxWidth()
-                .then(if (hovering) Modifier.border(3.dp, c.accent, RoundedCornerShape(20.dp)) else Modifier)
-                .photoDropTarget(onHoverChange = { hovering = it }, onDrop = viewModel::import),
-        ) {
-            CropEditor(
-                image = edit.shown,
-                preset = viewModel.presetOf(edit.recipe),
-                crop = edit.recipe.crop,
-                onCropChange = viewModel::updateCrop,
-                onCommit = viewModel::commit,
-                modifier = Modifier.fillMaxSize().padding(12.dp),
-                colorMatrix = ColorAdjustment.matrix(edit.recipe),
-                backdrop = backdrop(edit.recipe.background),
-                brush = brush?.let { TouchUpBrush(it, brushSize, viewModel::touchUp) },
-            )
+        EditorStage(edit, viewModel, tools, Modifier.weight(1.4f).heightIn(min = 220.dp).fillMaxWidth()) {
             UndoRedo(
                 edit.canUndo, edit.canRedo, viewModel::undo, viewModel::redo,
                 Modifier.align(Alignment.TopEnd).padding(10.dp),
@@ -141,69 +95,10 @@ internal fun CustomerPanel(
             Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 220.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            when (tab) {
-                EditorTab.Crop -> CropControls(
-                    presets = viewModel.presets,
-                    preset = viewModel.presetOf(edit.recipe),
-                    crop = edit.recipe.crop,
-                    onPreset = viewModel::setPreset,
-                    onCropChange = viewModel::updateCrop,
-                    onCommit = viewModel::commit,
-                    onReset = viewModel::resetCrop,
-                    onFitFace = if (viewModel.canFitFace) viewModel::fitFace else null,
-                )
-                EditorTab.Look -> LookControls(
-                    recipe = edit.recipe,
-                    onPreview = viewModel::adjust,
-                    onCommit = viewModel::commit,
-                    onReset = viewModel::resetAdjustments,
-                    onAuto = if (viewModel.canAutoLight) viewModel::autoLight else null,
-                )
-                EditorTab.Retouch -> RetouchControls(
-                    recipe = edit.recipe,
-                    onCommit = viewModel::commit,
-                    onEnhance = viewModel::enhance,
-                    // Fair and smooth skin go by the face, so only a photo with one has them.
-                    onFairness = if (edit.recipe.portrait != null) viewModel::fairness else null,
-                    onRetouch = if (edit.recipe.portrait != null) viewModel::retouch else null,
-                )
-                EditorTab.Backdrop -> BackgroundControls(
-                    background = edit.recipe.background,
-                    pending = edit.backgroundPending,
-                    onChange = viewModel::setBackground,
-                    onPreview = viewModel::previewBackground,
-                    onCommit = viewModel::commit,
-                    brush = brushMode,
-                    brushSize = brushSize,
-                    onBrush = { brushMode = it },
-                    onBrushSize = { brushSize = it },
-                    onClearTouchUps = viewModel::clearTouchUps,
-                )
-            }
+            ToolControls(edit, viewModel, tools)
         }
 
-        ToolDock {
-            for (t in EditorTab.entries) {
-                if (t == EditorTab.Backdrop && !viewModel.canChangeBackground) continue
-                DockTab(
-                    label = t.label,
-                    selected = tab == t,
-                    onClick = { tab = t },
-                    icon = {
-                        Icon(
-                            when (t) {
-                                EditorTab.Crop -> EditorIcons.Crop
-                                EditorTab.Look -> EditorIcons.Look
-                                EditorTab.Retouch -> EditorIcons.Retouch
-                                EditorTab.Backdrop -> EditorIcons.Backdrop
-                            },
-                            contentDescription = null,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    },
-                )
-            }
-        }
+        EditorDock(viewModel, tools)
 
         state.message?.let { Notice(it, state.messageIsError) }
 
@@ -259,10 +154,7 @@ private fun Actions(
     }
     if (selected == null) return
     val queued = queue.orderFor(selected)
-    var copies by remember(selected) { mutableStateOf(5) }
-    val shown = queued?.copies ?: copies
-    // Once queued, picking a number changes the queued copies straight away.
-    val choose = { n: Int -> if (queued != null) viewModel.addToPrint(n) else copies = n }
+    val (shown, choose) = rememberCopies(selected, queued, viewModel)
 
     Text("Copies", style = MaterialTheme.typography.titleSmall, color = c.text)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -276,7 +168,7 @@ private fun Actions(
         when {
             // Saving comes first: the sheet prints what was saved.
             edit.changed -> PrimaryButton(viewModel::saveChanges, Modifier.weight(1f), enabled = !state.busy) { Text("Save changes") }
-            queued == null -> PrimaryButton({ viewModel.addToPrint(copies) }, Modifier.weight(1f), enabled = !state.busy) { Text("Add to sheet · $copies copies") }
+            queued == null -> PrimaryButton({ viewModel.addToPrint(shown) }, Modifier.weight(1f), enabled = !state.busy) { Text("Add to sheet · $shown copies") }
             else -> PrimaryButton({}, Modifier.weight(1f), tone = ButtonTone.Ok) { Text("On the sheet · ${queued.copies} copies") }
         }
     }

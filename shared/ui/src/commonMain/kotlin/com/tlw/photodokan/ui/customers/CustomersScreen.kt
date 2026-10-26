@@ -28,6 +28,7 @@ import com.tlw.photodokan.ui.components.Notice
 import com.tlw.photodokan.ui.components.PrimaryButton
 import com.tlw.photodokan.ui.components.QuietButton
 import com.tlw.photodokan.ui.components.StudioBackground
+import com.tlw.photodokan.ui.navigation.FullScreen
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.photo.rememberCamera
 import com.tlw.photodokan.ui.photo.rememberPhotoPicker
@@ -98,7 +99,8 @@ fun CustomersScreen(modifier: Modifier = Modifier, viewModel: CustomersViewModel
                     PhoneNewPhoto(state, pickPhoto, takePhoto)
                 }
             } else {
-                CustomerPanel(state, viewModel, queue, pickPhoto, takePhoto, Modifier.fillMaxSize(), onBack = close)
+                FullScreen()
+                PhoneEditor(state, viewModel, queue, pickPhoto, takePhoto, onBack = close)
             }
         }
     }
