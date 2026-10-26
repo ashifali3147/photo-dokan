@@ -17,6 +17,8 @@ import com.tlw.photodokan.core.model.PrintQueueStore
 import com.tlw.photodokan.ui.customers.InMemoryPhotoLibrary
 import com.tlw.photodokan.ui.di.appModule
 import com.tlw.photodokan.ui.print.InMemoryPrintQueueStore
+import com.tlw.photodokan.ui.theme.InMemoryThemeModeStore
+import com.tlw.photodokan.ui.theme.ThemeModeStore
 import org.koin.compose.KoinApplication
 import org.koin.dsl.module
 import kotlin.test.Test
@@ -32,6 +34,7 @@ class AppNavigationTest {
             KoinApplication(application = { modules(appModule, module {
                 single<PhotoLibrary> { InMemoryPhotoLibrary() }
                 single<PrintQueueStore> { InMemoryPrintQueueStore() }
+                single<ThemeModeStore> { InMemoryThemeModeStore() }
             }) }) {
                 Box(Modifier.size(width.dp, height.dp)) { App() }
             }
