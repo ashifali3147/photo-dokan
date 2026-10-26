@@ -80,11 +80,11 @@ private fun AppContent() {
                 if (maxWidth >= 600.dp) {
                     Row {
                         StudioRail(current, select, waiting.orders.size)
-                        DestinationScreen(current, Modifier.weight(1f))
+                        DestinationScreen(current, Modifier.weight(1f), select)
                     }
                 } else {
                     Column {
-                        DestinationScreen(current, Modifier.weight(1f))
+                        DestinationScreen(current, Modifier.weight(1f), select)
                         // The photo editor needs the whole phone screen; Back brings the bar back.
                         if (!fullScreen.value) StudioBottomBar(current, select, waiting.orders.size)
                     }
@@ -96,8 +96,8 @@ private fun AppContent() {
 }
 
 @Composable
-private fun DestinationScreen(destination: Destination, modifier: Modifier) = when (destination) {
+private fun DestinationScreen(destination: Destination, modifier: Modifier, onSelect: (Destination) -> Unit) = when (destination) {
     Destination.Customers -> CustomersScreen(modifier)
-    Destination.Print -> PrintScreen(modifier)
+    Destination.Print -> PrintScreen(modifier, onOpenSettings = { onSelect(Destination.Settings) })
     Destination.Settings -> SettingsScreen(modifier)
 }
