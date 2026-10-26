@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -30,7 +31,7 @@ import com.tlw.photodokan.core.library.Customer
 import com.tlw.photodokan.core.model.PrintQueue
 import com.tlw.photodokan.ui.components.ButtonTone
 import com.tlw.photodokan.ui.components.CopyChoices
-import com.tlw.photodokan.ui.components.CopyStepper
+import com.tlw.photodokan.ui.components.CopyNudge
 import com.tlw.photodokan.ui.components.CustomerNumber
 import com.tlw.photodokan.ui.components.Notice
 import com.tlw.photodokan.ui.components.PrimaryButton
@@ -38,6 +39,13 @@ import com.tlw.photodokan.ui.components.QuietButton
 import com.tlw.photodokan.ui.photo.canDropPhotos
 import com.tlw.photodokan.ui.photo.photoDropTarget
 import com.tlw.photodokan.ui.theme.StudioTheme
+import com.tlw.photodokan.ui.editor.EditorIcons
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.BoxWithConstraints
+import com.tlw.photodokan.ui.components.scrollFade
 
 /**
  * The selected customer or new photo beside the grid on a wide window: the photo on a grey
@@ -72,30 +80,30 @@ internal fun CustomerPanel(
                     if (draft != null) "New photo · ${draft.fileName}" else customerLine(selected),
                     style = MaterialTheme.typography.bodyLarge,
                     color = c.textMuted,
-                    maxLines = 2,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "${viewModel.presetOf(edit.recipe).name} · ${edit.preview.originalWidth} × ${edit.preview.originalHeight} px",
+                    viewModel.presetOf(edit.recipe).name,
                     style = MaterialTheme.typography.bodyMedium,
                     color = c.textMuted,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             if (state.busy) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+            UndoRedo(edit.canUndo, edit.canRedo, viewModel::undo, viewModel::redo)
         }
 
-        EditorStage(edit, viewModel, tools, Modifier.weight(1.4f).heightIn(min = 220.dp).fillMaxWidth()) {
-            UndoRedo(
-                edit.canUndo, edit.canRedo, viewModel::undo, viewModel::redo,
-                Modifier.align(Alignment.TopEnd).padding(10.dp),
-            )
-        }
-
-        Column(
-            Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 220.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            ToolControls(edit, viewModel, tools)
+        // The photo gets a fixed share of the room above the dock, and the tool's controls under it
+        // scroll, so on a short window nothing is squeezed out of sight.
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val stageHeight = (maxHeight * 0.62f).coerceIn(200.dp, 520.dp)
+            val scroll = rememberScrollState()
+            Column(Modifier.fillMaxSize().scrollFade(scroll, c.surface).verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                EditorStage(edit, viewModel, tools, Modifier.height(stageHeight).fillMaxWidth())
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { ToolControls(edit, viewModel, tools) }
+            }
         }
 
         EditorDock(viewModel, tools)
@@ -107,11 +115,12 @@ internal fun CustomerPanel(
     }
 }
 
+/** Undo and redo as icons in the header, off the photo. */
 @Composable
-private fun UndoRedo(canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        QuietButton(onUndo, enabled = canUndo) { Text("Undo") }
-        QuietButton(onRedo, enabled = canRedo) { Text("Redo") }
+private fun UndoRedo(canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit) {
+    Row {
+        IconButton(onUndo, enabled = canUndo) { Icon(EditorIcons.Undo, contentDescription = "Undo") }
+        IconButton(onRedo, enabled = canRedo) { Icon(EditorIcons.Redo, contentDescription = "Redo") }
     }
 }
 
@@ -147,7 +156,7 @@ private fun Actions(
     val c = StudioTheme.colors
     if (isDraft) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            QuietButton(viewModel::discardDraft, enabled = !state.busy) { Text("Discard") }
+            QuietButton(viewModel::discardDraft, enabled = !state.busy, tall = true) { Text("Discard") }
             PrimaryButton(viewModel::saveDraft, Modifier.weight(1f), enabled = !state.busy) { Text("Save as customer ${state.draft?.numberLabel}") }
         }
         return
@@ -156,20 +165,19 @@ private fun Actions(
     val queued = queue.orderFor(selected)
     val (shown, choose) = rememberCopies(selected, queued, viewModel)
 
-    Text("Copies", style = MaterialTheme.typography.titleSmall, color = c.text)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         CopyChoices(shown, CommonCopies, choose, Modifier.weight(1f))
-        CopyStepper(shown, choose)
+        CopyNudge(shown, choose)
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         val newPhoto = if (takePhoto != null) takePhoto else pickPhoto
-        QuietButton(newPhoto, enabled = !state.busy) { Text(if (takePhoto != null) "Retake" else "New photo") }
-        if (queued != null) QuietButton(viewModel::removeFromPrint, enabled = !state.busy) { Text("Remove") }
+        QuietButton(newPhoto, enabled = !state.busy, tall = true) { Text(if (takePhoto != null) "Retake" else "New photo") }
+        if (queued != null) QuietButton(viewModel::removeFromPrint, enabled = !state.busy, tall = true) { Text("Remove") }
         when {
             // Saving comes first: the sheet prints what was saved.
             edit.changed -> PrimaryButton(viewModel::saveChanges, Modifier.weight(1f), enabled = !state.busy) { Text("Save changes") }
             queued == null -> PrimaryButton({ viewModel.addToPrint(shown) }, Modifier.weight(1f), enabled = !state.busy) { Text("Add to sheet · $shown copies") }
-            else -> PrimaryButton({}, Modifier.weight(1f), tone = ButtonTone.Ok) { Text("On the sheet · ${queued.copies} copies") }
+            else -> PrimaryButton({}, Modifier.weight(1f), tone = ButtonTone.Ok) { Text("On the sheet") }
         }
     }
 }
@@ -208,7 +216,7 @@ private fun EmptyPanel(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (takePhoto != null) {
                 PrimaryButton(takePhoto, Modifier.weight(1f), enabled = !state.busy) { Text("Take photo") }
-                QuietButton(pickPhoto, enabled = !state.busy) { Text("Choose photo") }
+                QuietButton(pickPhoto, enabled = !state.busy, tall = true) { Text("Choose photo") }
             } else {
                 PrimaryButton(pickPhoto, Modifier.weight(1f), enabled = !state.busy) { Text("Choose photo") }
             }

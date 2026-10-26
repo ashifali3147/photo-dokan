@@ -4,16 +4,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,6 +18,11 @@ import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.model.BackgroundConfig
 import com.tlw.photodokan.core.model.BackgroundMode
 import com.tlw.photodokan.core.model.BrushMode
+import com.tlw.photodokan.ui.components.StudioSlider
+import com.tlw.photodokan.ui.theme.StudioTheme
+import com.tlw.photodokan.ui.components.QuietButton
+import com.tlw.photodokan.ui.components.ChoiceRow
+import com.tlw.photodokan.ui.components.ChoiceChip
 
 /** The plain colours a background can be replaced with, as the operator names them. */
 private val COLOURS = listOf("White" to BackgroundConfig.WHITE, "Light blue" to BackgroundConfig.LIGHT_BLUE)
@@ -51,15 +52,15 @@ fun BackgroundControls(
     onBrushSize: (Double) -> Unit = {},
     onClearTouchUps: () -> Unit = {},
 ) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    ChoiceRow {
         for ((mode, label) in listOf(BackgroundMode.BLUR to "Soft blur", BackgroundMode.REPLACE to "Plain colour", BackgroundMode.KEEP to "As shot")) {
-            FilterChip(selected = background.mode == mode, onClick = { onChange(background.copy(mode = mode)) }, label = { Text(label) })
+            ChoiceChip(label, selected = background.mode == mode, onClick = { onChange(background.copy(mode = mode)) })
         }
     }
     when (background.mode) {
         BackgroundMode.BLUR -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Softness", Modifier.width(96.dp))
-            Slider(
+            StudioSlider(
                 value = background.blurStrength.toFloat(),
                 onValueChange = { onPreview(background.copy(blurStrength = (it * 20).toInt() / 20.0)) },
                 onValueChangeFinished = onCommit,
@@ -67,25 +68,25 @@ fun BackgroundControls(
                 modifier = Modifier.weight(1f),
             )
         }
-        BackgroundMode.REPLACE -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        BackgroundMode.REPLACE -> ChoiceRow {
             for ((name, argb) in COLOURS) {
-                FilterChip(
+                ChoiceChip(
+                    name,
                     selected = background.replaceColorArgb == argb,
                     onClick = { onChange(background.copy(replaceColorArgb = argb)) },
-                    label = { Text(name) },
-                    leadingIcon = { Swatch(Color(argb.toInt())) },
+                    leading = { Swatch(Color(argb.toInt())) },
                 )
             }
         }
         BackgroundMode.KEEP -> Unit
     }
     if (background.mode != BackgroundMode.KEEP && !pending) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-            Text("Fix the edge:")
+        ChoiceRow {
+            Text("Fix the edge", color = StudioTheme.colors.textMuted, style = MaterialTheme.typography.bodyMedium)
             for ((mode, label) in listOf(BrushMode.KEEP to "Keep", BrushMode.ERASE to "Erase")) {
-                FilterChip(selected = brush == mode, onClick = { onBrush(if (brush == mode) null else mode) }, label = { Text(label) })
+                ChoiceChip(label, selected = brush == mode, onClick = { onBrush(if (brush == mode) null else mode) })
             }
-            if (background.touchUps.isNotEmpty()) TextButton(onClick = onClearTouchUps) { Text("Clear fixes") }
+            if (background.touchUps.isNotEmpty()) QuietButton(onClearTouchUps) { Text("Clear fixes") }
         }
         if (brush != null) {
             Text(
@@ -95,7 +96,7 @@ fun BackgroundControls(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Brush size", Modifier.width(96.dp))
-                Slider(
+                StudioSlider(
                     value = brushSize.toFloat(),
                     onValueChange = { onBrushSize(it.toDouble()) },
                     valueRange = SMALL_BRUSH.toFloat()..LARGE_BRUSH.toFloat(),
@@ -111,4 +112,4 @@ fun BackgroundControls(
 
 @Composable
 private fun Swatch(colour: Color) =
-    Box(Modifier.size(18.dp).background(colour, CircleShape).border(1.dp, MaterialTheme.colorScheme.outline, CircleShape))
+    Box(Modifier.size(18.dp).background(colour, CircleShape).border(1.dp, StudioTheme.colors.outline, CircleShape))

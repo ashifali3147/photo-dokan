@@ -73,28 +73,26 @@ class PhoneEditorTest {
     @Test
     fun tappingTheOpenToolFoldsItsControlsAway() = runComposeUiTest {
         openFirstCustomerOnAPhone()
-        assertTrue(shows("Zoom"))
+        assertTrue(shows("Zoom in"))
         onNodeWithText("Crop").performClick()
         waitForIdle()
-        assertTrue(!shows("Zoom"), "the crop controls fold away")
+        assertTrue(!shows("Zoom in"), "the crop controls fold away")
         onNodeWithText("Crop").performClick()
         waitForIdle()
-        assertTrue(shows("Zoom"), "and come back")
+        assertTrue(shows("Zoom in"), "and come back")
     }
 
     @Test
-    fun copiesAreChosenInASheetAndAddedWithTheMainButton() = runComposeUiTest {
+    fun copiesAreChosenAndAddedFromTheSheetInOneTap() = runComposeUiTest {
         val koin = openFirstCustomerOnAPhone()
         onNodeWithContentDescription("5 copies. Change").performClick()
         waitUntil(timeoutMillis = 5_000) { shows("Copies for 0001") }
         onNodeWithContentDescription("10 copies").performClick()
-        onNodeWithText("Done · 10 copies").performClick()
-        waitForIdle()
-        onNodeWithContentDescription("10 copies. Change").assertExists()
-
-        onNodeWithText("Add to sheet").performClick()
+        // Choosing the copies and adding them is one tap from the sheet.
+        onNodeWithText("Add to sheet · 10 copies").performClick()
         waitForIdle()
         assertEquals(listOf(10), koin.koin.get<PrintOrders>().queue.value.orders.map { it.copies })
+        onNodeWithContentDescription("10 copies. Change").assertExists()
         onNodeWithText("On the sheet").assertExists()
     }
 }

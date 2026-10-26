@@ -26,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.model.Order
 import com.tlw.photodokan.core.model.QueuedOrder
@@ -62,8 +65,13 @@ import com.tlw.photodokan.ui.components.StatusDot
 import com.tlw.photodokan.ui.components.StudioBackground
 import com.tlw.photodokan.ui.components.riseIn
 import com.tlw.photodokan.ui.platform.imageBitmapOf
+import com.tlw.photodokan.ui.platform.today
 import com.tlw.photodokan.ui.theme.StudioTheme
 import org.koin.compose.viewmodel.koinViewModel
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import com.tlw.photodokan.ui.platform.tapVerb
 
 /** The print queue next to a to-scale preview of where each copy lands on the sheet. */
 @Composable
@@ -92,11 +100,18 @@ fun PrintScreen(modifier: Modifier = Modifier, viewModel: PrintViewModel = koinV
                     }
                 }
             } else {
+                // On a phone the sheet takes the full width, so its slots are big enough to tap,
+                // and everything above the buttons scrolls; the buttons stay at the bottom.
                 Column(Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(top = 20.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    QueueHeader(state)
-                    SheetWell(state, viewModel, Modifier.weight(1f))
-                    OrderList(state, viewModel, Modifier.weight(1f))
-                    Footer(state, viewModel, pickPdf) { confirm = it }
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        QueueHeader(state)
+                        SheetHeader(state, viewModel)
+                        SheetWell(state, viewModel, Modifier, fillWidth = true)
+                        state.queue.orders.forEachIndexed { index, order ->
+                            OrderCard(order, state.photos[order.id], viewModel, Modifier.riseIn(index))
+                        }
+                    }
+                    Footer(state, viewModel, pickPdf, compact = true) { confirm = it }
                 }
             }
         }
@@ -197,7 +212,12 @@ private fun OrderCard(order: QueuedOrder, photo: ImageBitmap?, viewModel: PrintV
                     style = MaterialTheme.typography.bodyMedium,
                     color = c.textMuted,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                // Numbers restart every day, so an order from another day says which day it is.
+                if (customer.date != today()) {
+                    Text("From ${customer.date}", style = MaterialTheme.typography.bodySmall, color = c.textMuted, maxLines = 1)
+                }
             }
             CopyStepper(order.copies, { viewModel.setCopies(order, it) }, range = 1..Order.MAX_COPIES)
             IconButton(onClick = { viewModel.remove(order) }) { Icon(Icons.Filled.Close, contentDescription = "Remove ${customer.label}", tint = c.textMuted) }
@@ -252,7 +272,7 @@ private fun SheetHeader(state: PrintState, viewModel: PrintViewModel) {
             )
             Text(
                 (if (sheets[index].reusesPartialSheet) "$used of $capacity slots already printed" else "$capacity free slots") +
-                    " · tap a slot to leave it blank",
+                    " · $tapVerb a slot to leave it blank",
                 style = MaterialTheme.typography.bodyMedium,
                 color = c.textMuted,
             )
@@ -276,7 +296,10 @@ private fun Legend() {
                 if (colour != null) {
                     Box(swatch.background(colour).border(1.dp, c.outline, RoundedCornerShape(3.dp)))
                 } else {
-                    Box(swatch.background(c.paper).border(1.dp, c.slotBlank, RoundedCornerShape(3.dp)))
+                    // A dashed outline, as a blank slot looks on the sheet, so it can't be taken for a free one.
+                    Canvas(Modifier.size(14.dp)) {
+                        drawRect(c.slotBlank, style = Stroke(width = 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 2.dp.toPx()))))
+                    }
                 }
                 Text(label, style = MaterialTheme.typography.bodySmall, color = c.textMuted)
             }
@@ -286,9 +309,9 @@ private fun Legend() {
 
 /** The sheet on a recessed surround, like paper on a light table. */
 @Composable
-private fun SheetWell(state: PrintState, viewModel: PrintViewModel, modifier: Modifier) {
+private fun SheetWell(state: PrintState, viewModel: PrintViewModel, modifier: Modifier, fillWidth: Boolean = false) {
     val c = StudioTheme.colors
-    Box(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.well).padding(16.dp), contentAlignment = Alignment.Center) {
+    Box(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.well).padding(if (fillWidth) 10.dp else 16.dp), contentAlignment = Alignment.Center) {
         val sheetIndex = state.sheetIndex.coerceIn(state.sheets.indices)
         val sheet = state.shownSheet
         val labels = state.queue.orders.associate { it.id to it.customer.label }
@@ -296,14 +319,15 @@ private fun SheetWell(state: PrintState, viewModel: PrintViewModel, modifier: Mo
             template = viewModel.template,
             sheet = sheet,
             photos = state.photos,
-            modifier = Modifier.fillMaxHeight(),
+            modifier = if (fillWidth) Modifier.fillMaxWidth() else Modifier.fillMaxHeight(),
             onSlotTap = if (state.printing) null else { slot -> viewModel.toggleBlank(sheetIndex, slot) },
             describe = { slot ->
+                val tap = tapVerb.replaceFirstChar { it.uppercase() }
                 val placed = sheet.placements.firstOrNull { it.slotIndex == slot }
                 when {
-                    placed != null -> "Slot ${slot + 1}, customer ${labels[placed.orderId].orEmpty()}. Tap to leave it blank."
-                    slot in sheet.blankSlots -> "Slot ${slot + 1}, left blank. Tap to use it again."
-                    else -> "Slot ${slot + 1}, free. Tap to leave it blank."
+                    placed != null -> "Slot ${slot + 1}, customer ${labels[placed.orderId].orEmpty()}. $tap to leave it blank."
+                    slot in sheet.blankSlots -> "Slot ${slot + 1}, left blank. $tap to use it again."
+                    else -> "Slot ${slot + 1}, free. $tap to leave it blank."
                 }
             },
         )
@@ -312,7 +336,7 @@ private fun SheetWell(state: PrintState, viewModel: PrintViewModel, modifier: Mo
 
 /** What is happening or happened, what to do with the sheet, and the buttons. */
 @Composable
-private fun Footer(state: PrintState, viewModel: PrintViewModel, pickPdf: (() -> Unit)?, onConfirm: (Confirm) -> Unit) {
+private fun Footer(state: PrintState, viewModel: PrintViewModel, pickPdf: (() -> Unit)?, compact: Boolean = false, onConfirm: (Confirm) -> Unit) {
     val c = StudioTheme.colors
     val queue = state.queue
     val idle = !state.printing && !state.choosingSettings
@@ -359,9 +383,27 @@ private fun Footer(state: PrintState, viewModel: PrintViewModel, pickPdf: (() ->
         }
     }
     Text(sheetAdvice(state, viewModel.template.capacity), style = MaterialTheme.typography.bodyMedium, color = c.textMuted)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-        for ((label, enabled, click) in others) QuietButton(click, enabled = idle && enabled) { Text(label) }
-        main?.let { (label, click) -> PrimaryButton(click, enabled = idle && hasOrders) { Text(label) } }
+    if (compact) {
+        // On a phone the main action takes the width; the rest wait in a menu beside it.
+        var menu by remember { mutableStateOf(false) }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (others.isNotEmpty()) {
+                Box {
+                    QuietButton({ menu = true }, enabled = idle, tall = true) { Text("More") }
+                    DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                        for ((label, enabled, click) in others) {
+                            DropdownMenuItem(text = { Text(label) }, onClick = { menu = false; click() }, enabled = idle && enabled)
+                        }
+                    }
+                }
+            }
+            main?.let { (label, click) -> PrimaryButton(click, Modifier.weight(1f), enabled = idle && hasOrders) { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) } }
+        }
+    } else {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+            for ((label, enabled, click) in others) QuietButton(click, enabled = idle && enabled, tall = true) { Text(label) }
+            main?.let { (label, click) -> PrimaryButton(click, enabled = idle && hasOrders) { Text(label) } }
+        }
     }
 }
 

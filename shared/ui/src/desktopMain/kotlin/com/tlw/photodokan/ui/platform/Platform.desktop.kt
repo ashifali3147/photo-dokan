@@ -44,3 +44,8 @@ actual fun logTiming(what: String, millis: Long) = Unit
 
 @Composable
 actual fun SystemBackHandler(enabled: Boolean, onBack: () -> Unit) = Unit
+
+@Composable
+actual fun SystemBarsFollowTheme(dark: Boolean) = Unit
+
+actual val tapVerb: String = "click"

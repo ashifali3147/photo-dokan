@@ -36,3 +36,22 @@ expect fun logTiming(what: String, millis: Long)
  */
 @Composable
 expect fun SystemBackHandler(enabled: Boolean, onBack: () -> Unit)
+
+/**
+ * Draws the phone's status and navigation bar icons dark on a light app, light on a dark one,
+ * following the app's own theme rather than the phone's. Nothing on the PC.
+ */
+@Composable
+expect fun SystemBarsFollowTheme(dark: Boolean)
+
+/** The gesture by name for instructions: "tap" on a phone, "click" on the PC. */
+expect val tapVerb: String
+
+/** Where this device keeps the customers' photos, for Settings to show and open. */
+interface PhotoFolder {
+    /** The folder as the operator would find it, e.g. C:\Users\Studio\Pictures\Photo Dokan. */
+    val location: String
+
+    /** Opens the folder in the computer's file manager. */
+    fun open()
+}

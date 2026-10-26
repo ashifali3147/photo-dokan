@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -129,7 +130,11 @@ private fun StepperButton(symbol: String, label: String, enabled: Boolean, onCli
     )
 }
 
-/** The usual copy counts as large buttons; the chosen one is washed in the accent with a glow. */
+/**
+ * The usual copy counts as large buttons; the chosen one is washed in the accent with a glow. A
+ * count that isn't one of [choices] (after − or +) shows as one more chosen button, so the number
+ * is always on screen exactly once.
+ */
 @Composable
 fun CopyChoices(
     copies: Int,
@@ -138,7 +143,7 @@ fun CopyChoices(
     modifier: Modifier = Modifier,
 ) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (n in choices) {
+        for (n in if (copies in choices) choices else (choices + copies).sorted()) {
             val chosen = copies == n
             val c = StudioTheme.colors
             val shape = RoundedCornerShape(12.dp)
@@ -212,5 +217,17 @@ fun Notice(text: String, isError: Boolean, modifier: Modifier = Modifier) {
     ) {
         Text(if (isError) "!" else "✓", color = colour, style = StudioTheme.type.numberSmall)
         Text(text, color = colour, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/** One copy fewer or more, beside [CopyChoices], which shows the count. */
+@Composable
+fun CopyNudge(copies: Int, onChange: (Int) -> Unit, modifier: Modifier = Modifier, range: IntRange = 1..40) {
+    val c = StudioTheme.colors
+    val shape = RoundedCornerShape(12.dp)
+    Row(modifier.height(56.dp).border(1.dp, c.outline, shape), verticalAlignment = Alignment.CenterVertically) {
+        StepperButton("−", "Fewer copies", enabled = copies > range.first) { onChange(copies - 1) }
+        Box(Modifier.width(1.dp).height(28.dp).background(c.line))
+        StepperButton("+", "More copies", enabled = copies < range.last) { onChange(copies + 1) }
     }
 }

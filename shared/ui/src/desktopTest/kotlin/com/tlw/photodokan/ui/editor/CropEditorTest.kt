@@ -47,7 +47,7 @@ class CropEditorTest {
             }
         }
 
-        onNodeWithText("+").performClick()
+        onNodeWithText("Zoom in").performClick()
         assertEquals(1.2, crop.scale, 1e-9)
         assertEquals(1, commits, "a button press is one undo step")
 
@@ -56,8 +56,8 @@ class CropEditorTest {
         assertTrue(crop.centerX < before, "dragging right moves the photo right, so the frame sits further left")
         assertEquals(2, commits, "a whole drag is one undo step")
 
-        onNodeWithText("−").performClick()
-        onNodeWithText("−").performClick()
+        onNodeWithText("Zoom out").performClick()
+        onNodeWithText("Zoom out").performClick()
         assertEquals(1.0, crop.scale, 1e-9, "never zooms out past the full frame")
     }
 

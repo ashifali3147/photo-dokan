@@ -3,7 +3,6 @@ package com.tlw.photodokan.ui.editor
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -13,6 +12,7 @@ import com.tlw.photodokan.core.model.EditRecipe
 import com.tlw.photodokan.ui.components.QuietButton
 import com.tlw.photodokan.ui.theme.StudioTheme
 import kotlin.math.roundToInt
+import com.tlw.photodokan.ui.components.StudioSlider
 
 /** The recipe's light and colour sliders, named the way the operator thinks of them. */
 enum class Adjustment(val label: String) {
@@ -59,11 +59,12 @@ fun LookControls(
         val value = adjustment.valueIn(recipe)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(adjustment.label, Modifier.width(96.dp))
-            Slider(
+            StudioSlider(
                 value = value.toFloat(),
                 onValueChange = { onPreview(adjustment, it.toDouble()) },
                 onValueChangeFinished = onCommit,
                 valueRange = -1f..1f,
+                centred = true,
                 modifier = Modifier.weight(1f),
             )
             Text(formatAmount(value), Modifier.width(44.dp), style = StudioTheme.type.numberSmall)
@@ -97,7 +98,7 @@ fun RetouchControls(
 private fun StrengthSlider(label: String, value: Double, onChange: (Double) -> Unit, onCommit: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.width(96.dp))
-        Slider(
+        StudioSlider(
             value = value.toFloat(),
             onValueChange = { onChange((it * 20).roundToInt() / 20.0) },
             onValueChangeFinished = onCommit,
