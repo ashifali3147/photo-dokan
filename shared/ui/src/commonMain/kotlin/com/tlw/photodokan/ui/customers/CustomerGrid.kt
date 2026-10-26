@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.library.Customer
 import com.tlw.photodokan.ui.components.Card
@@ -168,7 +169,7 @@ private fun CustomerCard(
         Column(Modifier.padding(horizontal = 2.dp)) {
             CustomerNumber(customer.label)
             val line = listOfNotNull(customer.name, customer.date.toString().takeIf { showDay }).joinToString(" · ")
-            if (line.isNotEmpty()) Text(line, style = MaterialTheme.typography.bodyMedium, color = c.textMuted, maxLines = 1)
+            if (line.isNotEmpty()) Text(line, style = MaterialTheme.typography.bodyMedium, color = c.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
