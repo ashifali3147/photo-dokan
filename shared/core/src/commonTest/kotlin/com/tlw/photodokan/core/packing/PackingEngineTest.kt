@@ -130,4 +130,82 @@ class PackingEngineTest {
         val result = PackingEngine.pack(small, SheetState.FRESH, listOf(order("A", 10)))
         assertEquals(listOf(8, 2), result.sheets.map { it.placements.size })
     }
+
+    // Blank slots: the operator taps a slot to leave it empty on this print.
+
+    @Test
+    fun copiesSkipABlankSlot() {
+        val result = PackingEngine.pack(sheet, SheetState.FRESH, listOf(order("A", 4)), blanks = mapOf(0 to setOf(2)))
+        assertEquals(listOf(0, 1, 3, 4), slotsOf(result, 0, "A"))
+        assertEquals(setOf(2), result.sheets[0].blankSlots)
+    }
+
+    @Test
+    fun aBlankAtTheEndOfARowStartsTheNextCustomerOnANewRow() {
+        val result = PackingEngine.pack(sheet, SheetState.FRESH, listOf(order("A", 4), order("B", 5)), blanks = mapOf(0 to setOf(4)))
+        assertEquals(listOf(0, 1, 2, 3), slotsOf(result, 0, "A"))
+        assertEquals(listOf(5, 6, 7, 8, 9), slotsOf(result, 0, "B"))
+    }
+
+    @Test
+    fun blankSlotsGetNoInkSoTheyStayFreeAfterPrinting() {
+        val result = PackingEngine.pack(sheet, SheetState.FRESH, listOf(order("A", 4)), blanks = mapOf(0 to setOf(2)))
+        assertEquals(SheetState(setOf(0, 1, 3, 4)), result.newState)
+    }
+
+    @Test
+    fun aSheetFullOnlyBecauseOfBlanksIsStillPartUsedAfterwards() {
+        val result = PackingEngine.pack(sheet, SheetState.FRESH, listOf(order("A", 39)), blanks = mapOf(0 to setOf(39)))
+        assertEquals(1, result.sheets.size)
+        assertEquals(SheetState((0..38).toSet()), result.newState)
+    }
+
+    @Test
+    fun blanksPushCopiesOntoTheNextSheet() {
+        val result = PackingEngine.pack(sheet, SheetState.FRESH, listOf(order("A", 35)), blanks = mapOf(0 to (0..9).toSet()))
+        assertEquals((10..39).toList(), slotsOf(result, 0, "A"))
+        assertEquals((0..4).toList(), slotsOf(result, 1, "A"))
+        assertEquals(35, result.copiesPlaced)
+        assertEquals(SheetState((0..4).toSet()), result.newState)
+    }
+
+    @Test
+    fun eachSheetHasItsOwnBlanks() {
+        val result = PackingEngine.pack(sheet, SheetState.FRESH, listOf(order("A", 42)), blanks = mapOf(1 to setOf(0)))
+        assertEquals((0..39).toList(), slotsOf(result, 0, "A"))
+        assertEquals(listOf(1, 2), slotsOf(result, 1, "A"))
+        assertEquals(emptySet(), result.sheets[0].blankSlots)
+        assertEquals(setOf(0), result.sheets[1].blankSlots)
+    }
+
+    @Test
+    fun aBlankOnAnAlreadyPrintedSlotIsIgnored() {
+        val state = SheetState(setOf(0, 1, 2))
+        val result = PackingEngine.pack(sheet, state, listOf(order("A", 3)), blanks = mapOf(0 to setOf(1, 5)))
+        assertEquals(listOf(3, 4, 6), slotsOf(result, 0, "A"))
+        assertEquals(setOf(5), result.sheets[0].blankSlots)
+    }
+
+    @Test
+    fun blanksThatWouldLeaveNoSlotToPrintOnAreIgnored() {
+        // Otherwise the part-used sheet would go through the printer with nothing on it.
+        val state = SheetState((0..38).toSet())
+        val result = PackingEngine.pack(sheet, state, listOf(order("A", 1)), blanks = mapOf(0 to setOf(39)))
+        assertEquals(listOf(39), slotsOf(result, 0, "A"))
+        assertEquals(emptySet(), result.sheets[0].blankSlots)
+        assertEquals(SheetState.FRESH, result.newState)
+    }
+
+    @Test
+    fun aWhollyBlankSheetCannotStopPacking() {
+        val result = PackingEngine.pack(sheet, SheetState.FRESH, listOf(order("A", 3)), blanks = mapOf(0 to (0 until 40).toSet()))
+        assertEquals(listOf(0, 1, 2), slotsOf(result, 0, "A"))
+    }
+
+    @Test
+    fun blanksOutsideTheSheetAreIgnored() {
+        val result = PackingEngine.pack(sheet, SheetState.FRESH, listOf(order("A", 2)), blanks = mapOf(0 to setOf(-1, 40)))
+        assertEquals(listOf(0, 1), slotsOf(result, 0, "A"))
+        assertEquals(emptySet(), result.sheets[0].blankSlots)
+    }
 }
