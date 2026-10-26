@@ -31,10 +31,13 @@ import com.tlw.photodokan.ui.theme.AppearanceSettings
 import com.tlw.photodokan.ui.theme.StudioTheme
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.getKoin
+import com.tlw.photodokan.ui.components.QuietButton
+import com.tlw.photodokan.ui.platform.PhotoFolder
 
 /**
  * Everything set up once and rarely touched again, one card each: the printer, the sheet, printing
- * from the phone, and how the app looks. A card with nothing to say on this device is left out.
+ * from the phone, the photo folder, and how the app looks. A card with nothing to say on this device is left out.
  */
 @Composable
 fun SettingsScreen(modifier: Modifier = Modifier) {
@@ -44,6 +47,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     // The printer and its saved settings are only known once asked for, so ask on opening Settings.
     LaunchedEffect(print) { print.refresh() }
     val station: StationViewModel = koinViewModel()
+    val folder = getKoin().getOrNull<PhotoFolder>()
     StudioBackground(modifier.fillMaxSize()) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 24.dp),
@@ -55,7 +59,8 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 if (print.hasPrinter && printState.photoSettings != PhotoSettings.NotSupported) Section(0) { PrinterSettings(print) }
                 Section(1) { SheetSettings() }
                 if (station.isHost || station.isPhone) Section(2) { StationSettings(station) }
-                Section(3) { AppearanceSettings() }
+                folder?.let { Section(3) { PhotoFolderSettings(it) } }
+                Section(4) { AppearanceSettings() }
             }
         }
     }
@@ -80,6 +85,15 @@ private fun SheetSettings(template: SheetTemplate = koinInject()) {
         style = MaterialTheme.typography.bodyLarge,
         color = c.textMuted,
     )
+}
+
+/** Where the photos are kept, with a way to open the folder, e.g. to copy them to a USB stick. */
+@Composable
+private fun PhotoFolderSettings(folder: PhotoFolder) {
+    val c = StudioTheme.colors
+    Text("Photo folder", style = MaterialTheme.typography.titleLarge, color = c.text)
+    Text(folder.location, style = MaterialTheme.typography.bodyLarge, color = c.textMuted)
+    QuietButton({ runCatching { folder.open() } }) { Text("Open folder") }
 }
 
 private fun Double.mm(): String = if (this % 1.0 == 0.0) toInt().toString() else toString()

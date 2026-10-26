@@ -23,6 +23,8 @@ dependencies {
     implementation(project(":shared:station"))
     implementation(project(":shared:vision"))
     implementation(compose.desktop.currentOs)
+    // The title bar follows the app's dark or light theme on Windows.
+    implementation(libs.jna)
     testImplementation(kotlin("test"))
 }
 

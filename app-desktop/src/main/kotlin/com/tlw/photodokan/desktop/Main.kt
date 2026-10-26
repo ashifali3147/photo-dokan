@@ -1,7 +1,9 @@
 package com.tlw.photodokan.desktop
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -31,7 +33,9 @@ import com.tlw.photodokan.ui.App
 import com.tlw.photodokan.ui.di.initKoin
 import com.tlw.photodokan.ui.platform.today
 import com.tlw.photodokan.ui.print.StationJobPrinter
+import com.tlw.photodokan.ui.platform.PhotoFolder
 import com.tlw.photodokan.ui.theme.FileThemeModeStore
+import com.tlw.photodokan.ui.theme.ThemeSettings
 import com.tlw.photodokan.ui.theme.ThemeModeStore
 import com.tlw.photodokan.vision.FaceFinder
 import com.tlw.photodokan.vision.ModelFiles
@@ -49,8 +53,11 @@ import java.time.format.DateTimeFormatter
 import kotlin.concurrent.thread
 
 // TODO(settings): let the operator pick the library folder, e.g. D:\PhotoDokan\Photos on the studio PC.
+private val libraryFolder = File(System.getProperty("user.home"), "Pictures" + File.separator + "Photo Dokan")
+
 private val desktopModule = module {
-    single<PhotoLibrary> { FilePhotoLibrary(Path(System.getProperty("user.home"), "Pictures", "Photo Dokan")) }
+    single<PhotoLibrary> { FilePhotoLibrary(Path(libraryFolder.path)) }
+    single<PhotoFolder> { DesktopPhotoFolder(libraryFolder) }
     single<PrintQueueStore> { FilePrintQueueStore(Path(appDataDir(), "print-queue.json")) }
     single<ThemeModeStore> { FileThemeModeStore(Path(appDataDir(), "theme.txt")) }
     // Away from Windows (developing on a Mac) Print saves an actual-size PDF instead.
@@ -93,6 +100,7 @@ private fun appDataDir(): Path =
 
 fun main() {
     initKoin(listOf(desktopModule))
+    TitleBar.prepare(KoinPlatform.getKoin().get<ThemeSettings>().mode.value)
     val station = KoinPlatform.getKoin().get<PrintStation>()
     // Off the main thread so the window never waits; the app works without the station.
     val starting = thread(name = "Print Station start", isDaemon = true) { PrintStation.startQuietly(station) }
@@ -123,6 +131,9 @@ fun main() {
                 mainWindow = window
                 onDispose { mainWindow = null }
             }
+            val mode by KoinPlatform.getKoin().get<ThemeSettings>().mode.collectAsState()
+            val dark = mode.isDark(isSystemInDarkTheme())
+            LaunchedEffect(window, dark) { TitleBar.match(window, dark) }
             LaunchedEffect(showRequests) {
                 if (showRequests > 0) {
                     windowState.isMinimized = false
