@@ -45,6 +45,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.BoxWithConstraints
+import com.tlw.photodokan.ui.components.scrollFade
 
 /**
  * The selected customer or new photo beside the grid on a wide window: the photo on a grey
@@ -98,7 +99,8 @@ internal fun CustomerPanel(
         // scroll, so on a short window nothing is squeezed out of sight.
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val stageHeight = (maxHeight * 0.62f).coerceIn(200.dp, 520.dp)
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            val scroll = rememberScrollState()
+            Column(Modifier.fillMaxSize().scrollFade(scroll, c.surface).verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 EditorStage(edit, viewModel, tools, Modifier.height(stageHeight).fillMaxWidth())
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { ToolControls(edit, viewModel, tools) }
             }

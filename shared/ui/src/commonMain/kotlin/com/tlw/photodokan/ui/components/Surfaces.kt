@@ -1,5 +1,6 @@
 package com.tlw.photodokan.ui.components
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -11,12 +12,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.ui.theme.StudioTheme
 import kotlin.math.max
@@ -74,5 +78,21 @@ fun Modifier.selectionGlow(selected: Boolean, shape: Shape = RoundedCornerShape(
         val c = StudioTheme.colors
         this.shadow(16.dp, shape, ambientColor = c.accentGlow, spotColor = c.accentGlow)
             .border(3.dp, c.accent, shape)
+    }
+}
+
+/**
+ * A soft fade into [colour] along the bottom while [state] can scroll further, so a row cut off
+ * at the edge reads as "more below" rather than as broken.
+ */
+fun Modifier.scrollFade(state: ScrollState, colour: Color, height: Dp = 28.dp): Modifier = drawWithContent {
+    drawContent()
+    if (state.canScrollForward) {
+        val h = height.toPx()
+        drawRect(
+            Brush.verticalGradient(listOf(Color.Transparent, colour), startY = size.height - h, endY = size.height),
+            topLeft = Offset(0f, size.height - h),
+            size = Size(size.width, h),
+        )
     }
 }

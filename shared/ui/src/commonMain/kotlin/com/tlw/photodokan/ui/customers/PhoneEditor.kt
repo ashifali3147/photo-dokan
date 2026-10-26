@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -57,9 +58,13 @@ import com.tlw.photodokan.ui.components.CopyStepper
 import com.tlw.photodokan.ui.components.Notice
 import com.tlw.photodokan.ui.components.PrimaryButton
 import com.tlw.photodokan.ui.components.QuietButton
+import com.tlw.photodokan.ui.components.scrollFade
 import com.tlw.photodokan.ui.editor.EditorIcons
 import com.tlw.photodokan.ui.theme.StudioTheme
 import kotlinx.coroutines.delay
+
+/** The height of the open tool's controls on a phone; longer ones scroll. */
+private val TOOL_HEIGHT = 184.dp
 
 /** How long a good-news message stays over the photo on a phone before it fades. */
 private const val NOTICE_MILLIS = 3_000L
@@ -110,10 +115,12 @@ internal fun PhoneEditor(
         }
 
         AnimatedVisibility(tools.showControls, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-            AnimatedContent(tools.tab, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "tool") { tab ->
+            // One height for every tool, so the photo doesn't jump when switching between them.
+            AnimatedContent(tools.tab, Modifier.height(TOOL_HEIGHT), transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "tool") { tab ->
+                val scroll = rememberScrollState()
                 Column(
-                    Modifier.fillMaxWidth().heightIn(max = 190.dp).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    Modifier.fillMaxSize().scrollFade(scroll, c.base).verticalScroll(scroll).padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     ToolControls(edit, viewModel, tools, tab)
                 }
