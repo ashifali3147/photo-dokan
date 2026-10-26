@@ -4,144 +4,144 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 
 /**
- * The "Darkroom & Print" colours. The interface stays neutral grey so skin is judged truthfully;
- * colour appears only where it means something, each borrowed from the darkroom:
- * - Cyanotype, the first photographic print process: what is selected, active or ready to print.
- * - Fixer, the bath that makes a print permanent: done, saved, printed, checks passed.
- * - Safelight, the only light in a darkroom: the one physical action, shoot or print. At most
- *   one per screen.
- * - Caution: something needs the operator, and only that.
- * - Grey card, the 18% grey photographers meter against: the surround of a photo being judged.
+ * The "Calm workspace" colours. A warm paper-grey ground with white cards, and one ink-blue
+ * accent. Colour is kept for meaning:
+ * - Accent: what is selected, and the one main action on a screen.
+ * - Ok: done, saved, on the sheet, printer ready.
+ * - Warn: something needs the operator, and only that.
+ * The accent and ok buttons are lit very slightly from above ([accentTop] to [accentBottom]) and
+ * carry a soft glow, so the main action stands out without the rest of the screen being decorated.
  */
 @Immutable
 data class StudioColors(
     val isDark: Boolean,
     /** The window behind everything. */
     val base: Color,
-    /** Cards and panels, from lowest to highest. */
+    /** The side rail. */
+    val rail: Color,
+    /** Cards and panels. */
     val surface: Color,
-    val surfaceRaised: Color,
-    val surfaceHigh: Color,
+    /** A recessed track: segmented controls, the surround of the sheet. */
+    val well: Color,
     /** Dividers and card borders. */
     val line: Color,
-    /** Outlines of controls, which must stay visible against [base] (3:1). */
+    /** Outlines of fields and steppers, which must stay visible against [base] (3:1). */
     val outline: Color,
     val text: Color,
     val textMuted: Color,
-    val cyanotype: Color,
-    val onCyanotype: Color,
-    /** A selected chip or row: a quiet wash of [cyanotype]. */
-    val cyanotypeWash: Color,
-    val fixer: Color,
-    val onFixer: Color,
-    val fixerWash: Color,
-    val caution: Color,
-    val onCaution: Color,
-    val cautionWash: Color,
-    /** The safelight lamp, lit from the top: a button's gradient runs from [safelightTop] to [safelightBottom]. */
-    val safelight: Color,
-    val safelightTop: Color,
-    val safelightBottom: Color,
-    val onSafelight: Color,
+    /** A solid dark (light theme) or light (dark theme) block, e.g. the logo. */
+    val strong: Color,
+    val onStrong: Color,
+    val accent: Color,
+    val accentTop: Color,
+    val accentBottom: Color,
+    val onAccent: Color,
+    /** A selected chip or row: a quiet wash of [accent]. */
+    val accentWash: Color,
+    /** [accent] as text on [accentWash]. */
+    val accentText: Color,
+    /** The glow under the main action and around a selected photo. */
+    val accentGlow: Color,
+    val ok: Color,
+    val okTop: Color,
+    val okBottom: Color,
+    val onOk: Color,
+    val okWash: Color,
+    val okGlow: Color,
+    val warn: Color,
+    val onWarn: Color,
+    val warnWash: Color,
     /** The neutral surround of a photo being judged. The same in both themes. */
-    val greyCard: Color,
-    /** Film base under a contact sheet: dark in both themes, as film is. */
-    val film: Color,
-    /** Sprocket holes punched in the [film]. */
-    val filmHole: Color,
-    /** Frame numbers printed on the [film]'s edge. */
-    val filmText: Color,
-    /**
-     * The button that moves on without printing ("Next", "Add to sheet"): the brightest thing
-     * after the safelight, without its colour. Lit from the top, [goTop] to [goBottom].
-     */
-    val goTop: Color,
-    val goBottom: Color,
-    val onGo: Color,
-    /** Panels are lit from above: [panelTop] to [panelBottom], with an [edgeHighlight] along the top. */
-    val panelTop: Color,
-    val panelBottom: Color,
-    val edgeHighlight: Color,
-    /** Round buttons floating over a photo or the window. */
+    val stage: Color,
+    /** The A4 sheet. Paper is white in both themes. */
+    val paper: Color,
+    /** A slot on the sheet that is already printed. */
+    val slotPrinted: Color,
+    /** A free slot on the sheet. */
+    val slotFree: Color,
+    /** The outline of a slot left blank. */
+    val slotBlank: Color,
+    /** Round buttons floating over a photo (the camera is always dark). */
     val glass: Color,
 )
 
 /** Every colour pair a screen uses, by theme. */
 object StudioPalette {
-    private val Safelight = Color(0xFFC23A1E)
-    private val SafelightTop = Color(0xFFCE462A)
-    private val SafelightBottom = Color(0xFFA9301A)
-    private val GreyCard = Color(0xFF777777)
+    private val Stage = Color(0xFF7A7A7A)
+    private val Paper = Color(0xFFFFFFFF)
+    private val SlotPrinted = Color(0xFFDAD6CE)
+    private val SlotFree = Color(0xFFF1EFEA)
+    private val SlotBlank = Color(0xFF8A8F98)
 
     val Dark = StudioColors(
         isDark = true,
-        base = Color(0xFF0F0F0F),
-        surface = Color(0xFF161616),
-        surfaceRaised = Color(0xFF1C1C1C),
-        surfaceHigh = Color(0xFF252525),
-        line = Color(0xFF2C2C2C),
-        outline = Color(0xFF6B6B6B),
-        text = Color(0xFFEDEDED),
-        textMuted = Color(0xFF9A9A9A),
-        cyanotype = Color(0xFF8FB4DC),
-        onCyanotype = Color(0xFF0B1B2B),
-        cyanotypeWash = Color(0xFF1A232C),
-        fixer = Color(0xFF8CCBA8),
-        onFixer = Color(0xFF0C2017),
-        fixerWash = Color(0xFF17241D),
-        caution = Color(0xFFE0C068),
-        onCaution = Color(0xFF2A2000),
-        cautionWash = Color(0xFF2A2516),
-        safelight = Safelight,
-        safelightTop = SafelightTop,
-        safelightBottom = SafelightBottom,
-        onSafelight = Color.White,
-        greyCard = GreyCard,
-        film = Color(0xFF050505),
-        filmHole = Color(0xFF1C1C1C),
-        filmText = Color(0xFFBDBDBD),
-        goTop = Color(0xFFF4F4F4),
-        goBottom = Color(0xFFDADADA),
-        onGo = Color(0xFF111111),
-        panelTop = Color(0xFF1D1D1D),
-        panelBottom = Color(0xFF161616),
-        edgeHighlight = Color(0x12FFFFFF),
-        glass = Color(0x0AFFFFFF),
+        base = Color(0xFF111214),
+        rail = Color(0xFF16171A),
+        surface = Color(0xFF1B1C20),
+        well = Color(0xFF17181B),
+        line = Color(0xFF2A2C31),
+        outline = Color(0xFF6B6F78),
+        text = Color(0xFFEDEDEF),
+        textMuted = Color(0xFFA3A7B0),
+        strong = Color(0xFFEDEDEF),
+        onStrong = Color(0xFF111214),
+        accent = Color(0xFF5B7CFF),
+        accentTop = Color(0xFF4A68EC),
+        accentBottom = Color(0xFF3753D6),
+        onAccent = Color.White,
+        accentWash = Color(0xFF1D2542),
+        accentText = Color(0xFFA9BCFF),
+        accentGlow = Color(0x735B7CFF),
+        ok = Color(0xFF8CD3AB),
+        okTop = Color(0xFF247F52),
+        okBottom = Color(0xFF1C6F46),
+        onOk = Color.White,
+        okWash = Color(0xFF17281F),
+        okGlow = Color(0x612F9A66),
+        warn = Color(0xFFE0C068),
+        onWarn = Color(0xFF2A2000),
+        warnWash = Color(0xFF2A2516),
+        stage = Stage,
+        paper = Paper,
+        slotPrinted = SlotPrinted,
+        slotFree = SlotFree,
+        slotBlank = SlotBlank,
+        glass = Color(0x24FFFFFF),
     )
 
     val Light = StudioColors(
         isDark = false,
-        base = Color(0xFFF7F7F7),
+        base = Color(0xFFF4F2EE),
+        rail = Color(0xFFFBFAF8),
         surface = Color(0xFFFFFFFF),
-        surfaceRaised = Color(0xFFFFFFFF),
-        surfaceHigh = Color(0xFFF1F1F1),
-        line = Color(0xFFE2E2E2),
-        outline = Color(0xFF8A8A8A),
-        text = Color(0xFF151515),
-        textMuted = Color(0xFF5E5E5E),
-        cyanotype = Color(0xFF1F4E79),
-        onCyanotype = Color.White,
-        cyanotypeWash = Color(0xFFEEF3F8),
-        fixer = Color(0xFF2E6B4F),
-        onFixer = Color.White,
-        fixerWash = Color(0xFFE5F0EA),
-        caution = Color(0xFF7A5A00),
-        onCaution = Color.White,
-        cautionWash = Color(0xFFFFF3DC),
-        safelight = Safelight,
-        safelightTop = SafelightTop,
-        safelightBottom = SafelightBottom,
-        onSafelight = Color.White,
-        greyCard = GreyCard,
-        film = Color(0xFF111111),
-        filmHole = Color(0xFFF3F3F3),
-        filmText = Color(0xFFBDBDBD),
-        goTop = Color(0xFF2A2A2A),
-        goBottom = Color(0xFF111111),
-        onGo = Color.White,
-        panelTop = Color(0xFFFFFFFF),
-        panelBottom = Color(0xFFFAFAFA),
-        edgeHighlight = Color(0xFFFFFFFF),
-        glass = Color(0xFFFFFFFF),
+        well = Color(0xFFE9E6DF),
+        line = Color(0xFFE5E1DA),
+        outline = Color(0xFF8C8880),
+        text = Color(0xFF1B1D21),
+        textMuted = Color(0xFF5F636B),
+        strong = Color(0xFF1B1D21),
+        onStrong = Color.White,
+        accent = Color(0xFF2B50D8),
+        accentTop = Color(0xFF3E62E6),
+        accentBottom = Color(0xFF2447C9),
+        onAccent = Color.White,
+        accentWash = Color(0xFFE8EDFC),
+        accentText = Color(0xFF1E3FB8),
+        accentGlow = Color(0x4D2B50D8),
+        ok = Color(0xFF17603B),
+        okTop = Color(0xFF238053),
+        okBottom = Color(0xFF1B6F44),
+        onOk = Color.White,
+        okWash = Color(0xFFE3F2EA),
+        okGlow = Color(0x471F7A4D),
+        warn = Color(0xFF7A5A00),
+        onWarn = Color.White,
+        warnWash = Color(0xFFFFF1D6),
+        stage = Stage,
+        paper = Paper,
+        slotPrinted = SlotPrinted,
+        slotFree = SlotFree,
+        slotBlank = SlotBlank,
+        glass = Color(0x99FFFFFF),
     )
 }
