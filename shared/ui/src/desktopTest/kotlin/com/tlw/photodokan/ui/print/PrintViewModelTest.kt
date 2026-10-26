@@ -899,4 +899,55 @@ class PrintViewModelTest {
     private companion object {
         val personOnTheRight = Matte(4, 2, byteArrayOf(0, 0, -1, -1, 0, 0, -1, -1))
     }
+
+    // Blank slots
+
+    @Test
+    fun aSlotLeftBlankIsSkippedOnThePrintedPageAndStaysFreeAfterwards() {
+        start(PrintQueue().add(customer(), 4))
+        vm.toggleBlank(0, 2)
+        assertEquals(listOf(0, 1, 3, 4), state.shownSheet.placements.map { it.slotIndex })
+        assertEquals(setOf(2), state.shownSheet.blankSlots)
+
+        vm.print()
+        val photos = images(printer.jobs.single().first)
+        assertEquals(listOf(0, 1, 3, 4).map { template.slotRect(it) }, photos.map { it.rect }, "nothing is printed in the blank slot")
+        assertEquals(SheetState(setOf(0, 1, 3, 4)), state.queue.sheet)
+        assertEquals(emptyMap(), state.queue.blanks)
+        assertEquals(state.queue, store.saved)
+    }
+
+    @Test
+    fun aPrintedSlotCannotBeLeftBlankAndTheOperatorIsTold() {
+        start(PrintQueue(sheet = SheetState(setOf(0, 1))).add(customer(), 4))
+        vm.toggleBlank(0, 1)
+        assertEquals(emptyMap(), state.queue.blanks)
+        assertEquals("That slot is already printed.", state.message)
+        assertTrue(state.messageIsError)
+    }
+
+    @Test
+    fun theLastSlotToPrintOnCannotBeLeftBlank() {
+        start(PrintQueue(sheet = SheetState((0..38).toSet())).add(customer(), 1))
+        vm.toggleBlank(0, 39)
+        assertEquals(emptyMap(), state.queue.blanks)
+        assertEquals("Keep at least one slot free to print on.", state.message)
+    }
+
+    @Test
+    fun leavingASlotBlankOnTheSecondSheetKeepsItShown() {
+        start(PrintQueue().add(customer(), 45))
+        vm.showSheet(1)
+        vm.toggleBlank(1, 0)
+        assertEquals(1, state.sheetIndex)
+        assertEquals(setOf(0), state.shownSheet.blankSlots)
+    }
+
+    @Test
+    fun aNewSheetForgetsTheBlanks() {
+        start(PrintQueue(sheet = SheetState(setOf(0))).add(customer(), 4))
+        vm.toggleBlank(0, 3)
+        vm.newSheet()
+        assertEquals(emptyMap(), state.queue.blanks)
+    }
 }

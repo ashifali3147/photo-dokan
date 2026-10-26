@@ -257,6 +257,7 @@ private fun SheetHeader(state: PrintState, viewModel: PrintViewModel) {
         index == 0 && used == 0 -> "Blank sheet"
         else -> "New sheet"
     }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -265,7 +266,8 @@ private fun SheetHeader(state: PrintState, viewModel: PrintViewModel) {
                 color = c.text,
             )
             Text(
-                if (sheets[index].reusesPartialSheet) "$used of $capacity slots already printed" else "$capacity free slots",
+                (if (sheets[index].reusesPartialSheet) "$used of $capacity slots already printed" else "$capacity free slots") +
+                    " · tap a slot to leave it blank",
                 style = MaterialTheme.typography.bodyMedium,
                 color = c.textMuted,
             )
@@ -274,7 +276,8 @@ private fun SheetHeader(state: PrintState, viewModel: PrintViewModel) {
             QuietButton({ viewModel.showSheet(index - 1) }, enabled = index > 0) { Text("Previous") }
             QuietButton({ viewModel.showSheet(index + 1) }, enabled = index < sheets.size - 1) { Text("Next") }
         }
-        Legend()
+    }
+    Legend()
     }
 }
 
@@ -282,9 +285,14 @@ private fun SheetHeader(state: PrintState, viewModel: PrintViewModel) {
 private fun Legend() {
     val c = StudioTheme.colors
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-        for ((colour, label) in listOf(c.slotPrinted to "Printed", c.accent to "Will print", c.slotFree to "Free")) {
+        for ((colour, label) in listOf(c.slotPrinted to "Printed", c.accent to "Will print", c.slotFree to "Free", null to "Blank")) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(14.dp).clip(RoundedCornerShape(3.dp)).background(colour).border(1.dp, c.outline, RoundedCornerShape(3.dp)))
+                val swatch = Modifier.size(14.dp).clip(RoundedCornerShape(3.dp))
+                if (colour != null) {
+                    Box(swatch.background(colour).border(1.dp, c.outline, RoundedCornerShape(3.dp)))
+                } else {
+                    Box(swatch.background(c.paper).border(1.dp, c.slotBlank, RoundedCornerShape(3.dp)))
+                }
                 Text(label, style = MaterialTheme.typography.bodySmall, color = c.textMuted)
             }
         }
@@ -296,11 +304,23 @@ private fun Legend() {
 private fun SheetWell(state: PrintState, viewModel: PrintViewModel, modifier: Modifier) {
     val c = StudioTheme.colors
     Box(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.well).padding(16.dp), contentAlignment = Alignment.Center) {
+        val sheetIndex = state.sheetIndex.coerceIn(state.sheets.indices)
+        val sheet = state.shownSheet
+        val labels = state.queue.orders.associate { it.id to it.customer.label }
         SheetPreview(
             template = viewModel.template,
-            sheet = state.shownSheet,
+            sheet = sheet,
             photos = state.photos,
             modifier = Modifier.fillMaxHeight(),
+            onSlotTap = if (state.printing) null else { slot -> viewModel.toggleBlank(sheetIndex, slot) },
+            describe = { slot ->
+                val placed = sheet.placements.firstOrNull { it.slotIndex == slot }
+                when {
+                    placed != null -> "Slot ${slot + 1}, customer ${labels[placed.orderId].orEmpty()}. Tap to leave it blank."
+                    slot in sheet.blankSlots -> "Slot ${slot + 1}, left blank. Tap to use it again."
+                    else -> "Slot ${slot + 1}, free. Tap to leave it blank."
+                }
+            },
         )
     }
 }
@@ -361,12 +381,19 @@ private fun Footer(state: PrintState, viewModel: PrintViewModel, pickPdf: (() ->
 }
 
 /** One line under the sheet: how to load it, so the operator needn't open the dialog to know. */
-private fun sheetAdvice(state: PrintState, capacity: Int): String =
-    if (state.pack.sheets.firstOrNull()?.reusesPartialSheet == true) {
+private fun sheetAdvice(state: PrintState, capacity: Int): String {
+    val load = if (state.pack.sheets.firstOrNull()?.reusesPartialSheet == true) {
         "Put the part-used sheet (${state.queue.sheet.usedSlots.size} of $capacity slots used) in the printer, the same way round as last time."
     } else {
         "Put a blank photo sheet in the printer."
     }
+    val blank = state.pack.sheets.sumOf { it.blankSlots.size }
+    return when (blank) {
+        0 -> load
+        1 -> "$load 1 slot is left blank; it stays free for the next customers."
+        else -> "$load $blank slots are left blank; they stay free for the next customers."
+    }
+}
 
 /** Print the colour strip, hold it next to the patch on screen, and type in the number that matches. */
 @Composable

@@ -18,6 +18,7 @@ import com.tlw.photodokan.core.library.PhotoLibrary
 import com.tlw.photodokan.core.model.EditRecipe
 import com.tlw.photodokan.core.model.PrintQueueStore
 import com.tlw.photodokan.core.model.SheetState
+import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.ui.App
 import com.tlw.photodokan.ui.customers.InMemoryPhotoLibrary
 import com.tlw.photodokan.ui.di.appModule
@@ -36,7 +37,7 @@ import javax.imageio.ImageIO
 import kotlin.test.Test
 
 /**
- * Draws the Print screen with three customers queued on a part-used sheet, on a wide window and a
+ * Draws the Print screen with three customers queued on a part-used sheet, one slot left blank, on a wide window and a
  * phone, into build/reports/screens for checking by eye. It fails only if something can't draw.
  */
 @OptIn(ExperimentalTestApi::class)
@@ -68,7 +69,7 @@ class PrintScreenshotTest {
             })
         }
         val orders = koin.koin.get<PrintOrders>()
-        orders.update { q -> customers.zip(listOf(10, 5, 4)).fold(q) { acc, (c, n) -> acc.add(c, n) }.copy(sheet = SheetState(usedSlots = (0 until 12).toSet())) }
+        orders.update { q -> customers.zip(listOf(10, 5, 4)).fold(q) { acc, (c, n) -> acc.add(c, n) }.copy(sheet = SheetState(usedSlots = (0 until 12).toSet())).toggleBlank(SheetTemplate.STUDIO_A4_5X8, 0, 22) }
         setContent { KoinIsolatedContext(context = koin) { Box(Modifier.size(width, height)) { App() } } }
         onNode(hasText("Print") and hasClickAction()).performClick()
         waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Remove 0001").fetchSemanticsNodes().isNotEmpty() }
