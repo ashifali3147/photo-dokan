@@ -25,8 +25,10 @@ import com.tlw.photodokan.print.PdfRenderer
 import com.tlw.photodokan.print.PdfSheetReader
 import com.tlw.photodokan.print.PrintDocument
 import com.tlw.photodokan.print.PrintException
+import com.tlw.photodokan.print.PrintTone
 import com.tlw.photodokan.print.SheetPrinter
 import com.tlw.photodokan.print.SimplePdfRenderer
+import com.tlw.photodokan.print.ToneStrip
 import com.tlw.photodokan.print.sheetPage
 import com.tlw.photodokan.station.StationConnector
 import com.tlw.photodokan.station.StationException
@@ -38,6 +40,7 @@ import com.tlw.photodokan.ui.editor.painting
 import com.tlw.photodokan.ui.photo.decodePreview
 import com.tlw.photodokan.ui.photo.photoSize
 import com.tlw.photodokan.ui.platform.encodeJpeg
+import com.tlw.photodokan.ui.platform.imageBitmapOf
 import com.tlw.photodokan.ui.platform.timed
 import com.tlw.photodokan.vision.MattePng
 import com.tlw.photodokan.vision.PortraitMatter
@@ -79,6 +82,12 @@ data class PrintState(
     val calibrating: Boolean = false,
     /** Why the measurements entered in the Calibrate window were not saved. */
     val calibrationError: String? = null,
+    /** How much brighter and more colourful photos print than on screen; null when the printer keeps no tone. */
+    val tone: PrintTone? = null,
+    /** The Match colours window is open. */
+    val matchingTone: Boolean = false,
+    /** Why the patch number entered in the Match colours window was not saved. */
+    val toneError: String? = null,
     val printing: Boolean = false,
     /** The PC this phone is paired with, by name; null when it isn't paired with one. */
     val stationName: String? = null,
@@ -392,7 +401,8 @@ class PrintViewModel(
             try {
                 val saved = withContext(work) { printer.choosePhotoSettings() }
                 val (status, calibration) = withContext(work) { printer.photoSettings() to printer.calibration() }
-                _state.update { it.copy(photoSettings = status, calibration = calibration) }
+                val tone = withContext(work) { printer.tone() }
+                _state.update { it.copy(photoSettings = status, calibration = calibration, tone = tone) }
                 if (saved) _state.update { it.copy(message = "Photo settings saved. Every print now uses them.", messageIsError = false) }
             } catch (e: CancellationException) {
                 throw e
@@ -472,6 +482,64 @@ class PrintViewModel(
 
     private fun calibrationError(text: String) = _state.update { it.copy(calibrationError = text) }
 
+    fun openTone() {
+        if (_state.value.tone == null) return
+        _state.update { it.copy(matchingTone = true, toneError = null, message = null) }
+    }
+
+    fun closeTone() = _state.update { it.copy(matchingTone = false, toneError = null) }
+
+    /**
+     * Prints the colour strip with the photo settings. Its patches carry their own tones, so the
+     * saved tone is left out.
+     */
+    fun printToneStrip() {
+        val printer = printer ?: return
+        if (_state.value.printing || _state.value.choosingSettings) return
+        viewModelScope.launch {
+            _state.update { it.copy(printing = true, toneError = null, message = null) }
+            try {
+                withContext(work) {
+                    val page = ToneStrip.page { argb, width, height -> encodeJpeg(imageBitmapOf(argb, width, height), quality = 95) }
+                    printer.print(PrintDocument(listOf(page), applyTone = false), "Photo Dokan colour strip")
+                }
+                _state.update { it.copy(message = "Colour strip printed. Find the patch that looks like the screen.", messageIsError = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val text = (e as? PrintException)?.message ?: "Printing failed: ${e.message ?: e::class.simpleName}"
+                _state.update { it.copy(toneError = text) }
+            } finally {
+                _state.update { it.copy(printing = false) }
+            }
+        }
+    }
+
+    /** Saves the tone of the colour strip's patch [number], as typed, for every later print. */
+    fun saveTone(number: String) {
+        val tone = number.trim().toIntOrNull()?.let(ToneStrip::toneOf)
+            ?: return _state.update { it.copy(toneError = "Enter the number under the patch, from 1 to ${ToneStrip.PATCHES}.") }
+        storeTone(tone, "Print colours saved: ${tone.describe().replaceFirstChar { it.lowercase() }}.")
+    }
+
+    /** Goes back to printing photos exactly as they look on screen. */
+    fun removeTone() = storeTone(PrintTone.NONE, "Print colours set back to no change.")
+
+    private fun storeTone(tone: PrintTone, done: String) {
+        val printer = printer ?: return
+        viewModelScope.launch {
+            try {
+                withContext(work) { printer.saveTone(tone) }
+                _state.update { it.copy(tone = tone, matchingTone = false, toneError = null, message = done, messageIsError = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val text = (e as? PrintException)?.message ?: "Could not save the print colours: ${e.message ?: e::class.simpleName}"
+                _state.update { it.copy(toneError = text) }
+            }
+        }
+    }
+
     /** A blank sheet went into the printer. */
     fun newSheet() {
         orders.update { it.newSheet() }
@@ -492,7 +560,8 @@ class PrintViewModel(
         val name = withContext(work) { runCatching { printer.printerName() }.getOrNull() }
         val settings = withContext(work) { runCatching { printer.photoSettings() }.getOrDefault(PhotoSettings.NotSaved) }
         val calibration = withContext(work) { runCatching { printer.calibration() }.getOrNull() }
-        _state.update { it.copy(printerName = name, photoSettings = settings, calibration = calibration) }
+        val tone = withContext(work) { runCatching { printer.tone() }.getOrNull() }
+        _state.update { it.copy(printerName = name, photoSettings = settings, calibration = calibration, tone = tone) }
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.tlw.photodokan.ui.print
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,8 +50,10 @@ import com.tlw.photodokan.core.model.Order
 import com.tlw.photodokan.core.model.QueuedOrder
 import com.tlw.photodokan.print.CalibrationSheet
 import com.tlw.photodokan.print.PhotoSettings
+import com.tlw.photodokan.print.ToneStrip
 import com.tlw.photodokan.ui.SheetPreview
 import com.tlw.photodokan.ui.orderColor
+import com.tlw.photodokan.ui.platform.imageBitmapOf
 import org.koin.compose.viewmodel.koinViewModel
 
 /** The print queue next to a to-scale preview of where each copy lands on the sheet. */
@@ -113,6 +116,7 @@ private fun ColumnScope.Queue(state: PrintState, viewModel: PrintViewModel) {
 
     if (viewModel.hasPrinter && state.photoSettings != PhotoSettings.NotSupported) PhotoSettingsRow(state, viewModel)
     if (state.calibrating) CalibrationDialog(state, viewModel)
+    if (state.matchingTone) ToneDialog(state, viewModel)
 
     val pickPdf = if (viewModel.canPrintPdf) rememberPdfPicker(viewModel::openPdf) else null
     state.pendingPdf?.let { pending ->
@@ -229,6 +233,54 @@ private fun PhotoSettingsRow(state: PrintState, viewModel: PrintViewModel) {
             TextButton(onClick = viewModel::openCalibration, enabled = idle) { Text("Calibrate") }
         }
     }
+    state.tone?.let { tone ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Print colours: ${tone.describe().replaceFirstChar { it.lowercase() }}.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = viewModel::openTone, enabled = idle) { Text("Match colours") }
+        }
+    }
+}
+
+/** Print the colour strip, hold it next to the patch on screen, and type in the number that matches. */
+@Composable
+private fun ToneDialog(state: PrintState, viewModel: PrintViewModel) {
+    var number by remember { mutableStateOf("") }
+    val chart = remember { imageBitmapOf(ToneStrip.chart(), ToneStrip.CHART_PX, ToneStrip.CHART_PX) }
+    AlertDialog(
+        onDismissRequest = viewModel::closeTone,
+        title = { Text("Match print colours to the screen") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("1. Put one sheet of photo paper in the printer and print the colour strip.")
+                OutlinedButton(onClick = viewModel::printToneStrip, enabled = !state.printing) {
+                    Text(if (state.printing) "Printing…" else "Print colour strip")
+                }
+                Text("2. Hold the strip next to this patch. Which numbered patch looks most like it?")
+                Image(chart, contentDescription = "The colour patch to match", modifier = Modifier.size(140.dp))
+                OutlinedTextField(
+                    value = number,
+                    onValueChange = { text -> number = text.filter { it.isDigit() }.take(2) },
+                    label = { Text("Patch number (1 to ${ToneStrip.PATCHES})") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                state.toneError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (state.tone?.isNone == false) {
+                    TextButton(onClick = viewModel::removeTone, contentPadding = PaddingValues(0.dp)) { Text("Print colours as on screen (no change)") }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { viewModel.saveTone(number) }, enabled = !state.printing) { Text("Save colours") }
+        },
+        dismissButton = { TextButton(onClick = viewModel::closeTone) { Text("Cancel") } },
+    )
 }
 
 /** Print the calibration sheet, measure it with a ruler, and type in the four numbers. */
