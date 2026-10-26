@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -52,6 +51,7 @@ import com.tlw.photodokan.core.model.MaskStroke
 import com.tlw.photodokan.core.model.PhotoSizePreset
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import com.tlw.photodokan.ui.components.StudioSlider
 
 /** How one photo-size crop changes, given the photo's size and the frame's aspect. */
 typealias CropChange = (imageWidth: Int, imageHeight: Int, aspect: Double, crop: CropConfig) -> CropConfig
@@ -227,11 +227,12 @@ fun CropControls(
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("Straighten ${formatDegrees(crop.rotationDegrees)}", Modifier.width(120.dp))
-        Slider(
+        StudioSlider(
             value = crop.rotationDegrees.toFloat(),
             onValueChange = { degrees -> onCropChange { w, h, a, c -> CropGeometry.rotate(w, h, a, c, (degrees * 2).roundToInt() / 2.0) } },
             onValueChangeFinished = onCommit,
             valueRange = -CropGeometry.MAX_ROTATION.toFloat()..CropGeometry.MAX_ROTATION.toFloat(),
+            centred = true,
             modifier = Modifier.weight(1f),
         )
     }

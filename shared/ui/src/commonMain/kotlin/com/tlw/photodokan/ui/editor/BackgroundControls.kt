@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -22,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.model.BackgroundConfig
 import com.tlw.photodokan.core.model.BackgroundMode
 import com.tlw.photodokan.core.model.BrushMode
+import com.tlw.photodokan.ui.components.StudioSlider
 
 /** The plain colours a background can be replaced with, as the operator names them. */
 private val COLOURS = listOf("White" to BackgroundConfig.WHITE, "Light blue" to BackgroundConfig.LIGHT_BLUE)
@@ -59,7 +59,7 @@ fun BackgroundControls(
     when (background.mode) {
         BackgroundMode.BLUR -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Softness", Modifier.width(96.dp))
-            Slider(
+            StudioSlider(
                 value = background.blurStrength.toFloat(),
                 onValueChange = { onPreview(background.copy(blurStrength = (it * 20).toInt() / 20.0)) },
                 onValueChangeFinished = onCommit,
@@ -95,7 +95,7 @@ fun BackgroundControls(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Brush size", Modifier.width(96.dp))
-                Slider(
+                StudioSlider(
                     value = brushSize.toFloat(),
                     onValueChange = { onBrushSize(it.toDouble()) },
                     valueRange = SMALL_BRUSH.toFloat()..LARGE_BRUSH.toFloat(),
