@@ -19,8 +19,20 @@ class Cutout(internal val argb: IntArray, val width: Int, val height: Int, matte
     internal val oldBackdrop = NearbyColour(argb, width, height, alpha, EDGE * height)
     internal val ownColour = NearbyColour(argb, width, height, alpha, EDGE * height, person = true)
 
+    /**
+     * For taking the backdrop's light off the person near the edges ([Despill]): the person's
+     * colour further in, the backdrop's further out, and how near each point is to the edge.
+     * Only a new plain background needs them, so they are worked out when first asked for.
+     */
+    internal val inside by lazy { NearbyColour(argb, width, height, alpha, SPILL * height, person = true) }
+    internal val outside by lazy { NearbyColour(argb, width, height, alpha, SPILL * height) }
+    internal val nearEdge by lazy { EdgeNearness(alpha, width, height, SPILL / 2 * height) }
+
     private companion object {
         /** How far around an edge to look for the colours on either side, as a share of the photo's height. */
         const val EDGE = 0.01
+
+        /** How far in from the edge the backdrop's light reaches the person, as a share of the photo's height. */
+        const val SPILL = 0.03
     }
 }

@@ -70,6 +70,12 @@ object Background {
         val back = IntArray(width)
         val old = IntArray(width)
         val own = IntArray(width)
+        // On its own, for a plain background, the person loses the old backdrop's light near the edges.
+        val inside = if (blurred == null) cutout.inside.Rows() else null
+        val outside = if (blurred == null) cutout.outside.Rows() else null
+        val farIn = IntArray(width)
+        val farOut = IntArray(width)
+        val near = FloatArray(width)
         for (y in 0 until cutout.height) {
             val row = y * width
             // Rows that are all person need no background.
@@ -82,6 +88,11 @@ object Background {
             blurred?.read(y, back)
             oldBackdrop.read(y, old)
             ownColour.read(y, own)
+            if (inside != null && outside != null) {
+                inside.read(y, farIn)
+                outside.read(y, farOut)
+                cutout.nearEdge.read(y, near)
+            }
             for (x in 0 until width) {
                 val a = alpha[row + x].toInt() and 0xff
                 val pixel = argb[row + x]
@@ -94,7 +105,10 @@ object Background {
                     else -> front(pixel, own[x], old[x], a)
                 }
                 out[row + x] = when {
-                    blurred == null -> (a shl 24) or (front and 0xffffff)
+                    blurred == null -> {
+                        val clean = if (a == 0 || farIn[x] == NearbyColour.UNKNOWN || farOut[x] == NearbyColour.UNKNOWN) front else Despill.clean(front, farOut[x], farIn[x], near[x])
+                        (a shl 24) or (clean and 0xffffff)
+                    }
                     a == 255 -> pixel or OPAQUE
                     a == 0 -> back[x] or OPAQUE
                     else -> blend(front, back[x], a)
