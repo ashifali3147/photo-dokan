@@ -275,8 +275,8 @@ class CustomersViewModel(
     }
 
     /**
-     * Sets white balance from the face's skin, the studio look at full strength and the usual fair
-     * skin for its shade, as one undo step. Contrast and colour are left as they are.
+     * Sets white balance from the face's skin, the studio look at full strength, the usual fair
+     * skin for its shade and light smoothing, as one undo step. Contrast and colour are left as they are.
      */
     fun autoLight() {
         val edit = _state.value.edit ?: return
@@ -370,14 +370,19 @@ class CustomersViewModel(
 
     fun resetCrop() = step { it.live.copy(crop = CropConfig()) }
 
-    /** Light and colour as shot, the studio look and fair skin off, as one undo step. */
-    fun resetAdjustments() = step { it.live.copy(exposure = 0.0, contrast = 0.0, warmth = 0.0, tint = 0.0, saturation = 0.0, enhance = 0.0, fairness = 0.0) }
+    /** Light and colour as shot, the studio look, fair skin and smoothing off, as one undo step. */
+    fun resetAdjustments() = step {
+        it.live.copy(exposure = 0.0, contrast = 0.0, warmth = 0.0, tint = 0.0, saturation = 0.0, enhance = 0.0, fairness = 0.0, retouch = 0.0)
+    }
 
     /** Shows a change to the studio look's strength live; call [commit] when the slider is let go. */
     fun enhance(strength: Double) = preview { it.live.copy(enhance = strength.coerceIn(0.0, 1.0)) }
 
     /** Shows a change to how fair the skin is made live; call [commit] when the slider is let go. */
     fun fairness(amount: Double) = preview { it.live.copy(fairness = amount.coerceIn(0.0, 1.0)) }
+
+    /** Shows a change to how much the skin is smoothed live; call [commit] when the slider is let go. */
+    fun retouch(amount: Double) = preview { it.live.copy(retouch = amount.coerceIn(0.0, 1.0)) }
 
     /** Shows a background change live, e.g. while the softness slider moves; call [commit] when let go. */
     fun previewBackground(background: BackgroundConfig) = preview { it.live.copy(background = background) }

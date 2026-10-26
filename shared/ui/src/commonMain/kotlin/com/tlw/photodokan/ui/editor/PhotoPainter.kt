@@ -18,12 +18,18 @@ import kotlin.concurrent.Volatile
 
 /**
  * The part of a recipe that changes the photo's pixels, rather than how it is cropped or drawn:
- * its background, the studio look and fair skin. When only the rest changes, the painted photo is
+ * its background, the studio look, fair skin and smoothing. When only the rest changes, the painted photo is
  * reused.
  */
-data class Painting(val background: BackgroundConfig, val enhance: Double, val portrait: Portrait?, val fairness: Double = 0.0) {
-    /** The look or fair skin changes the photo's pixels. */
-    val looks: Boolean get() = enhance > 0 || (fairness > 0 && portrait != null)
+data class Painting(
+    val background: BackgroundConfig,
+    val enhance: Double,
+    val portrait: Portrait?,
+    val fairness: Double = 0.0,
+    val retouch: Double = 0.0,
+) {
+    /** The look, fair skin or smoothing changes the photo's pixels. */
+    val looks: Boolean get() = enhance > 0 || ((fairness > 0 || retouch > 0) && portrait != null)
 
     /** The photo looks different from how it was shot. */
     val changesPhoto: Boolean get() = background.mode != BackgroundMode.KEEP || looks
@@ -32,7 +38,7 @@ data class Painting(val background: BackgroundConfig, val enhance: Double, val p
     val needsMatte: Boolean get() = background.mode != BackgroundMode.KEEP
 }
 
-val EditRecipe.painting: Painting get() = Painting(background, enhance, portrait, fairness)
+val EditRecipe.painting: Painting get() = Painting(background, enhance, portrait, fairness, retouch)
 
 /**
  * This photo painted as [painting] says, behind and on the person in [matte]: the same for the
@@ -69,7 +75,7 @@ class PhotoPainter {
         }
         val looked = if (!painting.looks) pixels else timed("Studio look ${width}x$height") {
             // With the background as shot, print has no matte to go by, so neither does the editor.
-            StudioLook.apply(pixels, width, height, painting.enhance, painting.portrait, person = cutout?.alpha, fairness = painting.fairness)
+            StudioLook.apply(pixels, width, height, painting.enhance, painting.portrait, person = cutout?.alpha, fairness = painting.fairness, retouch = painting.retouch)
         }
         return imageBitmapOf(looked, width, height)
     }

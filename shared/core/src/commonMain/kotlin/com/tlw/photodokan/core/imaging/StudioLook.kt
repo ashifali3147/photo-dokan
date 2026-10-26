@@ -33,6 +33,15 @@ object StudioLook {
     private const val FAIR_LIFT = 0.35f
     private const val FAIR_PALE = 0.2f
 
+    /**
+     * Smoothing keeps details whose brightness varies by more than about this (squared, colours
+     * 0–1, so about 5 %): the eyes and brows, not pores.
+     */
+    private const val EDGE = 0.0025f
+
+    /** At full retouch, this share of the skin's texture goes; never all of it, or skin looks like plastic. */
+    private const val RETOUCH_MOST = 0.8f
+
     /** Skin this bright or more is left as it is by default; skin this dark or less gets [FAIR_MOST]. */
     private const val FAIR_FROM = 0.62
     private const val FAIR_FULL = 0.35
@@ -51,10 +60,11 @@ object StudioLook {
     }
 
     /**
-     * [argb], a [width] × [height] photo, with the studio look at [strength] and its skin made
-     * [fairness] fairer, each 0 to 1; each pixel keeps its alpha. [person] says how much of each
-     * pixel is the person, 0–255, when known, so only their skin is changed. Without a [portrait]
-     * there is no face to go by, so the curve and fair skin are left out.
+     * [argb], a [width] × [height] photo, with the studio look at [strength], its skin made
+     * [fairness] fairer and smoothed by [retouch], each 0 to 1; each pixel keeps its alpha. [person]
+     * says how much of each pixel is the person, 0–255, when known, so only their skin is changed.
+     * Without a [portrait] there is no face to go by, so the curve, fair skin and smoothing are left
+     * out.
      */
     fun apply(
         argb: IntArray,
@@ -64,12 +74,14 @@ object StudioLook {
         portrait: Portrait?,
         person: ByteArray? = null,
         fairness: Double = 0.0,
+        retouch: Double = 0.0,
     ): IntArray {
         require(argb.size == width * height) { "Need $width × $height pixels, had ${argb.size}" }
         require(person == null || person.size == argb.size) { "The person needs a value per pixel" }
         val s = strength.coerceIn(0.0, 1.0).toFloat()
         val fair = if (portrait == null) 0f else fairness.coerceIn(0.0, 1.0).toFloat()
-        if (s <= 0 && fair <= 0) return argb.copyOf()
+        val smooth = if (portrait == null) 0f else retouch.coerceIn(0.0, 1.0).toFloat()
+        if (s <= 0 && fair <= 0 && smooth <= 0) return argb.copyOf()
         val curve = portrait?.takeIf { s > 0 }?.let { curve(it.skinLevel, it.skinLevel + s * (max(SKIN_TARGET, it.skinLevel) - it.skinLevel)) }
 
         // Light first, and how much of each pixel is skin.
@@ -78,7 +90,7 @@ object StudioLook {
         // Fair skin goes by a smooth map of the skin, so it changes evenly across the face: no
         // speckles where the skin's texture dips in and out of skin's colours. Anything much
         // darker than the face's skin (beard, brows, hair, deep shadow) is left out of it.
-        val fairMap = if (fair > 0) SmoothMap(width, height) else null
+        val fairMap = if (fair > 0 || smooth > 0) SmoothMap(width, height) else null
         val level = portrait?.let { curve?.at(it.skinLevel.toFloat()) ?: it.skinLevel.toFloat() } ?: 0f
         for (i in argb.indices) {
             val c = argb[i]
@@ -108,7 +120,7 @@ object StudioLook {
                 var r = ((c shr 16) and 0xff) / 255f
                 var g = ((c shr 8) and 0xff) / 255f
                 var b = (c and 0xff) / 255f
-                if (fairMap != null) {
+                if (fair > 0) {
                     val k = fair * row[x]
                     if (k > 0) {
                         // Lighter, and a little paler, as fair skin is.
@@ -135,7 +147,71 @@ object StudioLook {
                 toned[i] = pack(c, r, g, b)
             }
         }
+        if (smooth > 0) smoothSkin(toned, width, height, smooth, portrait!!.faceHeight, fairMap!!)
         return if (s > 0) detail(toned, width, height, s, portrait?.faceHeight, skin) else toned
+    }
+
+    /**
+     * Smooths the skin in [argb], in place, by [amount] where [skinMap] says it is skin: an
+     * edge-preserving (self-guided) filter on brightness, so pores, blotches and fine lines soften
+     * while the eyes, brows, lips and the beard's edge, with real contrast, stay sharp. Worked
+     * out on a grid a few times smaller and read back at full size (fast guided filter).
+     */
+    private fun smoothSkin(argb: IntArray, width: Int, height: Int, amount: Float, faceHeight: Double, skinMap: SmoothMap) {
+        // Pores and blotches: about a sixtieth of the face's height.
+        val radius = max(1.0, faceHeight * height / 60)
+        val step = max(1, (radius / 3).toInt())
+        val w = (width + step - 1) / step
+        val h = (height + step - 1) / step
+        // Brightness and its square, averaged over each block: the square keeps the texture inside
+        // a block, so it counts as texture rather than looking flat.
+        val mean = FloatArray(w * h)
+        val square = FloatArray(w * h)
+        for (y in 0 until height) for (x in 0 until width) {
+            val l = luma(argb[y * width + x])
+            val j = (y / step) * w + x / step
+            mean[j] += l
+            square[j] += l * l
+        }
+        for (j in mean.indices) {
+            val pixels = (min(step, width - (j % w) * step) * min(step, height - (j / w) * step)).toFloat()
+            mean[j] /= pixels
+            square[j] /= pixels
+        }
+        val box = BoxMean(w, h, max(1, (radius / step).roundToInt()))
+        box.smooth(mean)
+        box.smooth(square)
+        // Around each point, smooth brightness as a·brightness + b: a near 1 at real edges, near 0 on texture.
+        for (j in mean.indices) {
+            val variance = (square[j] - mean[j] * mean[j]).coerceAtLeast(0f)
+            val a = variance / (variance + EDGE)
+            square[j] = a
+            mean[j] *= 1 - a
+        }
+        box.smooth(square)
+        box.smooth(mean)
+        val columns = GridLerp(width, step, w)
+        val rows = GridLerp(height, step, h)
+        val skin = FloatArray(width)
+        for (y in 0 until height) {
+            skinMap.row(y, skin)
+            val top = rows.low[y] * w
+            val bottom = rows.high[y] * w
+            val t = rows.t[y]
+            for (x in 0 until width) {
+                val k = amount * RETOUCH_MOST * skin[x]
+                if (k <= 0) continue
+                val l0 = columns.low[x]
+                val hi = columns.high[x]
+                val tx = columns.t[x]
+                fun at(grid: FloatArray) = (grid[top + l0] * (1 - tx) + grid[top + hi] * tx) * (1 - t) + (grid[bottom + l0] * (1 - tx) + grid[bottom + hi] * tx) * t
+                val i = y * width + x
+                val c = argb[i]
+                val l = luma(c)
+                val d = k * (at(square) * l + at(mean) - l)
+                argb[i] = pack(c, ((c shr 16) and 0xff) / 255f + d, ((c shr 8) and 0xff) / 255f + d, (c and 0xff) / 255f + d)
+            }
+        }
     }
 
     /**
