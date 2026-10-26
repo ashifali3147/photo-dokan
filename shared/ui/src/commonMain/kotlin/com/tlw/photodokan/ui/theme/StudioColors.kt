@@ -47,6 +47,23 @@ data class StudioColors(
     val greyCard: Color,
     /** Film base under a contact sheet: dark in both themes, as film is. */
     val film: Color,
+    /** Sprocket holes punched in the [film]. */
+    val filmHole: Color,
+    /** Frame numbers printed on the [film]'s edge. */
+    val filmText: Color,
+    /**
+     * The button that moves on without printing ("Next", "Add to sheet"): the brightest thing
+     * after the safelight, without its colour. Lit from the top, [goTop] to [goBottom].
+     */
+    val goTop: Color,
+    val goBottom: Color,
+    val onGo: Color,
+    /** Panels are lit from above: [panelTop] to [panelBottom], with an [edgeHighlight] along the top. */
+    val panelTop: Color,
+    val panelBottom: Color,
+    val edgeHighlight: Color,
+    /** Round buttons floating over a photo or the window. */
+    val glass: Color,
 )
 
 /** Every colour pair a screen uses, by theme. */
@@ -81,6 +98,15 @@ object StudioPalette {
         onSafelight = Color.White,
         greyCard = GreyCard,
         film = Color(0xFF050505),
+        filmHole = Color(0xFF1C1C1C),
+        filmText = Color(0xFFBDBDBD),
+        goTop = Color(0xFFF4F4F4),
+        goBottom = Color(0xFFDADADA),
+        onGo = Color(0xFF111111),
+        panelTop = Color(0xFF1D1D1D),
+        panelBottom = Color(0xFF161616),
+        edgeHighlight = Color(0x12FFFFFF),
+        glass = Color(0x0AFFFFFF),
     )
 
     val Light = StudioColors(
@@ -108,5 +134,14 @@ object StudioPalette {
         onSafelight = Color.White,
         greyCard = GreyCard,
         film = Color(0xFF111111),
+        filmHole = Color(0xFFF3F3F3),
+        filmText = Color(0xFFBDBDBD),
+        goTop = Color(0xFF2A2A2A),
+        goBottom = Color(0xFF111111),
+        onGo = Color.White,
+        panelTop = Color(0xFFFFFFFF),
+        panelBottom = Color(0xFFFAFAFA),
+        edgeHighlight = Color(0xFFFFFFFF),
+        glass = Color(0xFFFFFFFF),
     )
 }

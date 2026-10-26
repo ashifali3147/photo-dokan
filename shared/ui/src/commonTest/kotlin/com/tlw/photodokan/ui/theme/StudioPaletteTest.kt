@@ -60,6 +60,16 @@ class StudioPaletteTest {
     }
 
     @Test
+    fun theGoButtonAndFilmEdgeAreReadable() {
+        for (c in both) {
+            assertReadable(c.onGo, c.goTop, "top of the go button (dark=${c.isDark})")
+            assertReadable(c.onGo, c.goBottom, "bottom of the go button (dark=${c.isDark})")
+            assertReadable(c.filmText, c.film, "frame numbers on film (dark=${c.isDark})")
+            for (panel in listOf(c.panelTop, c.panelBottom)) assertReadable(c.text, panel, "text on a panel (dark=${c.isDark})")
+        }
+    }
+
+    @Test
     fun controlOutlinesStandOut() {
         for (c in both) assertReadable(c.outline, c.base, "outline (dark=${c.isDark})", minimum = 3.0)
     }
@@ -67,7 +77,7 @@ class StudioPaletteTest {
     @Test
     fun surfacesAreTrulyNeutralSoSkinIsJudgedFairly() {
         for (c in both) {
-            for (colour in listOf(c.base, c.surface, c.surfaceRaised, c.surfaceHigh, c.line, c.text, c.textMuted, c.greyCard)) {
+            for (colour in listOf(c.base, c.surface, c.surfaceRaised, c.surfaceHigh, c.line, c.text, c.textMuted, c.greyCard, c.panelTop, c.panelBottom, c.goTop, c.goBottom, c.film)) {
                 assertEquals(colour.red, colour.green, "no tint in $colour")
                 assertEquals(colour.green, colour.blue, "no tint in $colour")
             }
