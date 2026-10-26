@@ -198,3 +198,19 @@ fun ToolDock(modifier: Modifier = Modifier, tabs: @Composable RowScope.() -> Uni
         content = tabs,
     )
 }
+
+/** A short message after something happened: green with a tick when it went well, warn with "!" when it did not. */
+@Composable
+fun Notice(text: String, isError: Boolean, modifier: Modifier = Modifier) {
+    val c = StudioTheme.colors
+    val wash = if (isError) c.warnWash else c.okWash
+    val colour = if (isError) c.warn else c.ok
+    Row(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(wash).padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(if (isError) "!" else "✓", color = colour, style = StudioTheme.type.numberSmall)
+        Text(text, color = colour, style = MaterialTheme.typography.bodyMedium)
+    }
+}
