@@ -126,6 +126,16 @@ interface SheetPrinter {
 
     /** Keeps [calibration] with the photo settings for every later job. Throws [PrintException]. */
     fun saveCalibration(calibration: PrintCalibration): Unit = throw PrintException("This printer has no size correction.")
+
+    /**
+     * How much brighter and more colourful photos are printed than they look on screen, for the
+     * printer jobs go to; [PrintTone.NONE] when not matched yet. Null when this printer keeps no
+     * tone, or until photo settings are saved: the tone belongs to that paper and quality.
+     */
+    fun tone(): PrintTone? = null
+
+    /** Keeps [tone] with the photo settings for every later job. Throws [PrintException]. */
+    fun saveTone(tone: PrintTone): Unit = throw PrintException("This printer keeps no print colours.")
 }
 
 enum class PhotoSettings {

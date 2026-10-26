@@ -10,14 +10,15 @@ import java.nio.file.StandardCopyOption
 
 /**
  * The photo settings chosen once in the printer's own settings window: the Windows DEVMODE the
- * driver returned, kept as it is, for the printer it belongs to, and the [calibration] measured
- * with them. Another printer's DEVMODE must never be handed to a driver, so [printerName] is
+ * driver returned, kept as it is, for the printer it belongs to, and the [calibration] and
+ * [tone] measured with them. Another printer's DEVMODE must never be handed to a driver, so [printerName] is
  * checked before every use.
  */
 class PrintProfile(
     val printerName: String,
     val devMode: ByteArray,
     val calibration: PrintCalibration = PrintCalibration.NONE,
+    val tone: PrintTone = PrintTone.NONE,
 ) {
     init {
         require(printerName.isNotBlank()) { "A print profile needs a printer name" }
@@ -79,7 +80,9 @@ class FilePrintProfileStore(private val file: File) {
                 } else {
                     PrintCalibration.NONE
                 }
-                PrintProfile(name, devMode, calibration)
+                // Version 2 files were saved before the print tone existed.
+                val tone = if (version >= 3) PrintTone(input.readInt(), input.readInt()) else PrintTone.NONE
+                PrintProfile(name, devMode, calibration, tone)
             }
         }.getOrNull()
     }
@@ -98,6 +101,8 @@ class FilePrintProfileStore(private val file: File) {
                     out.writeDouble(offsetXMm)
                     out.writeDouble(offsetYMm)
                 }
+                out.writeInt(profile.tone.brightness)
+                out.writeInt(profile.tone.colour)
             }
         }.toByteArray()
         file.parentFile?.mkdirs()
@@ -110,6 +115,6 @@ class FilePrintProfileStore(private val file: File) {
     private companion object {
         /** "PDPP": Photo Dokan print profile. */
         const val MAGIC = 0x50445050
-        const val VERSION = 2
+        const val VERSION = 3
     }
 }

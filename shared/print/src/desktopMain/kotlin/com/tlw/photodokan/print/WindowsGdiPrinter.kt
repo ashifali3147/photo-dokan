@@ -21,7 +21,7 @@ import kotlin.math.roundToInt
  *
  * Prints to the Windows default printer. Paper type and quality come from the photo settings
  * the operator chose once in the driver's own window and [profiles] keeps, together with the
- * size correction measured on them; without them the driver's defaults apply. [owner] is the
+ * size correction and print tone measured on them; without them the driver's defaults apply. [owner] is the
  * app window that settings window opens over.
  */
 class WindowsGdiPrinter(
@@ -65,8 +65,8 @@ class WindowsGdiPrinter(
         val saved = savedProfile(name)
         val window = owner()?.let { runCatching { Native.getWindowPointer(it) }.getOrNull() }
         val chosen = withPrinter(name) { documentProperties(it, name, saved?.devMode, prompt = true, window) } ?: return false
-        // The correction was measured on this printer; keep it until it is measured again.
-        profiles.save(PrintProfile(name, chosen, saved?.calibration ?: PrintCalibration.NONE))
+        // The correction and tone were measured on this printer; keep them until they are measured again.
+        profiles.save(PrintProfile(name, chosen, saved?.calibration ?: PrintCalibration.NONE, saved?.tone ?: PrintTone.NONE))
         return true
     }
 
@@ -75,7 +75,15 @@ class WindowsGdiPrinter(
     override fun saveCalibration(calibration: PrintCalibration) {
         val name = printerName() ?: throw PrintException(NO_PRINTER)
         val saved = savedProfile(name) ?: throw PrintException("Save the Photo settings first: the size correction goes with them.")
-        profiles.save(PrintProfile(name, saved.devMode, calibration))
+        profiles.save(PrintProfile(name, saved.devMode, calibration, saved.tone))
+    }
+
+    override fun tone(): PrintTone? = printerName()?.let(::savedProfile)?.tone
+
+    override fun saveTone(tone: PrintTone) {
+        val name = printerName() ?: throw PrintException(NO_PRINTER)
+        val saved = savedProfile(name) ?: throw PrintException("Save the Photo settings first: the print colours go with them.")
+        profiles.save(PrintProfile(name, saved.devMode, saved.calibration, tone))
     }
 
     override fun print(document: PrintDocument, jobName: String) {
@@ -85,6 +93,7 @@ class WindowsGdiPrinter(
         val hdc = gdi.CreateDCW(null, WString(name), null, devMode) ?: throw PrintException("Could not open the printer \"$name\". Check it is switched on.")
         try {
             val page = pageOf(hdc, profile?.calibration ?: PrintCalibration.NONE)
+            val tone = profile?.tone?.takeIf { document.applyTone } ?: PrintTone.NONE
             // Check every page before anything prints: half a job on photo paper is worse than none.
             for (p in document.pages) page.problemWith(p)?.let { throw PrintException(it) }
 
@@ -93,7 +102,7 @@ class WindowsGdiPrinter(
             try {
                 for (p in document.pages) {
                     if (gdi.StartPage(hdc) <= 0) throw PrintException("The printer stopped before the page could start.")
-                    for (item in p.items) draw(hdc, page, item)
+                    for (item in p.items) draw(hdc, page, tone, item)
                     if (gdi.EndPage(hdc) <= 0) throw PrintException("The printer stopped while printing the page.")
                 }
                 if (gdi.EndDoc(hdc) <= 0) throw PrintException("The printer stopped at the end of the job.")
@@ -166,8 +175,8 @@ class WindowsGdiPrinter(
         )
     }
 
-    private fun draw(hdc: Pointer, page: PrinterPage, item: PageItem) = when (item) {
-        is PageItem.Image -> drawImage(hdc, page.rect(item.rect), item.jpeg)
+    private fun draw(hdc: Pointer, page: PrinterPage, tone: PrintTone, item: PageItem) = when (item) {
+        is PageItem.Image -> drawImage(hdc, page.rect(item.rect), item.jpeg, tone)
         is PageItem.Line -> withPen(hdc, page.width(item.widthMm), item.gray) {
             val l = item.line
             gdi.MoveToEx(hdc, page.x(l.x1), page.y(l.y1), null)
@@ -184,8 +193,11 @@ class WindowsGdiPrinter(
         is PageItem.Text -> drawText(hdc, page, item)
     }
 
-    /** Stretches the photo into [dest] exactly; it was rendered at the printer's resolution, so this is about 1:1. */
-    private fun drawImage(hdc: Pointer, dest: DeviceRect, jpeg: ByteArray) {
+    /**
+     * Stretches the photo into [dest] exactly; it was rendered at the printer's resolution, so this
+     * is about 1:1. The printer's [tone] is applied on the way.
+     */
+    private fun drawImage(hdc: Pointer, dest: DeviceRect, jpeg: ByteArray, tone: PrintTone) {
         val image = ImageIO.read(ByteArrayInputStream(jpeg)) ?: throw PrintException("A photo could not be read for printing.")
         val rgb = if (image.type == BufferedImage.TYPE_INT_RGB) image else {
             BufferedImage(image.width, image.height, BufferedImage.TYPE_INT_RGB).also {
@@ -194,6 +206,7 @@ class WindowsGdiPrinter(
         }
         // TYPE_INT_RGB pixels are 0x00RRGGBB: in memory B, G, R, 0, which is what a 32-bit DIB expects.
         val pixels = (rgb.raster.dataBuffer as DataBufferInt).data
+        tone.applyTo(pixels)
         gdi.SetStretchBltMode(hdc, G.HALFTONE)
         gdi.SetBrushOrgEx(hdc, 0, 0, null)
         val lines = gdi.StretchDIBits(
