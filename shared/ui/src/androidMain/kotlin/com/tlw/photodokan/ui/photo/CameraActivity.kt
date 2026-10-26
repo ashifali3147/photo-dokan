@@ -26,7 +26,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,11 +34,12 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +49,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -61,13 +63,20 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.tlw.photodokan.ui.components.GlassIconButton
+import com.tlw.photodokan.ui.components.PrimaryButton
+import com.tlw.photodokan.ui.components.QuietButton
+import com.tlw.photodokan.ui.theme.PhotoDokanTheme
+import com.tlw.photodokan.ui.theme.StudioTheme
+import com.tlw.photodokan.ui.theme.ThemeMode
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * The in-app camera: the back camera's preview with a face guide, and one big shutter button.
+ * The in-app camera, always dark: the back camera's preview with a face guide, a Close button over
+ * it, and one big shutter button.
  * The photo is saved as a JPEG in the app's cache and its path returned in [EXTRA_PATH]; it is
  * filed in the library only when the operator saves the customer, never in the phone's gallery.
  */
@@ -84,7 +93,8 @@ class CameraActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            // The camera is always dark, whatever the app's theme: nothing bright beside the subject.
+            PhotoDokanTheme(ThemeMode.Dark) {
                 Box(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
                     CameraScreen(onTaken = ::finishWith, onClose = ::finish)
                 }
@@ -156,19 +166,16 @@ class CameraActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                 )
                 FaceGuide(Modifier.fillMaxSize())
+                GlassIconButton(onClose, "Close camera", Modifier.align(Alignment.TopStart).padding(12.dp)) {
+                    Icon(Icons.Filled.Close, contentDescription = null, tint = Color.White)
+                }
+                Hint(
+                    error ?: "Fit the face inside the oval",
+                    isError = error != null,
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 72.dp, start = 24.dp, end = 24.dp),
+                )
             }
-            Text(
-                error ?: "Fit the face inside the oval, then press the button.",
-                color = if (error != null) MaterialTheme.colorScheme.errorContainer else Color.White,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-            )
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(onClick = onClose, enabled = !taking) { Text("Close", color = Color.White) }
+            Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
                 Shutter(taking) {
                     taking = true
                     error = null
@@ -177,17 +184,30 @@ class CameraActivity : ComponentActivity() {
                         error = "The photo could not be taken. Try again."
                     })
                 }
-                // Balances the Close button so the shutter stays centred.
-                TextButton(onClick = {}, enabled = false) { Text("Close", color = Color.Transparent) }
             }
         }
     }
 
+    /** A short line on a dark pill over the preview, so it reads on any scene. */
+    @Composable
+    private fun Hint(text: String, isError: Boolean, modifier: Modifier) {
+        Text(
+            text,
+            modifier.clip(CircleShape).background(Color(0xCC0F1013)).padding(horizontal = 16.dp, vertical = 8.dp),
+            color = if (isError) StudioTheme.colors.warn else Color.White,
+            style = MaterialTheme.typography.titleSmall,
+        )
+    }
+
+    /** The shutter: a white ring around a white disc, with a soft light around it. */
     @Composable
     private fun Shutter(taking: Boolean, onClick: () -> Unit) {
         Box(
             Modifier
-                .size(76.dp)
+                .size(84.dp)
+                .shadow(if (taking) 0.dp else 18.dp, CircleShape, ambientColor = Color.White, spotColor = Color.White)
+                .clip(CircleShape)
+                .background(Color.Black)
                 .border(4.dp, Color.White, CircleShape)
                 .padding(8.dp)
                 .background(if (taking) Color.Gray else Color.White, CircleShape)
@@ -223,10 +243,10 @@ class CameraActivity : ComponentActivity() {
         ) {
             Text("Photo Dokan needs the camera to take photos.", color = Color.White, style = MaterialTheme.typography.titleLarge)
             Text("Allow Camera in the app's settings, or close this and choose a photo instead.", color = Color.White)
-            Button(onClick = {
+            PrimaryButton(onClick = {
                 startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
             }) { Text("Open settings") }
-            TextButton(onClick = onClose) { Text("Close", color = Color.White) }
+            QuietButton(onClick = onClose) { Text("Close") }
         }
     }
 
