@@ -43,3 +43,15 @@ expect fun SystemBackHandler(enabled: Boolean, onBack: () -> Unit)
  */
 @Composable
 expect fun SystemBarsFollowTheme(dark: Boolean)
+
+/** The gesture by name for instructions: "tap" on a phone, "click" on the PC. */
+expect val tapVerb: String
+
+/** Where this device keeps the customers' photos, for Settings to show and open. */
+interface PhotoFolder {
+    /** The folder as the operator would find it, e.g. C:\Users\Studio\Pictures\Photo Dokan. */
+    val location: String
+
+    /** Opens the folder in the computer's file manager. */
+    fun open()
+}

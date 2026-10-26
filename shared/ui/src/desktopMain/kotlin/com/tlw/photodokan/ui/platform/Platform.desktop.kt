@@ -47,3 +47,5 @@ actual fun SystemBackHandler(enabled: Boolean, onBack: () -> Unit) = Unit
 
 @Composable
 actual fun SystemBarsFollowTheme(dark: Boolean) = Unit
+
+actual val tapVerb: String = "click"

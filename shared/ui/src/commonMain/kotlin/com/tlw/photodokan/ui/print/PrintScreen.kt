@@ -68,6 +68,10 @@ import com.tlw.photodokan.ui.platform.imageBitmapOf
 import com.tlw.photodokan.ui.platform.today
 import com.tlw.photodokan.ui.theme.StudioTheme
 import org.koin.compose.viewmodel.koinViewModel
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import com.tlw.photodokan.ui.platform.tapVerb
 
 /** The print queue next to a to-scale preview of where each copy lands on the sheet. */
 @Composable
@@ -268,7 +272,7 @@ private fun SheetHeader(state: PrintState, viewModel: PrintViewModel) {
             )
             Text(
                 (if (sheets[index].reusesPartialSheet) "$used of $capacity slots already printed" else "$capacity free slots") +
-                    " · tap a slot to leave it blank",
+                    " · $tapVerb a slot to leave it blank",
                 style = MaterialTheme.typography.bodyMedium,
                 color = c.textMuted,
             )
@@ -292,7 +296,10 @@ private fun Legend() {
                 if (colour != null) {
                     Box(swatch.background(colour).border(1.dp, c.outline, RoundedCornerShape(3.dp)))
                 } else {
-                    Box(swatch.background(c.paper).border(1.dp, c.slotBlank, RoundedCornerShape(3.dp)))
+                    // A dashed outline, as a blank slot looks on the sheet, so it can't be taken for a free one.
+                    Canvas(Modifier.size(14.dp)) {
+                        drawRect(c.slotBlank, style = Stroke(width = 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 2.dp.toPx()))))
+                    }
                 }
                 Text(label, style = MaterialTheme.typography.bodySmall, color = c.textMuted)
             }
@@ -315,11 +322,12 @@ private fun SheetWell(state: PrintState, viewModel: PrintViewModel, modifier: Mo
             modifier = if (fillWidth) Modifier.fillMaxWidth() else Modifier.fillMaxHeight(),
             onSlotTap = if (state.printing) null else { slot -> viewModel.toggleBlank(sheetIndex, slot) },
             describe = { slot ->
+                val tap = tapVerb.replaceFirstChar { it.uppercase() }
                 val placed = sheet.placements.firstOrNull { it.slotIndex == slot }
                 when {
-                    placed != null -> "Slot ${slot + 1}, customer ${labels[placed.orderId].orEmpty()}. Tap to leave it blank."
-                    slot in sheet.blankSlots -> "Slot ${slot + 1}, left blank. Tap to use it again."
-                    else -> "Slot ${slot + 1}, free. Tap to leave it blank."
+                    placed != null -> "Slot ${slot + 1}, customer ${labels[placed.orderId].orEmpty()}. $tap to leave it blank."
+                    slot in sheet.blankSlots -> "Slot ${slot + 1}, left blank. $tap to use it again."
+                    else -> "Slot ${slot + 1}, free. $tap to leave it blank."
                 }
             },
         )
@@ -381,7 +389,7 @@ private fun Footer(state: PrintState, viewModel: PrintViewModel, pickPdf: (() ->
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             if (others.isNotEmpty()) {
                 Box {
-                    QuietButton({ menu = true }, enabled = idle) { Text("More") }
+                    QuietButton({ menu = true }, enabled = idle, tall = true) { Text("More") }
                     DropdownMenu(menu, onDismissRequest = { menu = false }) {
                         for ((label, enabled, click) in others) {
                             DropdownMenuItem(text = { Text(label) }, onClick = { menu = false; click() }, enabled = idle && enabled)
@@ -393,7 +401,7 @@ private fun Footer(state: PrintState, viewModel: PrintViewModel, pickPdf: (() ->
         }
     } else {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-            for ((label, enabled, click) in others) QuietButton(click, enabled = idle && enabled) { Text(label) }
+            for ((label, enabled, click) in others) QuietButton(click, enabled = idle && enabled, tall = true) { Text(label) }
             main?.let { (label, click) -> PrimaryButton(click, enabled = idle && hasOrders) { Text(label) } }
         }
     }

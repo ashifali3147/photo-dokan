@@ -27,6 +27,8 @@ actual fun encodeJpeg(image: ImageBitmap, quality: Int): ByteArray =
 actual fun imageBitmapOf(argb: IntArray, width: Int, height: Int): ImageBitmap =
     Bitmap.createBitmap(argb, width, height, Bitmap.Config.ARGB_8888).asImageBitmap()
 
+actual val tapVerb: String = "tap"
+
 actual fun monotonicNanos(): Long = SystemClock.elapsedRealtimeNanos()
 
 actual fun logTiming(what: String, millis: Long) {
