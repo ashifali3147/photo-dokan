@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.library.Customer
 import com.tlw.photodokan.ui.components.Card
+import com.tlw.photodokan.ui.components.ChoiceRow
 import com.tlw.photodokan.ui.components.CustomerNumber
 import com.tlw.photodokan.ui.components.QuietButton
 import com.tlw.photodokan.ui.components.pressScale
@@ -72,15 +73,20 @@ internal fun CustomerGrid(
                     if (state.date == state.today) "Today" else state.date.toString(),
                     style = MaterialTheme.typography.headlineLarge,
                     color = c.text,
+                    maxLines = 1,
                 )
-                Text(subtitle(state), style = MaterialTheme.typography.bodyLarge, color = c.textMuted)
+                // An empty day says so in the card below, so no "0 customers" here too.
+                if (state.customers.isNotEmpty()) Text(subtitle(state), style = MaterialTheme.typography.bodyLarge, color = c.textMuted)
             }
-            if (!state.searching) {
+            onImport?.let { QuietButton(it, enabled = !state.busy) { Text("Import photo") } }
+        }
+        // The day buttons get their own line, so a date never has to break to make room for them.
+        if (!state.searching) {
+            ChoiceRow {
                 QuietButton(onPreviousDay) { Text("Earlier") }
                 if (state.date < state.today) QuietButton(onNextDay) { Text("Later") }
                 if (state.date != state.today) QuietButton(onToday) { Text("Today") }
             }
-            onImport?.let { QuietButton(it, enabled = !state.busy) { Text("Import photo") } }
         }
         OutlinedTextField(
             value = state.query,
