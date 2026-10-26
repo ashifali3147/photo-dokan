@@ -1,20 +1,13 @@
 package com.tlw.photodokan.ui
 
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -32,6 +25,9 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.tlw.photodokan.ui.navigation.Destination
 import com.tlw.photodokan.ui.navigation.LocalFullScreen
+import com.tlw.photodokan.ui.navigation.StudioBottomBar
+import com.tlw.photodokan.ui.navigation.StudioRail
+import com.tlw.photodokan.ui.print.PrintOrders
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.customers.CustomersScreen
 import com.tlw.photodokan.ui.platform.SystemBackHandler
@@ -79,38 +75,18 @@ private fun AppContent() {
       CompositionLocalProvider(LocalFullScreen provides fullScreen) {
         Surface(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
             BoxWithConstraints {
+                val waiting by koinInject<PrintOrders>().queue.collectAsState()
+                val select = { destination: Destination -> current = destination }
                 if (maxWidth >= 600.dp) {
                     Row {
-                        NavigationRail {
-                            for (destination in Destination.entries) {
-                                NavigationRailItem(
-                                    selected = destination == current,
-                                    onClick = { current = destination },
-                                    icon = { Icon(destination.icon, contentDescription = null) },
-                                    label = { Text(destination.label) },
-                                )
-                            }
-                        }
+                        StudioRail(current, select, waiting.orders.size)
                         DestinationScreen(current, Modifier.weight(1f))
                     }
                 } else {
-                    Scaffold(
-                        contentWindowInsets = WindowInsets(0),
-                        bottomBar = {
-                            // The photo editor needs the whole phone screen; Back brings the bar back.
-                            if (!fullScreen.value) NavigationBar(windowInsets = WindowInsets(0)) {
-                                for (destination in Destination.entries) {
-                                    NavigationBarItem(
-                                        selected = destination == current,
-                                        onClick = { current = destination },
-                                        icon = { Icon(destination.icon, contentDescription = null) },
-                                        label = { Text(destination.label) },
-                                    )
-                                }
-                            }
-                        },
-                    ) { padding ->
-                        DestinationScreen(current, Modifier.padding(padding))
+                    Column {
+                        DestinationScreen(current, Modifier.weight(1f))
+                        // The photo editor needs the whole phone screen; Back brings the bar back.
+                        if (!fullScreen.value) StudioBottomBar(current, select, waiting.orders.size)
                     }
                 }
             }
