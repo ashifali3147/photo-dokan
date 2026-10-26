@@ -26,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -105,7 +107,7 @@ fun PrintScreen(modifier: Modifier = Modifier, viewModel: PrintViewModel = koinV
                             OrderCard(order, state.photos[order.id], viewModel, Modifier.riseIn(index))
                         }
                     }
-                    Footer(state, viewModel, pickPdf) { confirm = it }
+                    Footer(state, viewModel, pickPdf, compact = true) { confirm = it }
                 }
             }
         }
@@ -326,7 +328,7 @@ private fun SheetWell(state: PrintState, viewModel: PrintViewModel, modifier: Mo
 
 /** What is happening or happened, what to do with the sheet, and the buttons. */
 @Composable
-private fun Footer(state: PrintState, viewModel: PrintViewModel, pickPdf: (() -> Unit)?, onConfirm: (Confirm) -> Unit) {
+private fun Footer(state: PrintState, viewModel: PrintViewModel, pickPdf: (() -> Unit)?, compact: Boolean = false, onConfirm: (Confirm) -> Unit) {
     val c = StudioTheme.colors
     val queue = state.queue
     val idle = !state.printing && !state.choosingSettings
@@ -373,9 +375,27 @@ private fun Footer(state: PrintState, viewModel: PrintViewModel, pickPdf: (() ->
         }
     }
     Text(sheetAdvice(state, viewModel.template.capacity), style = MaterialTheme.typography.bodyMedium, color = c.textMuted)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-        for ((label, enabled, click) in others) QuietButton(click, enabled = idle && enabled) { Text(label) }
-        main?.let { (label, click) -> PrimaryButton(click, enabled = idle && hasOrders) { Text(label) } }
+    if (compact) {
+        // On a phone the main action takes the width; the rest wait in a menu beside it.
+        var menu by remember { mutableStateOf(false) }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (others.isNotEmpty()) {
+                Box {
+                    QuietButton({ menu = true }, enabled = idle) { Text("More") }
+                    DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                        for ((label, enabled, click) in others) {
+                            DropdownMenuItem(text = { Text(label) }, onClick = { menu = false; click() }, enabled = idle && enabled)
+                        }
+                    }
+                }
+            }
+            main?.let { (label, click) -> PrimaryButton(click, Modifier.weight(1f), enabled = idle && hasOrders) { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) } }
+        }
+    } else {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+            for ((label, enabled, click) in others) QuietButton(click, enabled = idle && enabled) { Text(label) }
+            main?.let { (label, click) -> PrimaryButton(click, enabled = idle && hasOrders) { Text(label) } }
+        }
     }
 }
 
