@@ -25,7 +25,10 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
+            // The bundled fonts of the theme.
+            implementation(compose.components.resources)
             implementation(libs.material.icons.core)
+            implementation(libs.kotlinx.io.core)
             api(libs.koin.core)
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
@@ -67,6 +70,10 @@ kotlin {
             }
         }
     }
+}
+
+compose.resources {
+    packageOfResClass = "com.tlw.photodokan.ui.resources"
 }
 
 android {
