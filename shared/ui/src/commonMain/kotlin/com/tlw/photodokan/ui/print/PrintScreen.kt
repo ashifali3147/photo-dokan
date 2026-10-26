@@ -45,6 +45,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.model.Order
 import com.tlw.photodokan.core.model.QueuedOrder
@@ -62,6 +63,7 @@ import com.tlw.photodokan.ui.components.StatusDot
 import com.tlw.photodokan.ui.components.StudioBackground
 import com.tlw.photodokan.ui.components.riseIn
 import com.tlw.photodokan.ui.platform.imageBitmapOf
+import com.tlw.photodokan.ui.platform.today
 import com.tlw.photodokan.ui.theme.StudioTheme
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -92,10 +94,17 @@ fun PrintScreen(modifier: Modifier = Modifier, viewModel: PrintViewModel = koinV
                     }
                 }
             } else {
+                // On a phone the sheet takes the full width, so its slots are big enough to tap,
+                // and everything above the buttons scrolls; the buttons stay at the bottom.
                 Column(Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(top = 20.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    QueueHeader(state)
-                    SheetWell(state, viewModel, Modifier.weight(1f))
-                    OrderList(state, viewModel, Modifier.weight(1f))
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        QueueHeader(state)
+                        SheetHeader(state, viewModel)
+                        SheetWell(state, viewModel, Modifier, fillWidth = true)
+                        state.queue.orders.forEachIndexed { index, order ->
+                            OrderCard(order, state.photos[order.id], viewModel, Modifier.riseIn(index))
+                        }
+                    }
                     Footer(state, viewModel, pickPdf) { confirm = it }
                 }
             }
@@ -197,7 +206,12 @@ private fun OrderCard(order: QueuedOrder, photo: ImageBitmap?, viewModel: PrintV
                     style = MaterialTheme.typography.bodyMedium,
                     color = c.textMuted,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                // Numbers restart every day, so an order from another day says which day it is.
+                if (customer.date != today()) {
+                    Text("From ${customer.date}", style = MaterialTheme.typography.bodySmall, color = c.textMuted, maxLines = 1)
+                }
             }
             CopyStepper(order.copies, { viewModel.setCopies(order, it) }, range = 1..Order.MAX_COPIES)
             IconButton(onClick = { viewModel.remove(order) }) { Icon(Icons.Filled.Close, contentDescription = "Remove ${customer.label}", tint = c.textMuted) }
@@ -286,9 +300,9 @@ private fun Legend() {
 
 /** The sheet on a recessed surround, like paper on a light table. */
 @Composable
-private fun SheetWell(state: PrintState, viewModel: PrintViewModel, modifier: Modifier) {
+private fun SheetWell(state: PrintState, viewModel: PrintViewModel, modifier: Modifier, fillWidth: Boolean = false) {
     val c = StudioTheme.colors
-    Box(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.well).padding(16.dp), contentAlignment = Alignment.Center) {
+    Box(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.well).padding(if (fillWidth) 10.dp else 16.dp), contentAlignment = Alignment.Center) {
         val sheetIndex = state.sheetIndex.coerceIn(state.sheets.indices)
         val sheet = state.shownSheet
         val labels = state.queue.orders.associate { it.id to it.customer.label }
@@ -296,7 +310,7 @@ private fun SheetWell(state: PrintState, viewModel: PrintViewModel, modifier: Mo
             template = viewModel.template,
             sheet = sheet,
             photos = state.photos,
-            modifier = Modifier.fillMaxHeight(),
+            modifier = if (fillWidth) Modifier.fillMaxWidth() else Modifier.fillMaxHeight(),
             onSlotTap = if (state.printing) null else { slot -> viewModel.toggleBlank(sheetIndex, slot) },
             describe = { slot ->
                 val placed = sheet.placements.firstOrNull { it.slotIndex == slot }
