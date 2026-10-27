@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
@@ -66,6 +67,7 @@ class TouchUpBrush(val mode: BrushMode, val size: Double, val onStroke: (MaskStr
  * pinch or scroll to zoom. What shows in the frame is exactly what is saved and printed.
  * Changes show live through [onCropChange]; [onCommit] marks the end of a drag or pinch, so each
  * gesture is one undo step. With a [brush], dragging paints touch-ups on the cut-out instead.
+ * [showGuide] draws where the head and chin go; off, the face is seen without lines over it.
  */
 @Composable
 fun CropEditor(
@@ -79,6 +81,7 @@ fun CropEditor(
     backdrop: Color = Color.White,
     border: FrameLine? = null,
     brush: TouchUpBrush? = null,
+    showGuide: Boolean = true,
 ) {
     val change by rememberUpdatedState(onCropChange)
     val commit by rememberUpdatedState(onCommit)
@@ -94,7 +97,7 @@ fun CropEditor(
                 .then(if (brush != null) Modifier.paintStrokes(brush, image, rect) { painting = it } else Modifier.moveAndZoom(image, { change(it) }, { commit() })),
         ) {
             drawCrop(image, rect, colorMatrix, backdrop, border)
-            drawFaceGuide(preset.guide)
+            if (showGuide) drawFaceGuide(preset.guide)
             if (brush != null && painting.isNotEmpty()) drawStroke(painting, brush)
         }
     }
@@ -197,7 +200,10 @@ private fun DrawScope.drawFaceGuide(guide: FaceGuide) {
     }
 }
 
-/** Photo size, zoom, straighten, fit to the face and reset, for when dragging and pinching isn't handy. */
+/**
+ * Photo size, zoom, straighten, fit to the face and reset, for when dragging and pinching isn't
+ * handy. [compact] (a phone) puts the four buttons side by side across the width, so none is cut off.
+ */
 @Composable
 fun CropControls(
     presets: List<PhotoSizePreset>,
@@ -208,6 +214,7 @@ fun CropControls(
     onCommit: () -> Unit,
     onReset: () -> Unit,
     onFitFace: (() -> Unit)? = null,
+    compact: Boolean = false,
 ) {
     fun step(change: CropChange) {
         onCropChange(change)
@@ -216,13 +223,16 @@ fun CropControls(
     ChoiceRow {
         for (p in presets) ChoiceChip(p.name, selected = p.id == preset.id, onClick = { onPreset(p) })
     }
-    ChoiceRow {
-        onFitFace?.let { QuietButton(it) { Text("Fit face") } }
-        QuietButton({ step { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1 / 1.2) } }) { Text("Zoom out") }
-        QuietButton({ step { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1.2) } }) { Text("Zoom in") }
-        QuietButton(onReset) { Text("Reset") }
+    val actions: @Composable RowScope.() -> Unit = {
+        val fill = if (compact) Modifier.weight(1f) else Modifier
+        val padding = if (compact) 4.dp else 20.dp
+        onFitFace?.let { QuietButton(it, fill, padding = padding) { Text("Fit face", maxLines = 1) } }
+        QuietButton({ step { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1 / 1.2) } }, fill, padding = padding) { Text("Zoom out", maxLines = 1) }
+        QuietButton({ step { w, h, a, c -> CropGeometry.zoom(w, h, a, c, 1.2) } }, fill, padding = padding) { Text("Zoom in", maxLines = 1) }
+        QuietButton(onReset, fill, padding = padding) { Text("Reset", maxLines = 1) }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    if (compact) Row(horizontalArrangement = Arrangement.spacedBy(6.dp), content = actions) else ChoiceRow(content = actions)
+    Row(sliderRow(compact), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("Straighten ${formatDegrees(crop.rotationDegrees)}", Modifier.width(120.dp))
         StudioSlider(
             value = crop.rotationDegrees.toFloat(),

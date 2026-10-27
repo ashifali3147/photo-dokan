@@ -1,7 +1,10 @@
 package com.tlw.photodokan.ui.editor
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +23,7 @@ import com.tlw.photodokan.ui.theme.StudioTheme
 import com.tlw.photodokan.ui.components.QuietButton
 import com.tlw.photodokan.ui.components.ChoiceRow
 import com.tlw.photodokan.ui.components.ChoiceChip
+import com.tlw.photodokan.ui.components.SegmentedChoice
 
 /** The plain colours a background can be replaced with, as the operator names them. */
 private val COLOURS = listOf(
@@ -28,6 +32,9 @@ private val COLOURS = listOf(
     "Sky blue" to BackgroundConfig.SKY_BLUE,
     "Light grey" to BackgroundConfig.LIGHT_GREY,
 )
+
+/** The two halves of the Backdrop tab, shown one at a time on a phone. */
+enum class BackdropPart { Background, Border }
 
 /** The brush sizes offered, as shares of the frame's height. */
 const val SMALL_BRUSH = 0.02
@@ -45,6 +52,9 @@ const val LARGE_BRUSH = 0.12
  *
  * Below the background, the touch-up brush for where the cut-out went wrong: [brush] is the one in
  * hand, or null to move the photo as usual, and [brushSize] its size as a share of the frame's height.
+ *
+ * With a [part] (a phone, short of height) only that half shows, under a switch between the two
+ * through [onPart], and the slider rows are short, so nothing is hidden below a scroll.
  */
 @Composable
 fun BackgroundControls(
@@ -64,7 +74,24 @@ fun BackgroundControls(
     onBorder: (BorderConfig) -> Unit = {},
     onBorderPreview: (BorderConfig) -> Unit = {},
     customBorderColour: Long = FIRST_CUSTOM_BORDER,
+    part: BackdropPart? = null,
+    onPart: (BackdropPart) -> Unit = {},
 ) {
+    if (part != null) {
+        // Without a background to change, only the border is left, so there is nothing to switch.
+        val shown = if (canChangeBackground) part else BackdropPart.Border
+        if (canChangeBackground) {
+            SegmentedChoice(listOf(BackdropPart.Background to "Background", BackdropPart.Border to "Border"), shown, onPart, Modifier.fillMaxWidth())
+        }
+        when (shown) {
+            BackdropPart.Background -> {
+                BackgroundChoices(background, onChange, onPreview, onCommit, customColour, compact = true)
+                EdgeFix(background, pending, brush, brushSize, onBrush, onBrushSize, onClearTouchUps, compact = true)
+            }
+            BackdropPart.Border -> BorderControls(border, onBorder, onBorderPreview, onCommit, customBorderColour)
+        }
+        return
+    }
     if (canChangeBackground) {
         Heading("Background")
         BackgroundChoices(background, onChange, onPreview, onCommit, customColour)
@@ -82,6 +109,7 @@ private fun BackgroundChoices(
     onPreview: (BackgroundConfig) -> Unit,
     onCommit: () -> Unit,
     customColour: Long,
+    compact: Boolean = false,
 ) {
     ChoiceRow {
         for ((mode, label) in listOf(BackgroundMode.BLUR to "Soft blur", BackgroundMode.REPLACE to "Plain colour", BackgroundMode.KEEP to "As shot")) {
@@ -89,7 +117,7 @@ private fun BackgroundChoices(
         }
     }
     when (background.mode) {
-        BackgroundMode.BLUR -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        BackgroundMode.BLUR -> Row(sliderRow(compact), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Softness", Modifier.width(96.dp))
             StudioSlider(
                 value = background.blurStrength.toFloat(),
@@ -119,11 +147,13 @@ private fun EdgeFix(
     onBrush: (BrushMode?) -> Unit,
     onBrushSize: (Double) -> Unit,
     onClearTouchUps: () -> Unit,
+    compact: Boolean = false,
 ) {
     if (background.mode != BackgroundMode.KEEP && !pending) {
         ChoiceRow {
-            Text("Fix the edge", color = StudioTheme.colors.textMuted, style = MaterialTheme.typography.bodyMedium)
-            for ((mode, label) in listOf(BrushMode.KEEP to "Keep", BrushMode.ERASE to "Erase")) {
+            // On a phone the brush is named for what it is, since "the edge" alone says little.
+            Text(if (compact) "Touch-up brush" else "Fix the edge", color = StudioTheme.colors.textMuted, style = MaterialTheme.typography.bodyMedium)
+            for ((mode, label) in listOf(BrushMode.KEEP to if (compact) "Restore" else "Keep", BrushMode.ERASE to "Erase")) {
                 ChoiceChip(label, selected = brush == mode, onClick = { onBrush(if (brush == mode) null else mode) })
             }
             if (background.touchUps.isNotEmpty()) QuietButton(onClearTouchUps) { Text("Clear fixes") }
@@ -134,7 +164,7 @@ private fun EdgeFix(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(sliderRow(compact), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Brush size", Modifier.width(96.dp))
                 StudioSlider(
                     value = brushSize.toFloat(),
@@ -146,7 +176,10 @@ private fun EdgeFix(
         }
     }
     if (pending) {
-        Text("Separating the person from the background…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // On a phone the note takes the brush row's height, so the photo doesn't move when it goes.
+        Box(if (compact) Modifier.heightIn(min = 44.dp) else Modifier, contentAlignment = Alignment.CenterStart) {
+            Text("Separating the person from the background…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
