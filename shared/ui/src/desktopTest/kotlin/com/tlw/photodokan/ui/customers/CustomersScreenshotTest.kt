@@ -122,6 +122,18 @@ class CustomersScreenshotTest {
     @Test fun wideDark() = shoot("customers-wide-dark", 1280.dp, 800.dp, ThemeMode.Dark, openCustomer = true)
     @Test fun phoneGrid() = shoot("customers-phone-light", 390.dp, 844.dp, ThemeMode.Light, openCustomer = false)
     @Test fun phoneEditor() = shoot("customers-phone-editor", 390.dp, 844.dp, ThemeMode.Light, openCustomer = true)
+    @Test fun wideLook() = shoot("customers-wide-look", 1280.dp, 800.dp, ThemeMode.Light, openCustomer = true) {
+        onAllNodesWithText("Look").onFirst().performClick()
+    }
+    @Test fun wideSideBySide() = shoot("customers-wide-side-by-side", 1280.dp, 800.dp, ThemeMode.Light, openCustomer = true) {
+        onNodeWithContentDescription("Show customers").performClick()
+    }
+    @Test fun landscapePhone() = shoot("customers-landscape-phone", 850.dp, 390.dp, ThemeMode.Light, openCustomer = false) {
+        onNodeWithContentDescription("Customer 0001").performClick()
+        waitUntil(timeoutMillis = 10_000) { showsText("Crop") }
+        mainClock.advanceTimeBy(1_000)
+        onAllNodesWithText("Look").onFirst().performClick()
+    }
     @Test fun wideBorder() = shoot("customers-wide-border", 1280.dp, 800.dp, ThemeMode.Light, openCustomer = true) {
         onAllNodesWithText("Backdrop").onFirst().performClick()
         onNodeWithText("Thick").performClick()

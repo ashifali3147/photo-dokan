@@ -33,6 +33,7 @@ import com.tlw.photodokan.ui.components.ButtonTone
 import com.tlw.photodokan.ui.components.CopyChoices
 import com.tlw.photodokan.ui.components.CopyNudge
 import com.tlw.photodokan.ui.components.CustomerNumber
+import com.tlw.photodokan.ui.components.GlassIconButton
 import com.tlw.photodokan.ui.components.Notice
 import com.tlw.photodokan.ui.components.PrimaryButton
 import com.tlw.photodokan.ui.components.QuietButton
@@ -51,7 +52,8 @@ import com.tlw.photodokan.ui.components.scrollFade
  * The selected customer or new photo beside the grid on a wide window: the photo on a grey
  * stage, the four tools, and the one main action for where the customer stands (save the new
  * photo, save the changes, or add to the sheet). With no photo it is the place to drop or choose
- * one. A phone uses [PhoneEditor] instead.
+ * one. [onExpand], when given, adds a button on the photo that gives the editor the whole window
+ * ([FocusEditor]). A phone uses [PhoneEditor] instead.
  */
 @Composable
 internal fun CustomerPanel(
@@ -61,6 +63,7 @@ internal fun CustomerPanel(
     pickPhoto: () -> Unit,
     takePhoto: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    onExpand: (() -> Unit)? = null,
 ) {
     val edit = state.edit
     if (edit == null) {
@@ -101,7 +104,13 @@ internal fun CustomerPanel(
             val stageHeight = (maxHeight * 0.62f).coerceIn(200.dp, 520.dp)
             val scroll = rememberScrollState()
             Column(Modifier.fillMaxSize().scrollFade(scroll, c.surface).verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                EditorStage(edit, viewModel, tools, Modifier.height(stageHeight).fillMaxWidth())
+                EditorStage(edit, viewModel, tools, Modifier.height(stageHeight).fillMaxWidth()) {
+                    onExpand?.let { expand ->
+                        GlassIconButton(expand, "Make the photo bigger", Modifier.align(Alignment.TopEnd).padding(10.dp)) {
+                            Icon(EditorIcons.Expand, contentDescription = null)
+                        }
+                    }
+                }
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { ToolControls(edit, viewModel, tools) }
             }
         }
@@ -117,7 +126,7 @@ internal fun CustomerPanel(
 
 /** Undo and redo as icons in the header, off the photo. */
 @Composable
-private fun UndoRedo(canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit) {
+internal fun UndoRedo(canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit) {
     Row {
         IconButton(onUndo, enabled = canUndo) { Icon(EditorIcons.Undo, contentDescription = "Undo") }
         IconButton(onRedo, enabled = canRedo) { Icon(EditorIcons.Redo, contentDescription = "Redo") }
@@ -126,7 +135,7 @@ private fun UndoRedo(canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onR
 
 /** Busy days run on numbers alone, so name and phone stay tucked away unless asked for. */
 @Composable
-private fun DraftDetails(draft: Draft, state: CustomersState, viewModel: CustomersViewModel) {
+internal fun DraftDetails(draft: Draft, state: CustomersState, viewModel: CustomersViewModel) {
     var showDetails by remember(draft.fileName) { mutableStateOf(false) }
     if (showDetails || draft.name.isNotEmpty() || draft.phone.isNotEmpty()) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -143,7 +152,7 @@ private fun DraftDetails(draft: Draft, state: CustomersState, viewModel: Custome
 
 /** Copies, then the one main button for where this customer stands. */
 @Composable
-private fun Actions(
+internal fun Actions(
     state: CustomersState,
     viewModel: CustomersViewModel,
     queue: PrintQueue,

@@ -56,6 +56,7 @@ fun CustomersScreen(modifier: Modifier = Modifier, viewModel: CustomersViewModel
 
     // Asked before Back or the back button throws away a new photo or unsaved changes.
     var confirmClose by remember { mutableStateOf(false) }
+    var focus by remember { mutableStateOf(true) }
     val close = { if (state.hasUnsavedWork) confirmClose = true else viewModel.closeEditor() }
     if (confirmClose) {
         CloseEditorDialog(state, onDiscard = { confirmClose = false; viewModel.closeEditor() }, onKeep = { confirmClose = false })
@@ -66,9 +67,14 @@ fun CustomersScreen(modifier: Modifier = Modifier, viewModel: CustomersViewModel
             val wide = maxWidth >= 720.dp
             // The editor gets more of a wider window; the grid only needs a few columns.
             val panelWidth = (maxWidth * 0.4f).coerceIn(420.dp, 600.dp)
-            // On a phone Back closes the editor and shows the grid again; side by side the grid is
-            // already showing, so Back only steps in to protect unsaved work.
-            SystemBackHandler(enabled = state.edit != null && !state.busy && (!wide || state.hasUnsavedWork), onBack = close)
+            // A wide window opens a photo with the whole window, until the operator asks for the grid.
+            val focused = wide && focus && state.edit != null
+            // On a phone Back closes the editor and shows the grid again. Focused, it gives the grid
+            // back; side by side the grid is already showing, so Back only steps in to protect unsaved work.
+            SystemBackHandler(
+                enabled = state.edit != null && !state.busy && (!wide || focused || state.hasUnsavedWork),
+                onBack = if (focused) ({ focus = false }) else close,
+            )
 
             val grid = @Composable { columns: GridCells, gridModifier: Modifier, onImport: (() -> Unit)? ->
                 CustomerGrid(
@@ -87,11 +93,13 @@ fun CustomersScreen(modifier: Modifier = Modifier, viewModel: CustomersViewModel
                 )
             }
 
-            if (wide) {
+            if (focused) {
+                FocusEditor(state, viewModel, queue, pickPhoto, takePhoto, onShowCustomers = { focus = false })
+            } else if (wide) {
                 Row(Modifier.fillMaxSize()) {
                     grid(GridCells.Adaptive(148.dp), Modifier.weight(1f).fillMaxHeight().padding(start = 28.dp, top = 28.dp, end = 12.dp, bottom = 12.dp), pickPhoto)
                     SidePanel(Modifier.width(panelWidth).fillMaxHeight()) {
-                        CustomerPanel(state, viewModel, queue, pickPhoto, takePhoto, Modifier.fillMaxSize())
+                        CustomerPanel(state, viewModel, queue, pickPhoto, takePhoto, Modifier.fillMaxSize(), onExpand = { focus = true })
                     }
                 }
             } else if (state.edit == null) {
