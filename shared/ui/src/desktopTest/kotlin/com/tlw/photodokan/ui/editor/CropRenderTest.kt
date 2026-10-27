@@ -1,9 +1,12 @@
 package com.tlw.photodokan.ui.editor
 
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropRect
+import com.tlw.photodokan.core.model.BackgroundConfig
+import com.tlw.photodokan.core.model.BackgroundMode
 import com.tlw.photodokan.core.model.BorderConfig
 import com.tlw.photodokan.core.model.EditRecipe
 import java.awt.Color
@@ -60,20 +63,37 @@ class CropRenderTest {
     @Test
     fun aBorderRunsAlongTheEdgeInMillimetres() {
         // 0.3 mm on a photo 30 mm wide is a hundredth of its width: 3 pixels of 300.
-        val line = assertNotNull(frameLine(BorderConfig(show = true), widthMm = 30.0))
+        val line = assertNotNull(frameLine(EditRecipe("studio-slot", border = BorderConfig(show = true)), widthMm = 30.0))
         val out = renderCrop(photo, CropRect(20.0, 10.0, 20.0, 20.0, 0.0), 300, 300, border = line).toAwtImage()
         for ((x, y) in listOf(0 to 150, 2 to 150, 299 to 150, 150 to 0, 150 to 297)) {
             assertEquals(0x000000, out.getRGB(x, y) and 0xffffff, "black at $x, $y")
         }
         assertTrue(out.isRed(5, 150) && out.isBlue(294, 150), "the photo just inside")
-        assertNull(frameLine(BorderConfig(show = false), widthMm = 30.0))
+        assertNull(frameLine(EditRecipe("studio-slot"), widthMm = 30.0))
     }
 
     @Test
     fun aBorderKeepsItsColour() {
-        val line = assertNotNull(frameLine(BorderConfig(show = true, colorArgb = 0xFF2040A0), widthMm = 30.0))
+        val blue = EditRecipe("studio-slot", border = BorderConfig(show = true, colorArgb = 0xFF2040A0))
+        val line = assertNotNull(frameLine(blue, widthMm = 30.0))
         val out = renderCrop(photo, CropRect(20.0, 10.0, 20.0, 20.0, 0.0), 300, 300, border = line).toAwtImage()
         assertEquals(0x2040A0, out.getRGB(1, 150) and 0xffffff)
+    }
+
+    @Test
+    fun blackAndWhiteTurnsTheBackgroundAndBorderGreyToo() {
+        val recipe = EditRecipe(
+            "studio-slot",
+            background = BackgroundConfig(mode = BackgroundMode.REPLACE, replaceColorArgb = BackgroundConfig.SKY_BLUE),
+            border = BorderConfig(show = true, colorArgb = 0xFF2040A0),
+            blackAndWhite = true,
+        )
+        for (colour in listOf(backdrop(recipe), assertNotNull(frameLine(recipe, widthMm = 30.0)).colour)) {
+            val argb = colour.toArgb()
+            assertTrue(((argb shr 16) and 0xff) == (argb and 0xff) && ((argb shr 8) and 0xff) == (argb and 0xff), "grey, was ${argb.toUInt().toString(16)}")
+        }
+        // In colour they stay as chosen.
+        assertEquals(BackgroundConfig.SKY_BLUE.toInt(), backdrop(recipe.copy(blackAndWhite = false)).toArgb())
     }
 
     @Test

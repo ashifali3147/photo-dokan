@@ -602,7 +602,7 @@ class CustomersViewModel(
         val rect = CropGeometry.rect(image.width, image.height, preset.aspect, edit.live.crop)
         val width = mmToPixels(preset.size.width, FINAL_DPI).roundToInt()
         val height = mmToPixels(preset.size.height, FINAL_DPI).roundToInt()
-        return timed("Make final.jpg") { encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(edit.live), backdrop(wanted.background), frameLine(edit.live.border, preset.size.width))) }
+        return timed("Make final.jpg") { encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(edit.live), backdrop(edit.live), frameLine(edit.live, preset.size.width))) }
     }
 
     private fun refresh() = launchWork { loadList() }

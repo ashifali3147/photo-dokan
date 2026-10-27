@@ -613,7 +613,7 @@ class PrintViewModel(
         val image = photo.image.painted(matteFor(order, photo.image, recipe), recipe.painting)
         val rect = CropGeometry.rect(image.width, image.height, aspect, recipe.crop)
         return encodeJpeg(
-            renderCrop(image, rect, width, height, ColorAdjustment.matrix(recipe), backdrop(recipe.background), frameLine(recipe.border, slot.width)),
+            renderCrop(image, rect, width, height, ColorAdjustment.matrix(recipe), backdrop(recipe), frameLine(recipe, slot.width)),
             quality = PRINT_JPEG_QUALITY,
         )
     }

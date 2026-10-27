@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropRect
-import com.tlw.photodokan.core.model.BorderConfig
+import com.tlw.photodokan.core.model.EditRecipe
 import kotlin.math.max
 
 /**
@@ -62,9 +62,13 @@ fun DrawScope.drawCrop(
 /** A line along a photo's edge: its [colour], and its width as a share of the photo's width. */
 class FrameLine(val colour: Color, val share: Double)
 
-/** [border] on a photo [widthMm] wide, or null when it is off. */
-fun frameLine(border: BorderConfig, widthMm: Double): FrameLine? =
-    if (border.show) FrameLine(Color(border.colorArgb.toInt()), border.widthMm / widthMm) else null
+/** [recipe]'s border on a photo [widthMm] wide, in grey when the photo is black and white, or null when it is off. */
+fun frameLine(recipe: EditRecipe, widthMm: Double): FrameLine? {
+    val border = recipe.border
+    if (!border.show) return null
+    val argb = if (recipe.blackAndWhite) ColorAdjustment.grey(border.colorArgb) else border.colorArgb
+    return FrameLine(Color(argb.toInt()), border.widthMm / widthMm)
+}
 
 /** Renders a crop into a new [width] × [height] image, the same on every platform. */
 fun renderCrop(

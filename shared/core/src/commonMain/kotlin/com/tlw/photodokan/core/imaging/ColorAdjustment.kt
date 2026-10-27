@@ -9,7 +9,8 @@ import kotlin.math.pow
  * and the same matrix is used for the screen, final.jpg and printing.
  *
  * Gentle studio corrections, applied in order: warmth and tint, exposure, colour, contrast. Black
- * and white takes the colour out instead of the colour slider.
+ * and white takes the colour out instead of the colour slider; the plain background and the border,
+ * which the sliders leave as chosen, are turned to their own grey by [grey].
  */
 object ColorAdjustment {
     /** ±1 stop of light at the slider ends. */
@@ -52,6 +53,12 @@ object ColorAdjustment {
         val green = 1 - TINT_RANGE * tint
         val keep = 1 / ((LUMA_R + LUMA_B) * pink + LUMA_G * green)
         return doubleArrayOf((1 + WARMTH_RANGE * warmth) * pink * keep, green * keep, (1 - WARMTH_RANGE * warmth) * pink * keep)
+    }
+
+    /** The opaque ARGB [argb] as the grey of the same brightness, as black and white shows it. */
+    fun grey(argb: Long): Long {
+        val y = (LUMA_R * ((argb shr 16) and 0xff) + LUMA_G * ((argb shr 8) and 0xff) + LUMA_B * (argb and 0xff) + 0.5).toLong().coerceIn(0, 255)
+        return 0xFF000000 or (y shl 16) or (y shl 8) or y
     }
 
     /**

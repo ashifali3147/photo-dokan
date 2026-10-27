@@ -91,8 +91,8 @@ internal fun EditorStage(
             onCommit = viewModel::commit,
             modifier = Modifier.fillMaxSize().padding(12.dp),
             colorMatrix = ColorAdjustment.matrix(edit.recipe),
-            backdrop = backdrop(edit.recipe.background),
-            border = frameLine(edit.recipe.border, viewModel.presetOf(edit.recipe).size.width),
+            backdrop = backdrop(edit.recipe),
+            border = frameLine(edit.recipe, viewModel.presetOf(edit.recipe).size.width),
             brush = brush?.let { TouchUpBrush(it, tools.brushSize, viewModel::touchUp) },
         )
         overlay()

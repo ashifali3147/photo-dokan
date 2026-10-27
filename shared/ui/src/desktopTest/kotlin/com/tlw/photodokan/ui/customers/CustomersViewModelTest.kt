@@ -759,7 +759,7 @@ class CustomersViewModelTest {
         val image = state.edit!!.shown
         val pixel = IntArray(image.width * image.height).also { image.readPixels(it) }[y * image.width + x]
         // Drawn over the chosen colour where the person is cut out, as the editor draws it.
-        val back = backdrop(state.edit!!.recipe.background).toArgb()
+        val back = backdrop(state.edit!!.recipe).toArgb()
         return Background.over(intArrayOf(pixel), back)[0] and 0xffffff
     }
 

@@ -96,7 +96,7 @@ data class EditRecipe(
     val fairness: Double = 0.0,
     /** The face as measured when the photo was opened, which the studio look works from; null without one. */
     val portrait: Portrait? = null,
-    /** The photo in shades of grey; a plain background keeps its colour. */
+    /** The whole photo in shades of grey: the person, the background and the border. */
     val blackAndWhite: Boolean = false,
     val border: BorderConfig = BorderConfig(),
 ) {

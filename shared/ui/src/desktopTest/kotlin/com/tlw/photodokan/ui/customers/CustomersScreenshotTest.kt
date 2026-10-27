@@ -12,6 +12,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runComposeUiTest
@@ -132,13 +134,20 @@ class CustomersScreenshotTest {
     }
     @Test fun wideBackdropDark() = shoot("customers-wide-backdrop-dark", 1280.dp, 800.dp, ThemeMode.Dark, openCustomer = true, cutOut = true) {
         onAllNodesWithText("Backdrop").onFirst().performClick()
-        onNodeWithText("Thin").performClick()
+        onNodeWithText("Thin").performSemanticsAction(SemanticsActions.OnClick)
     }
     @Test fun phoneBackdrop() = shoot("customers-phone-backdrop", 390.dp, 844.dp, ThemeMode.Light, openCustomer = true, cutOut = true) {
         onAllNodesWithText("Backdrop").onFirst().performClick()
         onNodeWithText("Plain colour").performClick()
     }
-    @Test fun wideBlackAndWhite() = shoot("customers-wide-black-and-white", 1280.dp, 800.dp, ThemeMode.Light, openCustomer = true) {
+    @Test fun wideBlackAndWhite() = shoot("customers-wide-black-and-white", 1280.dp, 800.dp, ThemeMode.Light, openCustomer = true, cutOut = true) {
+        // A coloured background and border, which black and white turns grey with the person.
+        onAllNodesWithText("Backdrop").onFirst().performClick()
+        onNodeWithText("Thick").performSemanticsAction(SemanticsActions.OnClick)
+        mainClock.advanceTimeBy(500)
+        onNodeWithText("Plain colour").performScrollTo().performClick()
+        onNodeWithContentDescription("Sky blue").performClick()
+        mainClock.advanceTimeBy(500)
         onAllNodesWithText("Look").onFirst().performClick()
         onNodeWithText("Black & white").performClick()
     }
