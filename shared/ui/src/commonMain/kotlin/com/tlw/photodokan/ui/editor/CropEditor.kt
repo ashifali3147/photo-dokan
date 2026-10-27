@@ -21,8 +21,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
@@ -38,6 +47,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.imaging.ColorAdjustment
+import com.tlw.photodokan.ui.components.FROST_PAD
 import com.tlw.photodokan.core.imaging.CropGeometry
 import com.tlw.photodokan.core.imaging.CropRect
 import com.tlw.photodokan.core.model.BrushMode
@@ -68,6 +78,8 @@ class TouchUpBrush(val mode: BrushMode, val size: Double, val onStroke: (MaskStr
  * Changes show live through [onCropChange]; [onCommit] marks the end of a drag or pinch, so each
  * gesture is one undo step. With a [brush], dragging paints touch-ups on the cut-out instead.
  * [showGuide] draws where the head and chin go; off, the face is seen without lines over it.
+ * A [frost] (a tiny black-and-white copy of [image]) is drawn behind the frame exactly where the rest of the photo
+ * lies, blurred and veiled in [frostVeil], so the print seems to lie on frosted glass over itself.
  */
 @Composable
 fun CropEditor(
@@ -82,6 +94,10 @@ fun CropEditor(
     border: FrameLine? = null,
     brush: TouchUpBrush? = null,
     showGuide: Boolean = true,
+    frost: ImageBitmap? = null,
+    frostVeil: Color = Color.Gray,
+    frostVeilAlpha: Float = FROST_VEIL,
+    glass: Boolean = frost != null,
 ) {
     val change by rememberUpdatedState(onCropChange)
     val commit by rememberUpdatedState(onCommit)
@@ -89,9 +105,50 @@ fun CropEditor(
     // The stroke being painted, in the frame's pixels, until the finger lifts.
     var painting by remember { mutableStateOf<List<Offset>>(emptyList()) }
     Box(modifier, contentAlignment = Alignment.Center) {
+        if (glass) {
+            Canvas(Modifier.matchParentSize().blur(FROST_BLUR, BlurredEdgeTreatment.Unbounded)) {
+                // Where the frame sits: as large as fits, in the middle, as the Canvas below.
+                val aspect = preset.aspect.toFloat()
+                val frameWidth = minOf(size.width, size.height * aspect)
+                val k = frameWidth / rect.width.toFloat()
+                withTransform({
+                    translate(size.width / 2, size.height / 2)
+                    scale(k, k, pivot = Offset.Zero)
+                    rotate(rect.rotationDegrees.toFloat(), pivot = Offset.Zero)
+                    translate(-rect.centerX.toFloat(), -rect.centerY.toFloat())
+                }) {
+                    if (frost == null) return@withTransform
+                    // The copy has clear pixels round it (FROST_PAD), which lie just outside the photo.
+                    val sx = image.width.toFloat() / (frost.width - 2 * FROST_PAD)
+                    val sy = image.height.toFloat() / (frost.height - 2 * FROST_PAD)
+                    drawImage(
+                        frost,
+                        dstOffset = IntOffset((-FROST_PAD * sx).roundToInt(), (-FROST_PAD * sy).roundToInt()),
+                        dstSize = IntSize((frost.width * sx).roundToInt(), (frost.height * sy).roundToInt()),
+                        filterQuality = FilterQuality.Low,
+                    )
+                }
+                // The veil, well past the edges: the photo's light shows through, but the stage
+                // stays near its grey.
+                val reach = maxOf(size.width, size.height)
+                drawRect(frostVeil.copy(alpha = frostVeilAlpha), topLeft = Offset(-reach, -reach), size = Size(size.width + 2 * reach, size.height + 2 * reach))
+                // Light on the glass: a broad sheen from the top left and a little shade at the
+                // foot. Behind the frame, so nothing lies over the photo being judged.
+                drawRect(
+                    Brush.linearGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent), start = Offset(-reach / 4, -reach / 4), end = Offset(size.width * 0.6f, size.height * 0.45f)),
+                    topLeft = Offset(-reach, -reach), size = Size(size.width + 2 * reach, size.height + 2 * reach),
+                )
+                drawRect(
+                    Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.14f)), startY = size.height * 0.65f, endY = size.height + reach / 4),
+                    topLeft = Offset(-reach, size.height * 0.65f), size = Size(size.width + 2 * reach, size.height * 0.35f + reach),
+                )
+            }
+        }
         Canvas(
             Modifier
                 .aspectRatio(preset.aspect.toFloat())
+                // The print lifted a little off the stage, as a photo lies on glass.
+                .shadow(14.dp, RectangleShape, clip = false)
                 .clipToBounds() // the photo extends past the frame; only the framed part shows
                 .semantics { contentDescription = "Crop frame" }
                 .then(if (brush != null) Modifier.paintStrokes(brush, image, rect) { painting = it } else Modifier.moveAndZoom(image, { change(it) }, { commit() })),
@@ -102,6 +159,12 @@ fun CropEditor(
         }
     }
 }
+
+/** How soft the frosted glass is where the device can blur, on top of the copy's own softness. */
+private val FROST_BLUR = 20.dp
+
+/** How much of the stage's grey lies over the photo behind the glass. */
+private const val FROST_VEIL = 0.45f
 
 /** Drag to move the photo, pinch or scroll to zoom; each gesture ends with [commit]. */
 private fun Modifier.moveAndZoom(image: ImageBitmap, change: (CropChange) -> Unit, commit: () -> Unit): Modifier =

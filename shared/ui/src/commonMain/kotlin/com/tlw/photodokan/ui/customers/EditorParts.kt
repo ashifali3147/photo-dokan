@@ -24,6 +24,7 @@ import com.tlw.photodokan.core.model.BrushMode
 import com.tlw.photodokan.core.model.QueuedOrder
 import com.tlw.photodokan.ui.components.DockTab
 import com.tlw.photodokan.ui.components.GreyStage
+import com.tlw.photodokan.ui.components.rememberFrost
 import com.tlw.photodokan.ui.components.ToolDock
 import com.tlw.photodokan.ui.editor.BackdropPart
 import com.tlw.photodokan.ui.editor.BackgroundControls
@@ -105,6 +106,8 @@ internal fun EditorStage(
             border = frameLine(edit.recipe, viewModel.presetOf(edit.recipe).size.width),
             brush = brush?.let { TouchUpBrush(it, tools.brushSize, viewModel::touchUp) },
             showGuide = showGuide,
+            frost = rememberFrost(edit.shown, backdrop(edit.recipe)),
+            frostVeil = c.stage,
         )
         overlay()
     }
