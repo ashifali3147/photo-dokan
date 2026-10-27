@@ -167,15 +167,15 @@ fun CopyChoices(
     }
 }
 
-/** One tab in a [ToolDock]. */
+/** One tab in a [ToolDock]; a phone, short of height, passes a lower [height]. */
 @Composable
-fun RowScope.DockTab(label: String, selected: Boolean, onClick: () -> Unit, icon: @Composable () -> Unit) {
+fun RowScope.DockTab(label: String, selected: Boolean, onClick: () -> Unit, height: Dp = 60.dp, icon: @Composable () -> Unit) {
     val c = StudioTheme.colors
     val shape = RoundedCornerShape(12.dp)
     Column(
         Modifier
             .weight(1f)
-            .height(60.dp)
+            .height(height)
             .then(if (selected) Modifier.shadow(10.dp, shape, ambientColor = c.accentGlow, spotColor = c.accentGlow) else Modifier)
             .clip(shape)
             .background(if (selected) (if (c.isDark) c.accentWash else c.surface) else Color.Transparent)

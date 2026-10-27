@@ -43,6 +43,10 @@ internal object EditorIcons {
         "M5,16h3v3h2v-5H5v2zM8,8H5v2h5V5H8v3zM14,19h2v-3h3v-2h-5v5zM16,8V5h-2v5h5V8h-3z",
     )
 
+    /** Fold the open tool's controls away (down), or bring them back (up). */
+    val FoldDown = icon("Fold down", "M16.59,8.59L12,13.17 7.41,8.59 6,10l6,6 6,-6z")
+    val FoldUp = icon("Fold up", "M12,8l-6,6 1.41,1.41L12,10.83l4.59,4.58L18,14z")
+
     private fun icon(name: String, path: String): ImageVector =
         ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
             .addPath(pathData = addPathNodes(path), fill = SolidColor(Color.Black))
