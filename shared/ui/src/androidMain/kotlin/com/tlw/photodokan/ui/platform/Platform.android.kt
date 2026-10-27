@@ -35,6 +35,8 @@ actual fun Paint.blur(radius: Float) {
 
 actual val tapVerb: String = "tap"
 
+actual val deviceIsCamera: Boolean = true
+
 actual fun monotonicNanos(): Long = SystemClock.elapsedRealtimeNanos()
 
 actual fun logTiming(what: String, millis: Long) {

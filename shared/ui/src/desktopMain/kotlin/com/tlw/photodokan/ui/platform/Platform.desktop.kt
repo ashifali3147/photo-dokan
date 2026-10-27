@@ -53,6 +53,8 @@ actual fun SystemBarsFollowTheme(dark: Boolean) = Unit
 
 actual val tapVerb: String = "click"
 
+actual val deviceIsCamera: Boolean = false
+
 actual fun Paint.blur(radius: Float) {
     // Skia blurs by a standard deviation; about half the radius matches Android's look.
     asFrameworkPaint().maskFilter = if (radius > 0f) MaskFilter.makeBlur(FilterBlurMode.NORMAL, radius / 2) else null
