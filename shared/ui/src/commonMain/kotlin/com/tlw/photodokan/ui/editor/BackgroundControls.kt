@@ -1,13 +1,8 @@
 package com.tlw.photodokan.ui.editor
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,7 +20,12 @@ import com.tlw.photodokan.ui.components.ChoiceRow
 import com.tlw.photodokan.ui.components.ChoiceChip
 
 /** The plain colours a background can be replaced with, as the operator names them. */
-private val COLOURS = listOf("White" to BackgroundConfig.WHITE, "Light blue" to BackgroundConfig.LIGHT_BLUE)
+private val COLOURS = listOf(
+    "White" to BackgroundConfig.WHITE,
+    "Light blue" to BackgroundConfig.LIGHT_BLUE,
+    "Sky blue" to BackgroundConfig.SKY_BLUE,
+    "Light grey" to BackgroundConfig.LIGHT_GREY,
+)
 
 /** The brush sizes offered, as shares of the frame's height. */
 const val SMALL_BRUSH = 0.02
@@ -33,8 +33,9 @@ const val LARGE_BRUSH = 0.12
 
 /**
  * The background behind the person: as shot, softly blurred (the studio's way) or a plain colour.
- * Choices are one undo step each through [onChange]; the softness slider shows live through
- * [onPreview] and becomes one step on [onCommit].
+ * Choices are one undo step each through [onChange]; the softness slider and the colour picker
+ * show live through [onPreview] and become one step on [onCommit]. [customColour] is the colour
+ * the Custom choice starts from: the last one picked.
  *
  * Below them, the touch-up brush for where the cut-out went wrong: [brush] is the one in hand, or
  * null to move the photo as usual, and [brushSize] its size as a share of the frame's height.
@@ -46,6 +47,7 @@ fun BackgroundControls(
     onChange: (BackgroundConfig) -> Unit,
     onPreview: (BackgroundConfig) -> Unit,
     onCommit: () -> Unit,
+    customColour: Long = BackgroundConfig.LIGHT_BLUE,
     brush: BrushMode? = null,
     brushSize: Double = SMALL_BRUSH,
     onBrush: (BrushMode?) -> Unit = {},
@@ -68,15 +70,25 @@ fun BackgroundControls(
                 modifier = Modifier.weight(1f),
             )
         }
-        BackgroundMode.REPLACE -> ChoiceRow {
-            for ((name, argb) in COLOURS) {
+        BackgroundMode.REPLACE -> {
+            val custom = COLOURS.none { it.second == background.replaceColorArgb }
+            ChoiceRow {
+                for ((name, argb) in COLOURS) {
+                    ChoiceChip(
+                        name,
+                        selected = background.replaceColorArgb == argb,
+                        onClick = { onChange(background.copy(replaceColorArgb = argb)) },
+                        leading = { Swatch(Color(argb.toInt())) },
+                    )
+                }
                 ChoiceChip(
-                    name,
-                    selected = background.replaceColorArgb == argb,
-                    onClick = { onChange(background.copy(replaceColorArgb = argb)) },
-                    leading = { Swatch(Color(argb.toInt())) },
+                    "Custom",
+                    selected = custom,
+                    onClick = { if (!custom) onChange(background.copy(replaceColorArgb = customColour)) },
+                    leading = { Swatch(Color((if (custom) background.replaceColorArgb else customColour).toInt())) },
                 )
             }
+            if (custom) ColourPicker(background.replaceColorArgb, { onPreview(background.copy(replaceColorArgb = it)) }, onCommit)
         }
         BackgroundMode.KEEP -> Unit
     }
@@ -109,7 +121,3 @@ fun BackgroundControls(
         Text("Separating the person from the background…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-
-@Composable
-private fun Swatch(colour: Color) =
-    Box(Modifier.size(18.dp).background(colour, CircleShape).border(1.dp, StudioTheme.colors.outline, CircleShape))

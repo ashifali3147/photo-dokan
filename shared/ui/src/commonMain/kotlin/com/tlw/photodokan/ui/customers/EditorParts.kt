@@ -132,6 +132,7 @@ internal fun ToolControls(edit: EditSession, viewModel: CustomersViewModel, tool
             onChange = viewModel::setBackground,
             onPreview = viewModel::previewBackground,
             onCommit = viewModel::commit,
+            customColour = viewModel.customBackdropColour,
             brush = tools.brushMode,
             brushSize = tools.brushSize,
             onBrush = { tools.brushMode = it },

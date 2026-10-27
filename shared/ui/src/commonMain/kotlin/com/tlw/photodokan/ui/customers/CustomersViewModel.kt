@@ -407,7 +407,15 @@ class CustomersViewModel(
     fun retouch(amount: Double) = preview { it.live.copy(retouch = amount.coerceIn(0.0, 1.0)) }
 
     /** Shows a background change live, e.g. while the softness slider moves; call [commit] when let go. */
-    fun previewBackground(background: BackgroundConfig) = preview { it.live.copy(background = background) }
+    fun previewBackground(background: BackgroundConfig) {
+        // Only the colour picker shows a colour live, so a colour previewed is one picked by hand.
+        if (background.mode == BackgroundMode.REPLACE) customBackdropColour = background.replaceColorArgb
+        preview { it.live.copy(background = background) }
+    }
+
+    /** The last colour picked by hand for a plain background, which the Custom choice starts from. */
+    var customBackdropColour: Long = BackgroundConfig.LIGHT_BLUE
+        private set
 
     /** Changes the background as one undo step: keep, blur, or a plain colour. */
     fun setBackground(background: BackgroundConfig) = step { it.live.copy(background = background) }

@@ -31,6 +31,8 @@ data class BackgroundConfig(
     companion object {
         const val WHITE = 0xFFFFFFFF
         const val LIGHT_BLUE = 0xFFDCE9F7
+        const val SKY_BLUE = 0xFF9FCBEF
+        const val LIGHT_GREY = 0xFFE4E4E4
     }
 }
 

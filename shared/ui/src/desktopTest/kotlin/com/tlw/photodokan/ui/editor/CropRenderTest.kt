@@ -55,6 +55,17 @@ class CropRenderTest {
     }
 
     @Test
+    fun pickedColoursSurviveTheSliders() {
+        for (argb in listOf(0xFF9FCBEF, 0xFFE4E4E4, 0xFF2040A0, 0xFFC0392B)) {
+            val (h, s, l) = hsl(argb)
+            val back = fromHsl(h, s, l)
+            for (shift in listOf(16, 8, 0)) {
+                assertTrue(abs(((back shr shift) and 0xff) - ((argb shr shift) and 0xff)) <= 1, "${argb.toString(16)} came back as ${back.toString(16)}")
+            }
+        }
+    }
+
+    @Test
     fun positiveRotationTurnsThePhotoClockwise() {
         // Turned a quarter clockwise, the left (red) half ends up on top.
         val out = render(CropRect(20.0, 10.0, 20.0, 20.0, 90.0))
