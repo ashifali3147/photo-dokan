@@ -53,6 +53,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
@@ -188,6 +190,12 @@ class CustomersViewModel(
     val canChangeBackground: Boolean get() = matter != null
 
     private var backgroundJob: Job? = null
+
+    /**
+     * One background worked out at a time. A cancelled one runs on to its end, and each holds
+     * several copies of the photo, so taps in a row would otherwise run out of memory on a phone.
+     */
+    private val painting = Mutex()
 
     /** Keeps the open photo's person cut out, so changing the background's settings is quick. */
     private val painter = PhotoPainter()
@@ -526,12 +534,15 @@ class CustomersViewModel(
         if (wanted.needsMatte && edit.matte == null && matter != null) return
         backgroundJob?.cancel()
         backgroundJob = viewModelScope.launch(work) {
-            val image = try {
-                painter.paint(edit.preview.image, edit.matte, wanted)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                return@launch // the photo shows as shot
+            // Waiting for the one before is cancelled by a newer change, so only the latest is painted.
+            val image = painting.withLock {
+                try {
+                    painter.paint(edit.preview.image, edit.matte, wanted)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    return@launch // the photo shows as shot
+                }
             }
             _state.update { s ->
                 val now = s.edit
