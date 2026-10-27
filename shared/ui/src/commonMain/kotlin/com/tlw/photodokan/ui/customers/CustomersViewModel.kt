@@ -8,6 +8,7 @@ import com.tlw.photodokan.core.face.FaceFit
 import com.tlw.photodokan.core.geometry.mmToPixels
 import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropGeometry
+import com.tlw.photodokan.core.imaging.Shrink
 import com.tlw.photodokan.core.library.Customer
 import com.tlw.photodokan.core.library.PhotoLibrary
 import com.tlw.photodokan.core.library.StudioDate
@@ -40,6 +41,7 @@ import com.tlw.photodokan.ui.photo.PhotoSource
 import com.tlw.photodokan.ui.photo.decodePreview
 import com.tlw.photodokan.ui.print.PrintOrders
 import com.tlw.photodokan.ui.platform.encodeJpeg
+import com.tlw.photodokan.ui.platform.imageBitmapOf
 import com.tlw.photodokan.ui.platform.timed
 import com.tlw.photodokan.vision.FaceFinder
 import com.tlw.photodokan.vision.MattePng
@@ -89,6 +91,11 @@ data class EditSession(
     /** [preview] painted as [paintedFor] says (background and studio look), once worked out. */
     val painted: ImageBitmap? = null,
     val paintedFor: Painting? = null,
+    /**
+     * Whether [painted] is at the preview's full size. While a slider is dragged a smaller copy is
+     * painted, so the photo keeps up with the finger; it is never saved.
+     */
+    val paintedFull: Boolean = false,
 ) {
     val recipe: EditRecipe get() = live
 
@@ -102,6 +109,13 @@ data class EditSession(
     /** The background as chosen isn't shown yet: the person is still being separated, or it is being redrawn. */
     val backgroundPending: Boolean
         get() = live.background.mode != BackgroundMode.KEEP && (matte == null || paintedFor?.background != live.background)
+
+    /**
+     * The person is still being separated from the background, which takes a moment after the
+     * photo opens. Redrawing after a slider moves is not this: the controls stay as they are then.
+     */
+    val separating: Boolean
+        get() = backgroundPending && matte == null
     val changed: Boolean get() = live != saved
     val canUndo: Boolean get() = history.canUndo || live != history.present
     val canRedo: Boolean get() = history.canRedo && live == history.present
@@ -199,6 +213,13 @@ class CustomersViewModel(
 
     /** Keeps the open photo's person cut out, so changing the background's settings is quick. */
     private val painter = PhotoPainter()
+
+    /** The same for the smaller copy painted while a slider is dragged, so neither undoes the other's cut-out. */
+    private val quickPainter = PhotoPainter()
+
+    /** The smaller copy of [quickOf], made once per photo; used only while [painting] is held. */
+    private var quickOf: ImageBitmap? = null
+    private var quickImage: ImageBitmap? = null
 
     fun presetOf(recipe: EditRecipe): PhotoSizePreset = presets.firstOrNull { it.id == recipe.presetId } ?: presets.first()
 
@@ -468,6 +489,7 @@ class CustomersViewModel(
     fun commit() {
         _state.update { s -> s.copy(edit = s.edit?.let { it.copy(history = it.history.apply(it.live)) }) }
         saveCustomColours()
+        redrawBackground() // in full, if a slider showed it on the smaller copy
     }
 
     /** Drops a change still being dragged, or steps back one finished change. */
@@ -516,19 +538,21 @@ class CustomersViewModel(
         _state.update { it.copy(message = "Customer ${customer.label} taken out of the print queue.", messageIsError = false) }
     }
 
+    /** Shows [change] live, e.g. while a slider is dragged: a slow repaint is done on a smaller copy. */
     private fun preview(change: (EditSession) -> EditRecipe) {
         _state.update { s -> s.copy(edit = s.edit?.let { it.copy(live = change(it)) }) }
-        redrawBackground()
+        redrawBackground(quick = true)
     }
 
     /**
      * Works out the photo with the background the open edit asks for, off the UI thread, unless
-     * it is already shown. A newer change replaces one still being worked out.
+     * it is already shown. A newer change replaces one still being worked out. [quick] paints a
+     * smaller copy, about four times quicker, for while a slider moves; letting go paints it in full.
      */
-    private fun redrawBackground() {
+    private fun redrawBackground(quick: Boolean = false) {
         val edit = _state.value.edit ?: return
         val wanted = edit.live.painting
-        if (!wanted.changesPhoto || wanted == edit.paintedFor) return
+        if (!wanted.changesPhoto || (wanted == edit.paintedFor && (quick || edit.paintedFull))) return
         // A new background waits for the person to be separated (findMatte asks again then); with
         // nothing to separate them, the look is painted on the photo as shot.
         if (wanted.needsMatte && edit.matte == null && matter != null) return
@@ -537,7 +561,7 @@ class CustomersViewModel(
             // Waiting for the one before is cancelled by a newer change, so only the latest is painted.
             val image = painting.withLock {
                 try {
-                    painter.paint(edit.preview.image, edit.matte, wanted)
+                    if (quick) quickPainter.paint(quickCopy(edit.preview.image), edit.matte, wanted) else painter.paint(edit.preview.image, edit.matte, wanted)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -546,13 +570,27 @@ class CustomersViewModel(
             }
             _state.update { s ->
                 val now = s.edit
-                if (now == null || now.preview !== edit.preview) s else s.copy(edit = now.copy(painted = image, paintedFor = wanted))
+                if (now == null || now.preview !== edit.preview) s else s.copy(edit = now.copy(painted = image, paintedFor = wanted, paintedFull = !quick))
             }
         }
     }
 
+    /** [image] at most [QUICK_SIDE] pixels on its longer side, made once per photo. Call it holding [painting]. */
+    private fun quickCopy(image: ImageBitmap): ImageBitmap {
+        if (quickOf === image) return quickImage!!
+        val factor = Shrink.factorFor(image.width, image.height, QUICK_SIDE)
+        val small = if (factor == 1) image else timed("Quick copy ${image.width}x${image.height} ÷$factor") {
+            val pixels = IntArray(image.width * image.height).also { image.readPixels(it) }
+            Shrink.box(pixels, image.width, image.height, factor).let { imageBitmapOf(it.argb, it.width, it.height) }
+        }
+        quickOf = image
+        quickImage = small
+        return small
+    }
+
+    /** One change at once, e.g. a tap: painted in full straight away, with no smaller copy first. */
     private fun step(change: (EditSession) -> EditRecipe) {
-        preview(change)
+        _state.update { s -> s.copy(edit = s.edit?.let { it.copy(live = change(it)) }) }
         commit()
     }
 
@@ -607,7 +645,7 @@ class CustomersViewModel(
         val wanted = edit.live.painting
         val image = when {
             !wanted.changesPhoto -> edit.preview.image
-            edit.paintedFor == wanted && edit.painted != null -> edit.painted
+            edit.paintedFor == wanted && edit.paintedFull && edit.painted != null -> edit.painted
             else -> painter.paint(edit.preview.image, matte, wanted)
         }
         val rect = CropGeometry.rect(image.width, image.height, preset.aspect, edit.live.crop)
@@ -644,6 +682,9 @@ class CustomersViewModel(
 
     companion object {
         const val FINAL_DPI = 300.0
+
+        /** The longer side of the copy painted while a slider is dragged. */
+        private const val QUICK_SIDE = 800
 
         /** The grid's pictures are about this many pixels on the longer side. */
         private const val THUMBNAIL_SIDE = 300

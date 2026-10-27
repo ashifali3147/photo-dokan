@@ -671,6 +671,26 @@ class CustomersViewModelTest {
     }
 
     @Test
+    fun aDraggedSliderPaintsASmallerCopyAndLettingGoPaintsItInFull() {
+        val wide = ByteArrayOutputStream().also { ImageIO.write(BufferedImage(1700, 100, BufferedImage.TYPE_INT_RGB), "jpg", it) }.toByteArray()
+        withMatter()
+        vm.import(PhotoSource("IMG_2.jpg") { wide })
+        val full = state.edit!!.preview.image.width
+        val blur = state.edit!!.recipe.background.copy(mode = BackgroundMode.BLUR, blurStrength = 0.3)
+
+        vm.previewBackground(blur)
+        val dragged = state.edit!!
+        assertEquals(blur, dragged.paintedFor?.background)
+        assertTrue(dragged.painted!!.width < full, "a smaller copy keeps up with the finger")
+        assertFalse(dragged.paintedFull)
+
+        vm.commit()
+        val letGo = state.edit!!
+        assertEquals(full, letGo.painted!!.width, "letting go paints it in full")
+        assertTrue(letGo.paintedFull)
+    }
+
+    @Test
     fun aCustomersMatteIsWorkedOutOnlyOnce() {
         vm.import(photo())
         vm.saveDraft()
