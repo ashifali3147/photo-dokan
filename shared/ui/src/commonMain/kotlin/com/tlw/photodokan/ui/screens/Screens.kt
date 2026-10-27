@@ -23,6 +23,7 @@ import com.tlw.photodokan.print.PhotoSettings
 import com.tlw.photodokan.ui.components.Card
 import com.tlw.photodokan.ui.components.StudioBackground
 import com.tlw.photodokan.ui.components.riseIn
+import com.tlw.photodokan.ui.intro.IntroReplaySettings
 import com.tlw.photodokan.ui.print.PrintViewModel
 import com.tlw.photodokan.ui.print.PrinterSettings
 import com.tlw.photodokan.ui.station.StationSettings
@@ -38,7 +39,7 @@ import com.tlw.photodokan.ui.platform.PhotoFolder
 
 /**
  * Everything set up once and rarely touched again, one card each: the printer, the sheet, printing
- * from the phone, the photo folder, and how the app looks. A card with nothing to say on this device is left out.
+ * from the phone, the photo folder, how the app looks, and the intro. A card with nothing to say on this device is left out.
  */
 @Composable
 fun SettingsScreen(modifier: Modifier = Modifier) {
@@ -63,6 +64,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 folder?.let { Section(3) { PhotoFolderSettings(it) } }
                 Section(4) { AppearanceSettings() }
                 Section(5) { StageLookSettings() }
+                Section(6) { IntroReplaySettings() }
             }
         }
     }

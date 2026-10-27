@@ -4,6 +4,9 @@ import com.tlw.photodokan.core.library.LibraryLayout
 import com.tlw.photodokan.core.model.PhotoSizePreset
 import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.ui.customers.CustomersViewModel
+import com.tlw.photodokan.ui.intro.InMemoryIntroStore
+import com.tlw.photodokan.ui.intro.IntroSettings
+import com.tlw.photodokan.ui.intro.IntroStore
 import com.tlw.photodokan.ui.photo.IncomingPhotos
 import com.tlw.photodokan.ui.print.PrintOrders
 import com.tlw.photodokan.ui.print.PrintViewModel
@@ -32,7 +35,8 @@ import org.koin.dsl.module
  * photos to the face, and a [com.tlw.photodokan.vision.PortraitMatter] separates the person from
  * the background. A [com.tlw.photodokan.ui.theme.ThemeModeStore] keeps this device's theme, a
  * [com.tlw.photodokan.ui.theme.StageLookStore] what photos lie on in the editor, and a
- * [com.tlw.photodokan.ui.editor.CustomColoursStore] the colours last picked by hand.
+ * [com.tlw.photodokan.ui.editor.CustomColoursStore] the colours last picked by hand, and an
+ * [com.tlw.photodokan.ui.intro.IntroStore] whether the intro has been seen.
  */
 val appModule = module {
     single { SheetTemplate.STUDIO_A4_5X8 }
@@ -44,6 +48,8 @@ val appModule = module {
     single { ThemeSettings(get()) }
     // Without a file to keep it in, the stage look lasts until the app closes.
     single { StageSettings(getOrNull<StageLookStore>() ?: InMemoryStageLookStore()) }
+    // Without a file to remember it in (tests, previews), the intro is left out.
+    single { IntroSettings(getOrNull<IntroStore>() ?: InMemoryIntroStore(saved = true)) }
     viewModel { CustomersViewModel(get(), ::today, orders = get(), template = get(), presets = get(), faces = getOrNull(), matter = getOrNull(), colours = getOrNull()) }
     viewModel {
         PrintViewModel(
