@@ -12,6 +12,9 @@ import com.tlw.photodokan.ui.station.PhoneName
 import com.tlw.photodokan.ui.station.StationViewModel
 import com.tlw.photodokan.ui.platform.today
 import com.tlw.photodokan.ui.theme.ThemeSettings
+import com.tlw.photodokan.ui.theme.InMemoryStageLookStore
+import com.tlw.photodokan.ui.theme.StageLookStore
+import com.tlw.photodokan.ui.theme.StageSettings
 import org.koin.core.KoinApplication
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
@@ -27,7 +30,8 @@ import org.koin.dsl.module
  * instead adds a [com.tlw.photodokan.ui.print.SheetSharer], and one that prints them adds a
  * [com.tlw.photodokan.print.PdfSheetReader]. A [com.tlw.photodokan.vision.FaceFinder] crops new
  * photos to the face, and a [com.tlw.photodokan.vision.PortraitMatter] separates the person from
- * the background. A [com.tlw.photodokan.ui.theme.ThemeModeStore] keeps this device's theme, and a
+ * the background. A [com.tlw.photodokan.ui.theme.ThemeModeStore] keeps this device's theme, a
+ * [com.tlw.photodokan.ui.theme.StageLookStore] what photos lie on in the editor, and a
  * [com.tlw.photodokan.ui.editor.CustomColoursStore] the colours last picked by hand.
  */
 val appModule = module {
@@ -38,6 +42,8 @@ val appModule = module {
     single { IncomingInvites() }
     single { PrintOrders(get()) }
     single { ThemeSettings(get()) }
+    // Without a file to keep it in, the stage look lasts until the app closes.
+    single { StageSettings(getOrNull<StageLookStore>() ?: InMemoryStageLookStore()) }
     viewModel { CustomersViewModel(get(), ::today, orders = get(), template = get(), presets = get(), faces = getOrNull(), matter = getOrNull(), colours = getOrNull()) }
     viewModel {
         PrintViewModel(

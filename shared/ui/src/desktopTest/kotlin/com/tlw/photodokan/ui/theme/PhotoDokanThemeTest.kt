@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
@@ -46,5 +47,22 @@ class PhotoDokanThemeTest {
         onNodeWithText("Light").performClick()
         onNodeWithText("Light").assertIsSelected()
         assertEquals(ThemeMode.Light, store.saved)
+    }
+
+    @Test
+    fun choosingAStageLookInSettingsSavesIt() = runComposeUiTest {
+        val store = InMemoryStageLookStore()
+        val settings = StageSettings(store)
+        setContent { PhotoDokanTheme(ThemeMode.Dark) { StageLookSettings(settings) } }
+
+        onNodeWithText("Light table").assertIsSelected()
+        onNodeWithText("Neutral frost").performClick()
+        onNodeWithText("Neutral frost").assertIsSelected()
+        assertEquals(StageLook(StageStyle.Frost), store.load())
+
+        // A tinted colour is kept, and the operator is told it can change how skin looks.
+        onNodeWithContentDescription("Warm").performClick()
+        assertEquals(StageLook(StageStyle.Frost, 0xFF8C8172), store.load())
+        onNodeWithText("This colour has a tint", substring = true).assertExists()
     }
 }

@@ -28,6 +28,7 @@ import com.tlw.photodokan.ui.print.PrinterSettings
 import com.tlw.photodokan.ui.station.StationSettings
 import com.tlw.photodokan.ui.station.StationViewModel
 import com.tlw.photodokan.ui.theme.AppearanceSettings
+import com.tlw.photodokan.ui.theme.StageLookSettings
 import com.tlw.photodokan.ui.theme.StudioTheme
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -61,6 +62,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 if (station.isHost || station.isPhone) Section(2) { StationSettings(station) }
                 folder?.let { Section(3) { PhotoFolderSettings(it) } }
                 Section(4) { AppearanceSettings() }
+                Section(5) { StageLookSettings() }
             }
         }
     }
