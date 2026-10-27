@@ -88,7 +88,7 @@ fun BackgroundControls(
                 BackgroundChoices(background, onChange, onPreview, onCommit, customColour, compact = true)
                 EdgeFix(background, pending, brush, brushSize, onBrush, onBrushSize, onClearTouchUps, compact = true)
             }
-            BackdropPart.Border -> BorderControls(border, onBorder, onBorderPreview, onCommit, customBorderColour)
+            BackdropPart.Border -> BorderControls(border, onBorder, onBorderPreview, onCommit, customBorderColour, compact = true)
         }
         return
     }
@@ -128,9 +128,9 @@ private fun BackgroundChoices(
             )
         }
         BackgroundMode.REPLACE -> {
-            ColourChoices(COLOURS, background.replaceColorArgb, customColour, { onChange(background.copy(replaceColorArgb = it)) }, { onChange(background.copy(replaceColorArgb = customColour)) })
+            ColourChoices(COLOURS, background.replaceColorArgb, customColour, { onChange(background.copy(replaceColorArgb = it)) }, { onChange(background.copy(replaceColorArgb = customColour)) }, compact)
             if (COLOURS.none { it.second == background.replaceColorArgb }) {
-                ColourPicker(background.replaceColorArgb, { onPreview(background.copy(replaceColorArgb = it)) }, onCommit)
+                ColourPicker(background.replaceColorArgb, { onPreview(background.copy(replaceColorArgb = it)) }, onCommit, compact)
             }
         }
         BackgroundMode.KEEP -> Unit
@@ -199,7 +199,7 @@ private val BORDER_WIDTHS = listOf("Thin" to BorderConfig.THIN_MM, "Thick" to Bo
  * step each through [onChange]; the colour picker shows live through [onPreview] until [onCommit].
  */
 @Composable
-private fun BorderControls(border: BorderConfig, onChange: (BorderConfig) -> Unit, onPreview: (BorderConfig) -> Unit, onCommit: () -> Unit, customColour: Long) {
+private fun BorderControls(border: BorderConfig, onChange: (BorderConfig) -> Unit, onPreview: (BorderConfig) -> Unit, onCommit: () -> Unit, customColour: Long, compact: Boolean = false) {
     ChoiceRow {
         ChoiceChip("Off", selected = !border.show, onClick = { if (border.show) onChange(border.copy(show = false)) })
         for ((name, mm) in BORDER_WIDTHS) {
@@ -208,6 +208,6 @@ private fun BorderControls(border: BorderConfig, onChange: (BorderConfig) -> Uni
     }
     if (!border.show) return
     val custom = BORDER_COLOURS.none { it.second == border.colorArgb }
-    ColourChoices(BORDER_COLOURS, border.colorArgb, customColour, { onChange(border.copy(colorArgb = it)) }, { onChange(border.copy(colorArgb = customColour)) })
-    if (custom) ColourPicker(border.colorArgb, { onPreview(border.copy(colorArgb = it)) }, onCommit)
+    ColourChoices(BORDER_COLOURS, border.colorArgb, customColour, { onChange(border.copy(colorArgb = it)) }, { onChange(border.copy(colorArgb = customColour)) }, compact)
+    if (custom) ColourPicker(border.colorArgb, { onPreview(border.copy(colorArgb = it)) }, onCommit, compact)
 }

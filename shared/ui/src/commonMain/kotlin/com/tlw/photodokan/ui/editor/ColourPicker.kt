@@ -39,10 +39,10 @@ private const val PICK_SATURATION = 0.55
  * shows live through [onPreview]; letting go calls [onCommit].
  */
 @Composable
-fun ColourPicker(argb: Long, onPreview: (Long) -> Unit, onCommit: () -> Unit) {
+fun ColourPicker(argb: Long, onPreview: (Long) -> Unit, onCommit: () -> Unit, compact: Boolean = false) {
     val (hue, _, lightness) = hsl(argb)
     val picked = Color(argb.toInt())
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(sliderRow(compact), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("Colour", Modifier.width(96.dp))
         StudioSlider(
             value = hue.toFloat(),
@@ -54,7 +54,7 @@ fun ColourPicker(argb: Long, onPreview: (Long) -> Unit, onCommit: () -> Unit) {
             thumbColour = picked,
         )
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(sliderRow(compact), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("Light", Modifier.width(96.dp))
         StudioSlider(
             value = lightness.toFloat(),
@@ -75,19 +75,18 @@ private val LIGHTEST = 0.1f..0.95f
  * Colours to choose from, shown as the colours themselves: a round sample each, ringed in the
  * accent once chosen, with the chosen one's name underneath so it isn't told by colour alone. The
  * last sample is Custom: [customColour] inside a ring of every hue, which [onCustom] switches to.
+ * [compact] (a phone) puts the name at the end of the samples' row instead, to save a line.
  */
 @Composable
-internal fun ColourChoices(choices: List<Pair<String, Long>>, selected: Long, customColour: Long, onPick: (Long) -> Unit, onCustom: () -> Unit) {
+internal fun ColourChoices(choices: List<Pair<String, Long>>, selected: Long, customColour: Long, onPick: (Long) -> Unit, onCustom: () -> Unit, compact: Boolean = false) {
     val custom = choices.none { it.second == selected }
+    val name = choices.firstOrNull { it.second == selected }?.first ?: "Custom"
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        for ((name, argb) in choices) ColourSample(name, Color(argb.toInt()), selected = argb == selected, onClick = { if (argb != selected) onPick(argb) })
+        for ((label, argb) in choices) ColourSample(label, Color(argb.toInt()), selected = argb == selected, onClick = { if (argb != selected) onPick(argb) })
         ColourSample("Custom", Color((if (custom) selected else customColour).toInt()), selected = custom, onClick = { if (!custom) onCustom() }, hues = true)
+        if (compact) Text(name, style = MaterialTheme.typography.bodyMedium, color = StudioTheme.colors.textMuted, maxLines = 1)
     }
-    Text(
-        choices.firstOrNull { it.second == selected }?.first ?: "Custom",
-        style = MaterialTheme.typography.bodyMedium,
-        color = StudioTheme.colors.textMuted,
-    )
+    if (!compact) Text(name, style = MaterialTheme.typography.bodyMedium, color = StudioTheme.colors.textMuted)
 }
 
 /** All the hues round a circle, for the Custom sample. */
