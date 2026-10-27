@@ -63,6 +63,17 @@ data class StudioColors(
     val slotBlank: Color,
     /** Round buttons floating over a photo (the camera is always dark). */
     val glass: Color,
+    /**
+     * The light that falls from the top of the window onto the ground, as if from a softbox. A
+     * faint accent glow in dark, so the night theme has depth; nearly nothing in light.
+     */
+    val ambient: Color = Color.Transparent,
+    /** A hairline of light along the top edge of raised things: cards, the dock, the main button. */
+    val edgeLight: Color = Color.Transparent,
+    /** The band of light that sweeps once across the main button when it changes. */
+    val sheen: Color = Color.White.copy(alpha = 0.22f),
+    /** How strongly glows show: fuller at night, where light reads, and quieter by day. */
+    val glowStrength: Float = 1f,
 )
 
 /** Every colour pair a screen uses, by theme. */
@@ -73,40 +84,50 @@ object StudioPalette {
     private val SlotFree = Color(0xFFF1EFEA)
     private val SlotBlank = Color(0xFF8A8F98)
 
+    /**
+     * Night: deep ink with a little blue in it rather than flat black, so the accent's light has
+     * something to fall on. Surfaces step up in the same hue; the accent is brighter and its glow
+     * fuller than by day, where light reads best. The stage stays neutral grey for judging skin.
+     */
     val Dark = StudioColors(
         isDark = true,
-        base = Color(0xFF111214),
-        rail = Color(0xFF16171A),
-        surface = Color(0xFF1B1C20),
-        well = Color(0xFF17181B),
-        line = Color(0xFF2A2C31),
-        outline = Color(0xFF6B6F78),
-        text = Color(0xFFEDEDEF),
-        textMuted = Color(0xFFA3A7B0),
-        strong = Color(0xFFEDEDEF),
-        onStrong = Color(0xFF111214),
-        accent = Color(0xFF5B7CFF),
+        base = Color(0xFF0B0D13),
+        rail = Color(0xFF10131B),
+        surface = Color(0xFF161A25),
+        well = Color(0xFF0E1119),
+        line = Color(0xFF262C3B),
+        outline = Color(0xFF5E6882),
+        text = Color(0xFFEEF1F8),
+        textMuted = Color(0xFFA2AABC),
+        strong = Color(0xFFEEF1F8),
+        onStrong = Color(0xFF0B0D13),
+        accent = Color(0xFF6E8CFF),
+        // Deep enough for white text (4.5:1 even at the top); the glow around it carries the light.
         accentTop = Color(0xFF4A68EC),
-        accentBottom = Color(0xFF3753D6),
+        accentBottom = Color(0xFF3B56E6),
         onAccent = Color.White,
-        accentWash = Color(0xFF1D2542),
-        accentText = Color(0xFFA9BCFF),
-        accentGlow = Color(0x735B7CFF),
-        ok = Color(0xFF8CD3AB),
-        okTop = Color(0xFF247F52),
-        okBottom = Color(0xFF1C6F46),
+        accentWash = Color(0xFF1A2347),
+        accentText = Color(0xFFB8C7FF),
+        accentGlow = Color(0xA06E8CFF),
+        ok = Color(0xFF7EE2AE),
+        okTop = Color(0xFF1F8553),
+        okBottom = Color(0xFF19744A),
         onOk = Color.White,
-        okWash = Color(0xFF17281F),
-        okGlow = Color(0x612F9A66),
-        warn = Color(0xFFE0C068),
+        okWash = Color(0xFF11271D),
+        okGlow = Color(0x8C34C47E),
+        warn = Color(0xFFF2C866),
         onWarn = Color(0xFF2A2000),
-        warnWash = Color(0xFF2A2516),
+        warnWash = Color(0xFF2B2414),
         stage = Stage,
         paper = Paper,
         slotPrinted = SlotPrinted,
         slotFree = SlotFree,
         slotBlank = SlotBlank,
-        glass = Color(0x24FFFFFF),
+        glass = Color(0x29FFFFFF),
+        ambient = Color(0x2E5B7CFF),
+        edgeLight = Color(0x14FFFFFF),
+        sheen = Color(0x47FFFFFF),
+        glowStrength = 1f,
     )
 
     val Light = StudioColors(
@@ -143,5 +164,9 @@ object StudioPalette {
         slotFree = SlotFree,
         slotBlank = SlotBlank,
         glass = Color(0x99FFFFFF),
+        ambient = Color(0x0F2B50D8),
+        edgeLight = Color(0x99FFFFFF),
+        sheen = Color(0x38FFFFFF),
+        glowStrength = 0.6f,
     )
 }
