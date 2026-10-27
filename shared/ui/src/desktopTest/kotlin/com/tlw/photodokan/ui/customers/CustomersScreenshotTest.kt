@@ -161,6 +161,6 @@ class CustomersScreenshotTest {
         onNodeWithContentDescription("Sky blue").performClick()
         mainClock.advanceTimeBy(500)
         onAllNodesWithText("Look").onFirst().performClick()
-        onNodeWithText("Black & white").performClick()
+        onNodeWithText("B&W").performClick()
     }
 }
