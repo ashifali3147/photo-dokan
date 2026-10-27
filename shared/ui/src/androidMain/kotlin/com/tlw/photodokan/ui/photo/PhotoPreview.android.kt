@@ -13,7 +13,7 @@ actual fun photoSize(bytes: ByteArray): Pair<Int, Int>? {
     return if (ExifOrientation.read(bytes).swapsDimensions) bounds.outHeight to bounds.outWidth else bounds.outWidth to bounds.outHeight
 }
 
-actual fun decodePreview(bytes: ByteArray, maxSide: Int): PhotoPreview? {
+actual fun decodePreview(bytes: ByteArray, maxSide: Int, scaleDown: Boolean): PhotoPreview? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
     val width = bounds.outWidth
@@ -27,14 +27,18 @@ actual fun decodePreview(bytes: ByteArray, maxSide: Int): PhotoPreview? {
         ?: return null
 
     val orientation = ExifOrientation.read(bytes)
-    val upright = if (orientation == ExifOrientation.NORMAL) {
+    val longer = maxOf(decoded.width, decoded.height)
+    val scale = if (scaleDown && longer > maxSide) maxSide.toFloat() / longer else 1f
+    val upright = if (orientation == ExifOrientation.NORMAL && scale == 1f) {
         decoded
     } else {
+        // Scaled, mirrored and turned in one step, so only one more copy is made.
         val matrix = Matrix().apply {
+            postScale(scale, scale)
             if (orientation.mirrored) postScale(-1f, 1f)
             postRotate(orientation.rotationDegrees.toFloat())
         }
-        Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+        Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true).also { if (it !== decoded) decoded.recycle() }
     }
     return if (orientation.swapsDimensions) {
         PhotoPreview(upright.asImageBitmap(), height, width)

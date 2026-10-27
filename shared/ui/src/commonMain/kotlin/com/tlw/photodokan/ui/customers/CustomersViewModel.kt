@@ -53,6 +53,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
@@ -189,6 +191,12 @@ class CustomersViewModel(
 
     private var backgroundJob: Job? = null
 
+    /**
+     * One background worked out at a time. A cancelled one runs on to its end, and each holds
+     * several copies of the photo, so taps in a row would otherwise run out of memory on a phone.
+     */
+    private val painting = Mutex()
+
     /** Keeps the open photo's person cut out, so changing the background's settings is quick. */
     private val painter = PhotoPainter()
 
@@ -217,7 +225,7 @@ class CustomersViewModel(
     /** Opens a saved customer in the editor with their last edit. */
     fun select(customer: Customer) = launchWork {
         val original = timed("Read customer ${customer.label}") { library.readOriginal(customer) }
-        val preview = timed("Open photo of ${original.size shr 10} KB") { decodePreview(original) }
+        val preview = timed("Open photo of ${original.size shr 10} KB") { decodePreview(original, scaleDown = true) }
         if (preview == null) {
             error("The photo of customer ${customer.label} could not be opened.")
         } else {
@@ -237,7 +245,7 @@ class CustomersViewModel(
             // E.g. a share whose app took back its permission, or a file on a removed card.
             return@launchWork error("Could not open \"${source.name}\". Choose it with Choose photo instead.")
         }
-        val preview = timed("Open photo of ${original.size shr 10} KB") { decodePreview(original) }
+        val preview = timed("Open photo of ${original.size shr 10} KB") { decodePreview(original, scaleDown = true) }
         if (preview == null) {
             error("\"${source.name}\" is not a photo Photo Dokan can open. Choose a JPEG or PNG photo.")
         } else {
@@ -526,12 +534,15 @@ class CustomersViewModel(
         if (wanted.needsMatte && edit.matte == null && matter != null) return
         backgroundJob?.cancel()
         backgroundJob = viewModelScope.launch(work) {
-            val image = try {
-                painter.paint(edit.preview.image, edit.matte, wanted)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                return@launch // the photo shows as shot
+            // Waiting for the one before is cancelled by a newer change, so only the latest is painted.
+            val image = painting.withLock {
+                try {
+                    painter.paint(edit.preview.image, edit.matte, wanted)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    return@launch // the photo shows as shot
+                }
             }
             _state.update { s ->
                 val now = s.edit
