@@ -21,6 +21,12 @@ import kotlin.math.roundToInt
  * Every step scales with the strength, 0 to 1, so the operator's Enhance slider blends it in.
  */
 object StudioLook {
+    /**
+     * How far the lift and the crispness go at full strength, of the way they could: all the way
+     * looked over-processed, so the slider's top end stays natural. Colour casts still go fully.
+     */
+    const val FULL = 0.7
+
     /** How bright well-lit skin is, in the middle of the face, 0 to 1. */
     const val SKIN_TARGET = 0.56
 
@@ -79,10 +85,11 @@ object StudioLook {
         require(argb.size == width * height) { "Need $width × $height pixels, had ${argb.size}" }
         require(person == null || person.size == argb.size) { "The person needs a value per pixel" }
         val s = strength.coerceIn(0.0, 1.0).toFloat()
+        val lift = s * FULL.toFloat()
         val fair = if (portrait == null) 0f else fairness.coerceIn(0.0, 1.0).toFloat()
         val smooth = if (portrait == null) 0f else retouch.coerceIn(0.0, 1.0).toFloat()
         if (s <= 0 && fair <= 0 && smooth <= 0) return argb.copyOf()
-        val curve = portrait?.takeIf { s > 0 }?.let { curve(it.skinLevel, it.skinLevel + s * (max(SKIN_TARGET, it.skinLevel) - it.skinLevel)) }
+        val curve = portrait?.takeIf { s > 0 }?.let { curve(it.skinLevel, it.skinLevel + lift * (max(SKIN_TARGET, it.skinLevel) - it.skinLevel)) }
 
         // Light first, and how much of each pixel is skin.
         val toned = IntArray(argb.size)
@@ -148,7 +155,7 @@ object StudioLook {
             }
         }
         if (smooth > 0) smoothSkin(toned, width, height, smooth, portrait!!.faceHeight, fairMap!!)
-        return if (s > 0) detail(toned, width, height, s, portrait?.faceHeight, skin) else toned
+        return if (s > 0) detail(toned, width, height, lift, portrait?.faceHeight, skin) else toned
     }
 
     /**

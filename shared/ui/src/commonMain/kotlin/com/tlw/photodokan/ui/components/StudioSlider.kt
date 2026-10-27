@@ -14,6 +14,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.ui.theme.StudioTheme
@@ -23,6 +25,9 @@ import com.tlw.photodokan.ui.theme.StudioTheme
  * With [centred], the track fills from the middle out, for values that go both ways around a
  * neutral zero (brightness, warmth, straighten), so "no change" reads as an empty track rather
  * than half full. Otherwise it fills from the start, for strengths and sizes.
+ *
+ * With a [trackBrush], the track is a wider strip painted with it instead, showing what each place
+ * on the slider gives (every hue, dark to light), and the thumb is filled with [thumbColour].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +39,8 @@ fun StudioSlider(
     centred: Boolean = false,
     enabled: Boolean = true,
     onValueChangeFinished: (() -> Unit)? = null,
+    trackBrush: Brush? = null,
+    thumbColour: Color? = null,
 ) {
     val c = StudioTheme.colors
     Slider(
@@ -48,7 +55,7 @@ fun StudioSlider(
                 Modifier
                     .size(22.dp)
                     .shadow(6.dp, CircleShape, ambientColor = c.accentGlow, spotColor = c.accentGlow)
-                    .background(if (enabled) c.accent else c.textMuted, CircleShape)
+                    .background(if (!enabled) c.textMuted else thumbColour ?: c.accent, CircleShape)
                     .border(3.dp, c.surface, CircleShape),
             )
         },
@@ -59,6 +66,10 @@ fun StudioSlider(
             val active = if (enabled) c.accent else c.textMuted
             Canvas(Modifier.fillMaxWidth().height(22.dp)) {
                 val y = size.height / 2
+                if (trackBrush != null) {
+                    drawLine(trackBrush, Offset(0f, y), Offset(size.width, y), 10.dp.toPx(), StrokeCap.Round)
+                    return@Canvas
+                }
                 val stroke = 4.dp.toPx()
                 drawLine(idle, Offset(0f, y), Offset(size.width, y), stroke, StrokeCap.Round)
                 val from = if (centred) size.width / 2 else 0f

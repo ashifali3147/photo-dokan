@@ -4,6 +4,8 @@ import com.tlw.photodokan.core.model.EditRecipe
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ColorAdjustmentTest {
@@ -48,6 +50,30 @@ class ColorAdjustmentTest {
         for ((r, g, b) in listOf(Triple(200.0, 30.0, 40.0), Triple(10.0, 220.0, 90.0), Triple(255.0, 255.0, 0.0))) {
             val out = grey.apply(r, g, b)
             close(out[0], out[1]); close(out[1], out[2])
+        }
+    }
+
+    @Test
+    fun blackAndWhiteIsGreyWhateverTheColourSlider() {
+        for (s in listOf(-0.5, 0.0, 1.0)) {
+            val recipe = neutral.copy(saturation = s, blackAndWhite = true)
+            assertFalse(ColorAdjustment.isNeutral(recipe))
+            val out = ColorAdjustment.matrix(recipe).apply(200.0, 120.0, 90.0)
+            close(out[0], out[1]); close(out[1], out[2])
+            // As bright as the colour was.
+            close(0.2126 * 200 + 0.7152 * 120 + 0.0722 * 90, out[0])
+        }
+    }
+
+    @Test
+    fun aColourTurnsToTheGreyBlackAndWhiteGivesIt() {
+        // The same grey as the matrix gives that colour, so a plain background matches the person.
+        val matrix = ColorAdjustment.matrix(neutral.copy(blackAndWhite = true))
+        for (argb in listOf(0xFF9FCBEF, 0xFF2040A0, 0xFFFFFFFF, 0xFF000000)) {
+            val grey = ColorAdjustment.grey(argb)
+            val shown = matrix.apply(((argb shr 16) and 0xff).toDouble(), ((argb shr 8) and 0xff).toDouble(), (argb and 0xff).toDouble())
+            for (shift in listOf(16, 8, 0)) close(shown[0], ((grey shr shift) and 0xff).toDouble(), 0.6)
+            assertEquals(0xFF000000, grey and 0xFF000000, "opaque")
         }
     }
 

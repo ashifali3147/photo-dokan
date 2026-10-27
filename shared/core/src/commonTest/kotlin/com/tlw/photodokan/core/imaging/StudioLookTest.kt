@@ -80,6 +80,16 @@ class StudioLookTest {
     }
 
     @Test
+    fun fullStrengthStopsShortOfTheTarget() {
+        // All the way to the target looked over-processed: full strength goes most of the way.
+        val skin = rgb(150, 98, 72)
+        val full = luma(look(skin)) / 255
+        val all = StudioLook.SKIN_TARGET
+        val from = dim.skinLevel
+        assertEquals(from + StudioLook.FULL * (all - from), full, 0.02)
+    }
+
+    @Test
     fun withoutAFaceThereIsNoCurve() {
         val skin = rgb(150, 98, 72)
         assertEquals(luma(skin), luma(look(skin, portrait = null)), 3.0)

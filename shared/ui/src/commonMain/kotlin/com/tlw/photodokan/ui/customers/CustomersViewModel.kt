@@ -14,6 +14,7 @@ import com.tlw.photodokan.core.library.StudioDate
 import com.tlw.photodokan.core.matte.Matte
 import com.tlw.photodokan.core.model.BackgroundConfig
 import com.tlw.photodokan.core.model.BackgroundMode
+import com.tlw.photodokan.core.model.BorderConfig
 import com.tlw.photodokan.core.model.CropConfig
 import com.tlw.photodokan.core.model.EditHistory
 import com.tlw.photodokan.core.model.EditRecipe
@@ -27,7 +28,10 @@ import com.tlw.photodokan.ui.editor.PhotoPainter
 import com.tlw.photodokan.ui.editor.painting
 import com.tlw.photodokan.ui.editor.studioLight
 import com.tlw.photodokan.ui.editor.backdrop
+import com.tlw.photodokan.ui.editor.CustomColours
+import com.tlw.photodokan.ui.editor.CustomColoursStore
 import com.tlw.photodokan.ui.editor.faceFit
+import com.tlw.photodokan.ui.editor.frameLine
 import com.tlw.photodokan.ui.editor.faceLight
 import com.tlw.photodokan.ui.editor.facePortrait
 import com.tlw.photodokan.ui.editor.firstEdit
@@ -142,6 +146,7 @@ class CustomersViewModel(
     private val faces: FaceFinder? = null,
     private val matter: PortraitMatter? = null,
     private val work: CoroutineDispatcher = Dispatchers.Default,
+    private val colours: CustomColoursStore? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(CustomersState(today = clock()))
@@ -394,7 +399,36 @@ class CustomersViewModel(
 
     /** Light and colour as shot, the studio look, fair skin and smoothing off, as one undo step. */
     fun resetAdjustments() = step {
-        it.live.copy(exposure = 0.0, contrast = 0.0, warmth = 0.0, tint = 0.0, saturation = 0.0, enhance = 0.0, fairness = 0.0, retouch = 0.0)
+        it.live.copy(exposure = 0.0, contrast = 0.0, warmth = 0.0, tint = 0.0, saturation = 0.0, enhance = 0.0, fairness = 0.0, retouch = 0.0, blackAndWhite = false)
+    }
+
+    /** Turns black and white on or off, as one undo step. */
+    fun setBlackAndWhite(on: Boolean) = step { it.live.copy(blackAndWhite = on) }
+
+    /** Changes the line along the photo's edge as one undo step: on or off, or its colour. */
+    fun setBorder(border: BorderConfig) = step { it.live.copy(border = border) }
+
+    /** Shows a border colour live while it is picked by hand; call [commit] when the slider is let go. */
+    fun previewBorder(border: BorderConfig) {
+        custom = custom.copy(border = border.colorArgb)
+        preview { it.live.copy(border = border) }
+    }
+
+    /** The colours last picked by hand, kept on this device from one day to the next. */
+    private var custom = runCatching { colours?.load() }.getOrNull() ?: CustomColours()
+    private var customSaved = custom
+
+    /** The last colour picked by hand for a plain background, which the Custom choice starts from. */
+    val customBackdropColour: Long get() = custom.backdrop
+
+    /** The last colour picked by hand for a border. */
+    val customBorderColour: Long get() = custom.border
+
+    /** Keeps a colour picked by hand once the slider is let go; it still applies if it can't be saved. */
+    private fun saveCustomColours() {
+        if (custom == customSaved) return
+        customSaved = custom
+        runCatching { colours?.save(custom) }
     }
 
     /** Shows a change to the studio look's strength live; call [commit] when the slider is let go. */
@@ -407,7 +441,11 @@ class CustomersViewModel(
     fun retouch(amount: Double) = preview { it.live.copy(retouch = amount.coerceIn(0.0, 1.0)) }
 
     /** Shows a background change live, e.g. while the softness slider moves; call [commit] when let go. */
-    fun previewBackground(background: BackgroundConfig) = preview { it.live.copy(background = background) }
+    fun previewBackground(background: BackgroundConfig) {
+        // Only the colour picker shows a colour live, so a colour previewed is one picked by hand.
+        if (background.mode == BackgroundMode.REPLACE) custom = custom.copy(backdrop = background.replaceColorArgb)
+        preview { it.live.copy(background = background) }
+    }
 
     /** Changes the background as one undo step: keep, blur, or a plain colour. */
     fun setBackground(background: BackgroundConfig) = step { it.live.copy(background = background) }
@@ -419,7 +457,10 @@ class CustomersViewModel(
     fun clearTouchUps() = step { it.live.copy(background = it.live.background.copy(touchUps = emptyList())) }
 
     /** Ends a live change: it becomes one undo step. */
-    fun commit() = _state.update { s -> s.copy(edit = s.edit?.let { it.copy(history = it.history.apply(it.live)) }) }
+    fun commit() {
+        _state.update { s -> s.copy(edit = s.edit?.let { it.copy(history = it.history.apply(it.live)) }) }
+        saveCustomColours()
+    }
 
     /** Drops a change still being dragged, or steps back one finished change. */
     fun undo() {
@@ -561,7 +602,7 @@ class CustomersViewModel(
         val rect = CropGeometry.rect(image.width, image.height, preset.aspect, edit.live.crop)
         val width = mmToPixels(preset.size.width, FINAL_DPI).roundToInt()
         val height = mmToPixels(preset.size.height, FINAL_DPI).roundToInt()
-        return timed("Make final.jpg") { encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(edit.live), backdrop(wanted.background))) }
+        return timed("Make final.jpg") { encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(edit.live), backdrop(edit.live), frameLine(edit.live, preset.size.width))) }
     }
 
     private fun refresh() = launchWork { loadList() }

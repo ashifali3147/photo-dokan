@@ -11,6 +11,7 @@ import com.tlw.photodokan.core.matte.Background
 import com.tlw.photodokan.core.matte.Matte
 import com.tlw.photodokan.core.model.BackgroundConfig
 import com.tlw.photodokan.core.model.BackgroundMode
+import com.tlw.photodokan.core.model.BorderConfig
 import com.tlw.photodokan.core.model.BrushMode
 import com.tlw.photodokan.core.model.CropConfig
 import com.tlw.photodokan.core.model.MaskPoint
@@ -18,6 +19,8 @@ import com.tlw.photodokan.core.model.MaskStroke
 import com.tlw.photodokan.core.model.PhotoSizePreset
 import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.ui.editor.Adjustment
+import com.tlw.photodokan.ui.editor.CustomColours
+import com.tlw.photodokan.ui.editor.CustomColoursStore
 import com.tlw.photodokan.ui.editor.backdrop
 import com.tlw.photodokan.ui.photo.PhotoSource
 import com.tlw.photodokan.ui.print.InMemoryPrintQueueStore
@@ -756,7 +759,7 @@ class CustomersViewModelTest {
         val image = state.edit!!.shown
         val pixel = IntArray(image.width * image.height).also { image.readPixels(it) }[y * image.width + x]
         // Drawn over the chosen colour where the person is cut out, as the editor draws it.
-        val back = backdrop(state.edit!!.recipe.background).toArgb()
+        val back = backdrop(state.edit!!.recipe).toArgb()
         return Background.over(intArrayOf(pixel), back)[0] and 0xffffff
     }
 
@@ -785,6 +788,81 @@ class CustomersViewModelTest {
         // The slot crop shows the middle of the photo: its left part is background.
         assertTrue((final.getRGB(5, final.height / 2) and 0xff) > 245, "white in final.jpg")
         assertTrue((final.getRGB(final.width - 5, final.height / 2) and 0xff) in 118..138, "grey person in final.jpg")
+    }
+
+    @Test
+    fun aBorderAndBlackAndWhiteAreSavedInFinalJpg() {
+        withMatter()
+        vm.import(photo())
+        vm.setBorder(BorderConfig(show = true))
+        vm.setBlackAndWhite(true)
+        vm.setBackground(BackgroundConfig(mode = BackgroundMode.REPLACE, replaceColorArgb = BackgroundConfig.SKY_BLUE))
+        vm.saveDraft()
+        val customer = library.customersOn(now).single()
+        val recipe = assertNotNull(library.readRecipe(customer))
+        assertTrue(recipe.border.show && recipe.blackAndWhite)
+        val final = ImageIO.read(ByteArrayInputStream(assertNotNull(library.readFinal(customer))))
+        assertTrue((final.getRGB(0, final.height / 2) and 0xffffff).let { (it shr 16) < 40 && (it and 0xff) < 40 }, "dark border at the edge")
+        // Each was its own undo step: the background, black and white, then the border.
+        vm.undo(); vm.undo(); vm.undo()
+        val live = vm.state.value.edit!!.recipe
+        assertFalse(live.border.show || live.blackAndWhite)
+    }
+
+    @Test
+    fun theCustomColourStartsFromTheLastOnePicked() {
+        withMatter()
+        vm.import(photo())
+        // Before any is picked, Custom is none of the named colours, or choosing it would pick that one.
+        val named = listOf(BackgroundConfig.WHITE, BackgroundConfig.LIGHT_BLUE, BackgroundConfig.SKY_BLUE, BackgroundConfig.LIGHT_GREY)
+        assertFalse(vm.customBackdropColour in named)
+        vm.previewBackground(BackgroundConfig(mode = BackgroundMode.REPLACE, replaceColorArgb = 0xFFF0D0E0))
+        vm.commit()
+        assertEquals(0xFFF0D0E0, vm.customBackdropColour)
+        vm.previewBorder(BorderConfig(show = true, colorArgb = 0xFF336699))
+        assertEquals(0xFF336699, vm.customBorderColour)
+    }
+
+    @Test
+    fun pickedColoursAreThereTheNextDay() {
+        val store = MemoryColours()
+        vm = CustomersViewModel(library, { now }, orders, SheetTemplate.STUDIO_A4_5X8, matter = matter, work = Dispatchers.Unconfined, colours = store)
+        vm.import(photo())
+        vm.previewBackground(BackgroundConfig(mode = BackgroundMode.REPLACE, replaceColorArgb = 0xFFF0D0E0))
+        assertEquals(0, store.saves, "not saved on every step of a drag")
+        vm.commit()
+        vm.previewBorder(BorderConfig(show = true, colorArgb = 0xFF336699))
+        vm.commit()
+        assertEquals(CustomColours(backdrop = 0xFFF0D0E0, border = 0xFF336699), store.saved)
+        assertEquals(2, store.saves)
+        vm.commit()
+        assertEquals(2, store.saves, "nothing new, nothing written")
+
+        val nextDay = CustomersViewModel(library, { now }, orders, SheetTemplate.STUDIO_A4_5X8, colours = store)
+        assertEquals(0xFFF0D0E0, nextDay.customBackdropColour)
+        assertEquals(0xFF336699, nextDay.customBorderColour)
+    }
+
+    @Test
+    fun aColourThatCantBeSavedStillApplies() {
+        val store = MemoryColours(failing = true)
+        vm = CustomersViewModel(library, { now }, orders, SheetTemplate.STUDIO_A4_5X8, matter = matter, work = Dispatchers.Unconfined, colours = store)
+        vm.import(photo())
+        vm.previewBackground(BackgroundConfig(mode = BackgroundMode.REPLACE, replaceColorArgb = 0xFFF0D0E0))
+        vm.commit()
+        assertEquals(0xFFF0D0E0, vm.customBackdropColour)
+        assertEquals(0xFFF0D0E0, state.edit!!.recipe.background.replaceColorArgb)
+    }
+
+    /** Keeps the custom colours in memory, or fails to save like a full disk when [failing]. */
+    private class MemoryColours(var saved: CustomColours? = null, val failing: Boolean = false) : CustomColoursStore {
+        var saves = 0
+        override fun load() = saved ?: CustomColours()
+        override fun save(colours: CustomColours) {
+            if (failing) throw IllegalStateException("Disk full")
+            saves++
+            saved = colours
+        }
     }
 
     @Test

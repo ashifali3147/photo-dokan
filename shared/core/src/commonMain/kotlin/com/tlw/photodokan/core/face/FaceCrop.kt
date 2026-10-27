@@ -24,10 +24,11 @@ data class FaceFit(val crop: CropConfig, val fits: Boolean)
  */
 object FaceCrop {
     /**
-     * From the eyes up to the top of the head, in eye-to-mouth distances (short hair included).
-     * This and [CHIN_BELOW_EYES] were checked on a few portraits; tune them on the shop's photos.
+     * From the eyes up to the top of the hair, in eye-to-mouth distances: a full head of hair,
+     * so it isn't cut off at the top. This and [CHIN_BELOW_EYES] were checked on a few portraits;
+     * tune them on the shop's photos.
      */
-    const val CROWN_ABOVE_EYES = 1.7
+    const val CROWN_ABOVE_EYES = 2.1
 
     /** From the eyes down to the chin, in eye-to-mouth distances. */
     const val CHIN_BELOW_EYES = 1.85

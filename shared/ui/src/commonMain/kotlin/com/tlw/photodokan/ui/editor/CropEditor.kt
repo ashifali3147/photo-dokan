@@ -77,6 +77,7 @@ fun CropEditor(
     modifier: Modifier = Modifier,
     colorMatrix: FloatArray = ColorAdjustment.IDENTITY,
     backdrop: Color = Color.White,
+    border: FrameLine? = null,
     brush: TouchUpBrush? = null,
 ) {
     val change by rememberUpdatedState(onCropChange)
@@ -92,7 +93,7 @@ fun CropEditor(
                 .semantics { contentDescription = "Crop frame" }
                 .then(if (brush != null) Modifier.paintStrokes(brush, image, rect) { painting = it } else Modifier.moveAndZoom(image, { change(it) }, { commit() })),
         ) {
-            drawCrop(image, rect, colorMatrix, backdrop)
+            drawCrop(image, rect, colorMatrix, backdrop, border)
             drawFaceGuide(preset.guide)
             if (brush != null && painting.isNotEmpty()) drawStroke(painting, brush)
         }

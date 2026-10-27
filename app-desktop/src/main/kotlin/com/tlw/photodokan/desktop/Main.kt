@@ -34,6 +34,8 @@ import com.tlw.photodokan.ui.di.initKoin
 import com.tlw.photodokan.ui.platform.today
 import com.tlw.photodokan.ui.print.StationJobPrinter
 import com.tlw.photodokan.ui.platform.PhotoFolder
+import com.tlw.photodokan.ui.editor.CustomColoursStore
+import com.tlw.photodokan.ui.editor.FileCustomColoursStore
 import com.tlw.photodokan.ui.theme.FileThemeModeStore
 import com.tlw.photodokan.ui.theme.ThemeSettings
 import com.tlw.photodokan.ui.theme.ThemeModeStore
@@ -60,6 +62,7 @@ private val desktopModule = module {
     single<PhotoFolder> { DesktopPhotoFolder(libraryFolder) }
     single<PrintQueueStore> { FilePrintQueueStore(Path(appDataDir(), "print-queue.json")) }
     single<ThemeModeStore> { FileThemeModeStore(Path(appDataDir(), "theme.txt")) }
+    single<CustomColoursStore> { FileCustomColoursStore(Path(appDataDir(), "colours.txt")) }
     // Away from Windows (developing on a Mac) Print saves an actual-size PDF instead.
     single<SheetPrinter> {
         if (WindowsGdiPrinter.isAvailable) {

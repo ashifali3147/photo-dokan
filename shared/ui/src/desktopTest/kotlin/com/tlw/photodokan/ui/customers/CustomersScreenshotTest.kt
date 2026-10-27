@@ -11,6 +11,11 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -22,6 +27,8 @@ import com.tlw.photodokan.ui.di.appModule
 import com.tlw.photodokan.ui.platform.today
 import com.tlw.photodokan.ui.print.InMemoryPrintQueueStore
 import com.tlw.photodokan.ui.theme.InMemoryThemeModeStore
+import com.tlw.photodokan.core.matte.Matte
+import com.tlw.photodokan.vision.PortraitMatter
 import com.tlw.photodokan.ui.theme.PhotoDokanTheme
 import com.tlw.photodokan.ui.theme.ThemeMode
 import com.tlw.photodokan.ui.theme.ThemeModeStore
@@ -53,6 +60,15 @@ class CustomersScreenshotTest {
         return ByteArrayOutputStream().also { ImageIO.write(image, "jpg", it) }.toByteArray()
     }
 
+    /** The person is whatever isn't the made-up photos' blue backdrop. */
+    private object BackdropMatter : PortraitMatter {
+        override fun matte(argb: IntArray, width: Int, height: Int) = Matte(width, height, ByteArray(argb.size) { i ->
+            val c = argb[i]
+            val blue = (c and 0xff) > 150 && ((c shr 16) and 0xff) < 100
+            if (blue) 0 else -1
+        })
+    }
+
     private fun library(): InMemoryPhotoLibrary {
         val library = InMemoryPhotoLibrary()
         val looks = listOf(0xD9A27C to 0x2F3A4F, 0xC68B63 to 0x7B3B3B, 0xE2B796 to 0x33465E, 0xB9795A to 0x3C5A4A, 0xD5A07F to 0x5A4A6B, 0xEAC3A3 to 0x2D2D2D, 0xC28A67 to 0x6A4B2F, 0xDDAA85 to 0x2F4F6B)
@@ -64,13 +80,22 @@ class CustomersScreenshotTest {
         return library
     }
 
-    private fun shoot(name: String, width: Dp, height: Dp, mode: ThemeMode, openCustomer: Boolean) = runComposeUiTest {
+    private fun shoot(
+        name: String,
+        width: Dp,
+        height: Dp,
+        mode: ThemeMode,
+        openCustomer: Boolean,
+        cutOut: Boolean = false,
+        then: androidx.compose.ui.test.ComposeUiTest.() -> Unit = {},
+    ) = runComposeUiTest {
         val library = library()
         val koin = koinApplication {
             modules(appModule, module {
                 single<PhotoLibrary> { library }
                 single<PrintQueueStore> { InMemoryPrintQueueStore() }
                 single<ThemeModeStore> { InMemoryThemeModeStore().also { it.save(mode) } }
+                if (cutOut) single<PortraitMatter> { BackdropMatter }
             })
         }
         setContent { KoinIsolatedContext(context = koin) { Box(Modifier.size(width, height)) { com.tlw.photodokan.ui.App() } } }
@@ -81,6 +106,8 @@ class CustomersScreenshotTest {
             waitUntil(timeoutMillis = 10_000) { showsText("Crop") }
             mainClock.advanceTimeBy(1_000)
         }
+        then()
+        mainClock.advanceTimeBy(1_000)
         val folder = File("build/reports/screens").apply { mkdirs() }
         ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(folder, "$name.png"))
     }
@@ -95,4 +122,33 @@ class CustomersScreenshotTest {
     @Test fun wideDark() = shoot("customers-wide-dark", 1280.dp, 800.dp, ThemeMode.Dark, openCustomer = true)
     @Test fun phoneGrid() = shoot("customers-phone-light", 390.dp, 844.dp, ThemeMode.Light, openCustomer = false)
     @Test fun phoneEditor() = shoot("customers-phone-editor", 390.dp, 844.dp, ThemeMode.Light, openCustomer = true)
+    @Test fun wideBorder() = shoot("customers-wide-border", 1280.dp, 800.dp, ThemeMode.Light, openCustomer = true) {
+        onAllNodesWithText("Backdrop").onFirst().performClick()
+        onNodeWithText("Thick").performClick()
+    }
+    @Test fun wideBackdrop() = shoot("customers-wide-backdrop", 1280.dp, 800.dp, ThemeMode.Light, openCustomer = true, cutOut = true) {
+        onAllNodesWithText("Backdrop").onFirst().performClick()
+        onNodeWithText("Plain colour").performClick()
+        onNodeWithContentDescription("Custom").performClick()
+        onNodeWithText("Light").performScrollTo()
+    }
+    @Test fun wideBackdropDark() = shoot("customers-wide-backdrop-dark", 1280.dp, 800.dp, ThemeMode.Dark, openCustomer = true, cutOut = true) {
+        onAllNodesWithText("Backdrop").onFirst().performClick()
+        onNodeWithText("Thin").performSemanticsAction(SemanticsActions.OnClick)
+    }
+    @Test fun phoneBackdrop() = shoot("customers-phone-backdrop", 390.dp, 844.dp, ThemeMode.Light, openCustomer = true, cutOut = true) {
+        onAllNodesWithText("Backdrop").onFirst().performClick()
+        onNodeWithText("Plain colour").performClick()
+    }
+    @Test fun wideBlackAndWhite() = shoot("customers-wide-black-and-white", 1280.dp, 800.dp, ThemeMode.Light, openCustomer = true, cutOut = true) {
+        // A coloured background and border, which black and white turns grey with the person.
+        onAllNodesWithText("Backdrop").onFirst().performClick()
+        onNodeWithText("Thick").performSemanticsAction(SemanticsActions.OnClick)
+        mainClock.advanceTimeBy(500)
+        onNodeWithText("Plain colour").performScrollTo().performClick()
+        onNodeWithContentDescription("Sky blue").performClick()
+        mainClock.advanceTimeBy(500)
+        onAllNodesWithText("Look").onFirst().performClick()
+        onNodeWithText("Black & white").performClick()
+    }
 }

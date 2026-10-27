@@ -32,6 +32,7 @@ import com.tlw.photodokan.ui.editor.RetouchControls
 import com.tlw.photodokan.ui.editor.SMALL_BRUSH
 import com.tlw.photodokan.ui.editor.TouchUpBrush
 import com.tlw.photodokan.ui.editor.backdrop
+import com.tlw.photodokan.ui.editor.frameLine
 import com.tlw.photodokan.ui.photo.photoDropTarget
 import com.tlw.photodokan.ui.theme.StudioTheme
 
@@ -90,7 +91,8 @@ internal fun EditorStage(
             onCommit = viewModel::commit,
             modifier = Modifier.fillMaxSize().padding(12.dp),
             colorMatrix = ColorAdjustment.matrix(edit.recipe),
-            backdrop = backdrop(edit.recipe.background),
+            backdrop = backdrop(edit.recipe),
+            border = frameLine(edit.recipe, viewModel.presetOf(edit.recipe).size.width),
             brush = brush?.let { TouchUpBrush(it, tools.brushSize, viewModel::touchUp) },
         )
         overlay()
@@ -117,6 +119,7 @@ internal fun ToolControls(edit: EditSession, viewModel: CustomersViewModel, tool
             onCommit = viewModel::commit,
             onReset = viewModel::resetAdjustments,
             onAuto = if (viewModel.canAutoLight) viewModel::autoLight else null,
+            onBlackAndWhite = viewModel::setBlackAndWhite,
         )
         EditorTab.Retouch -> RetouchControls(
             recipe = edit.recipe,
@@ -132,18 +135,24 @@ internal fun ToolControls(edit: EditSession, viewModel: CustomersViewModel, tool
             onChange = viewModel::setBackground,
             onPreview = viewModel::previewBackground,
             onCommit = viewModel::commit,
+            customColour = viewModel.customBackdropColour,
             brush = tools.brushMode,
             brushSize = tools.brushSize,
             onBrush = { tools.brushMode = it },
             onBrushSize = { tools.brushSize = it },
             onClearTouchUps = viewModel::clearTouchUps,
+            canChangeBackground = viewModel.canChangeBackground,
+            border = edit.recipe.border,
+            onBorder = viewModel::setBorder,
+            onBorderPreview = viewModel::previewBorder,
+            customBorderColour = viewModel.customBorderColour,
         )
     }
 }
 
 /**
  * The four tools in a recessed track. [onTab] decides what a tap does; by default it opens that
- * tool. Backdrop shows only where the background can be changed.
+ * tool. Backdrop always shows: its border works even where the background can't be changed.
  */
 @Composable
 internal fun EditorDock(
@@ -154,7 +163,6 @@ internal fun EditorDock(
 ) {
     ToolDock(modifier) {
         for (t in EditorTab.entries) {
-            if (t == EditorTab.Backdrop && !viewModel.canChangeBackground) continue
             DockTab(
                 label = t.label,
                 selected = tools.tab == t,

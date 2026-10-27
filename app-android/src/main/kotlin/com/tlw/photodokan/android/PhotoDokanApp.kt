@@ -13,6 +13,8 @@ import com.tlw.photodokan.station.NsdStationFinder
 import com.tlw.photodokan.station.StationClient
 import com.tlw.photodokan.station.StationConnector
 import com.tlw.photodokan.station.StationLinkStore
+import com.tlw.photodokan.ui.editor.CustomColoursStore
+import com.tlw.photodokan.ui.editor.FileCustomColoursStore
 import com.tlw.photodokan.ui.theme.FileThemeModeStore
 import com.tlw.photodokan.ui.theme.ThemeModeStore
 import com.tlw.photodokan.ui.di.initKoin
@@ -46,6 +48,7 @@ class PhotoDokanApp : Application() {
                     single<PhotoLibrary> { FilePhotoLibrary(photoFolder) }
                     single<PrintQueueStore> { FilePrintQueueStore(Path(filesDir.path, "print-queue.json")) }
                     single<ThemeModeStore> { FileThemeModeStore(Path(filesDir.path, "theme.txt")) }
+                    single<CustomColoursStore> { FileCustomColoursStore(Path(filesDir.path, "colours.txt")) }
                     // Sheets usually go to the PC as PDFs.
                     single<SheetSharer> { AndroidSheetSharer(this@PhotoDokanApp) }
                     // Or straight to a Wi-Fi printer, on phones with Android's printing. Made at start-up

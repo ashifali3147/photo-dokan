@@ -1,15 +1,21 @@
 package com.tlw.photodokan.ui.editor
 
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropRect
+import com.tlw.photodokan.core.model.BackgroundConfig
+import com.tlw.photodokan.core.model.BackgroundMode
+import com.tlw.photodokan.core.model.BorderConfig
 import com.tlw.photodokan.core.model.EditRecipe
 import java.awt.Color
 import java.awt.image.BufferedImage
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CropRenderTest {
@@ -52,6 +58,53 @@ class CropRenderTest {
         val grey = ColorAdjustment.matrix(EditRecipe("studio-slot", saturation = -1.0))
         val g = Color(renderCrop(photo, CropRect(20.0, 10.0, 20.0, 20.0, 0.0), 100, 100, grey).toAwtImage().getRGB(25, 50))
         assertTrue(abs(g.red - g.green) <= 2 && abs(g.green - g.blue) <= 2, "no colour gives grey, was $g")
+    }
+
+    @Test
+    fun aBorderRunsAlongTheEdgeInMillimetres() {
+        // 0.3 mm on a photo 30 mm wide is a hundredth of its width: 3 pixels of 300.
+        val line = assertNotNull(frameLine(EditRecipe("studio-slot", border = BorderConfig(show = true)), widthMm = 30.0))
+        val out = renderCrop(photo, CropRect(20.0, 10.0, 20.0, 20.0, 0.0), 300, 300, border = line).toAwtImage()
+        for ((x, y) in listOf(0 to 150, 2 to 150, 299 to 150, 150 to 0, 150 to 297)) {
+            assertEquals(0x000000, out.getRGB(x, y) and 0xffffff, "black at $x, $y")
+        }
+        assertTrue(out.isRed(5, 150) && out.isBlue(294, 150), "the photo just inside")
+        assertNull(frameLine(EditRecipe("studio-slot"), widthMm = 30.0))
+    }
+
+    @Test
+    fun aBorderKeepsItsColour() {
+        val blue = EditRecipe("studio-slot", border = BorderConfig(show = true, colorArgb = 0xFF2040A0))
+        val line = assertNotNull(frameLine(blue, widthMm = 30.0))
+        val out = renderCrop(photo, CropRect(20.0, 10.0, 20.0, 20.0, 0.0), 300, 300, border = line).toAwtImage()
+        assertEquals(0x2040A0, out.getRGB(1, 150) and 0xffffff)
+    }
+
+    @Test
+    fun blackAndWhiteTurnsTheBackgroundAndBorderGreyToo() {
+        val recipe = EditRecipe(
+            "studio-slot",
+            background = BackgroundConfig(mode = BackgroundMode.REPLACE, replaceColorArgb = BackgroundConfig.SKY_BLUE),
+            border = BorderConfig(show = true, colorArgb = 0xFF2040A0),
+            blackAndWhite = true,
+        )
+        for (colour in listOf(backdrop(recipe), assertNotNull(frameLine(recipe, widthMm = 30.0)).colour)) {
+            val argb = colour.toArgb()
+            assertTrue(((argb shr 16) and 0xff) == (argb and 0xff) && ((argb shr 8) and 0xff) == (argb and 0xff), "grey, was ${argb.toUInt().toString(16)}")
+        }
+        // In colour they stay as chosen.
+        assertEquals(BackgroundConfig.SKY_BLUE.toInt(), backdrop(recipe.copy(blackAndWhite = false)).toArgb())
+    }
+
+    @Test
+    fun pickedColoursSurviveTheSliders() {
+        for (argb in listOf(0xFF9FCBEF, 0xFFE4E4E4, 0xFF2040A0, 0xFFC0392B)) {
+            val (h, s, l) = hsl(argb)
+            val back = fromHsl(h, s, l)
+            for (shift in listOf(16, 8, 0)) {
+                assertTrue(abs(((back shr shift) and 0xff) - ((argb shr shift) and 0xff)) <= 1, "${argb.toString(16)} came back as ${back.toString(16)}")
+            }
+        }
     }
 
     @Test

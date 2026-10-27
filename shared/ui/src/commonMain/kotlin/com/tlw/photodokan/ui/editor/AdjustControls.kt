@@ -9,6 +9,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.model.EditRecipe
+import com.tlw.photodokan.ui.components.ChoiceChip
+import com.tlw.photodokan.ui.components.ChoiceRow
 import com.tlw.photodokan.ui.components.QuietButton
 import com.tlw.photodokan.ui.theme.StudioTheme
 import kotlin.math.roundToInt
@@ -45,7 +47,7 @@ enum class Adjustment(val label: String) {
 /**
  * The Look tab: one slider per [Adjustment]. Dragging updates the photo live; letting go calls
  * [onCommit], so a whole drag is one undo step. [onAuto], when given, sets the light and colour
- * from the face.
+ * from the face. Colour or black and white comes first, so it is seen before the sliders.
  */
 @Composable
 fun LookControls(
@@ -54,7 +56,12 @@ fun LookControls(
     onCommit: () -> Unit,
     onReset: () -> Unit,
     onAuto: (() -> Unit)? = null,
+    onBlackAndWhite: (Boolean) -> Unit = {},
 ) {
+    ChoiceRow {
+        ChoiceChip("Colour", selected = !recipe.blackAndWhite, onClick = { if (recipe.blackAndWhite) onBlackAndWhite(false) })
+        ChoiceChip("Black & white", selected = recipe.blackAndWhite, onClick = { if (!recipe.blackAndWhite) onBlackAndWhite(true) })
+    }
     for (adjustment in Adjustment.entries) {
         val value = adjustment.valueIn(recipe)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

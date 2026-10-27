@@ -2,6 +2,7 @@ package com.tlw.photodokan.ui.editor
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.StudioLook
 import com.tlw.photodokan.core.matte.Background
 import com.tlw.photodokan.core.matte.Cutout
@@ -90,6 +91,12 @@ class PhotoPainter {
     }
 }
 
-/** What shows behind a photo where it is clear: the plain colour it was given, or white. */
-fun backdrop(config: BackgroundConfig): Color =
-    if (config.mode == BackgroundMode.REPLACE) Color(config.replaceColorArgb.toInt()) else Color.White
+/**
+ * What shows behind [recipe]'s photo where it is clear: the plain colour it was given, or white;
+ * in grey when the photo is black and white.
+ */
+fun backdrop(recipe: EditRecipe): Color {
+    val config = recipe.background
+    val argb = if (config.mode == BackgroundMode.REPLACE) config.replaceColorArgb else BackgroundConfig.WHITE
+    return Color((if (recipe.blackAndWhite) ColorAdjustment.grey(argb) else argb).toInt())
+}

@@ -1,13 +1,9 @@
 package com.tlw.photodokan.ui.editor
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.model.BackgroundConfig
 import com.tlw.photodokan.core.model.BackgroundMode
+import com.tlw.photodokan.core.model.BorderConfig
 import com.tlw.photodokan.core.model.BrushMode
 import com.tlw.photodokan.ui.components.StudioSlider
 import com.tlw.photodokan.ui.theme.StudioTheme
@@ -25,19 +22,29 @@ import com.tlw.photodokan.ui.components.ChoiceRow
 import com.tlw.photodokan.ui.components.ChoiceChip
 
 /** The plain colours a background can be replaced with, as the operator names them. */
-private val COLOURS = listOf("White" to BackgroundConfig.WHITE, "Light blue" to BackgroundConfig.LIGHT_BLUE)
+private val COLOURS = listOf(
+    "White" to BackgroundConfig.WHITE,
+    "Light blue" to BackgroundConfig.LIGHT_BLUE,
+    "Sky blue" to BackgroundConfig.SKY_BLUE,
+    "Light grey" to BackgroundConfig.LIGHT_GREY,
+)
 
 /** The brush sizes offered, as shares of the frame's height. */
 const val SMALL_BRUSH = 0.02
 const val LARGE_BRUSH = 0.12
 
 /**
- * The background behind the person: as shot, softly blurred (the studio's way) or a plain colour.
- * Choices are one undo step each through [onChange]; the softness slider shows live through
- * [onPreview] and becomes one step on [onCommit].
+ * The Backdrop tab, in two parts. Background: behind the person, as shot, softly blurred (the
+ * studio's way) or a plain colour, when [canChangeBackground]. Border: the thin line along each
+ * photo's edge, its thickness and colour.
  *
- * Below them, the touch-up brush for where the cut-out went wrong: [brush] is the one in hand, or
- * null to move the photo as usual, and [brushSize] its size as a share of the frame's height.
+ * Choices are one undo step each through [onChange] and [onBorder]; the softness slider and the
+ * colour pickers show live through [onPreview] and [onBorderPreview] and become one step on
+ * [onCommit]. [customColour] and [customBorderColour] are where the Custom choices start: the
+ * last colours picked.
+ *
+ * Below the background, the touch-up brush for where the cut-out went wrong: [brush] is the one in
+ * hand, or null to move the photo as usual, and [brushSize] its size as a share of the frame's height.
  */
 @Composable
 fun BackgroundControls(
@@ -46,11 +53,35 @@ fun BackgroundControls(
     onChange: (BackgroundConfig) -> Unit,
     onPreview: (BackgroundConfig) -> Unit,
     onCommit: () -> Unit,
+    customColour: Long = FIRST_CUSTOM_BACKDROP,
     brush: BrushMode? = null,
     brushSize: Double = SMALL_BRUSH,
     onBrush: (BrushMode?) -> Unit = {},
     onBrushSize: (Double) -> Unit = {},
     onClearTouchUps: () -> Unit = {},
+    canChangeBackground: Boolean = true,
+    border: BorderConfig = BorderConfig(),
+    onBorder: (BorderConfig) -> Unit = {},
+    onBorderPreview: (BorderConfig) -> Unit = {},
+    customBorderColour: Long = FIRST_CUSTOM_BORDER,
+) {
+    if (canChangeBackground) {
+        Heading("Background")
+        BackgroundChoices(background, onChange, onPreview, onCommit, customColour)
+    }
+    Heading("Border")
+    BorderControls(border, onBorder, onBorderPreview, onCommit, customBorderColour)
+    // Fixing the cut-out is needed now and then, so it comes after the choices made for every photo.
+    if (canChangeBackground) EdgeFix(background, pending, brush, brushSize, onBrush, onBrushSize, onClearTouchUps)
+}
+
+@Composable
+private fun BackgroundChoices(
+    background: BackgroundConfig,
+    onChange: (BackgroundConfig) -> Unit,
+    onPreview: (BackgroundConfig) -> Unit,
+    onCommit: () -> Unit,
+    customColour: Long,
 ) {
     ChoiceRow {
         for ((mode, label) in listOf(BackgroundMode.BLUR to "Soft blur", BackgroundMode.REPLACE to "Plain colour", BackgroundMode.KEEP to "As shot")) {
@@ -68,18 +99,27 @@ fun BackgroundControls(
                 modifier = Modifier.weight(1f),
             )
         }
-        BackgroundMode.REPLACE -> ChoiceRow {
-            for ((name, argb) in COLOURS) {
-                ChoiceChip(
-                    name,
-                    selected = background.replaceColorArgb == argb,
-                    onClick = { onChange(background.copy(replaceColorArgb = argb)) },
-                    leading = { Swatch(Color(argb.toInt())) },
-                )
+        BackgroundMode.REPLACE -> {
+            ColourChoices(COLOURS, background.replaceColorArgb, customColour, { onChange(background.copy(replaceColorArgb = it)) }, { onChange(background.copy(replaceColorArgb = customColour)) })
+            if (COLOURS.none { it.second == background.replaceColorArgb }) {
+                ColourPicker(background.replaceColorArgb, { onPreview(background.copy(replaceColorArgb = it)) }, onCommit)
             }
         }
         BackgroundMode.KEEP -> Unit
     }
+}
+
+/** The touch-up brush for where the cut-out went wrong, or a note while the person is still being cut out. */
+@Composable
+private fun EdgeFix(
+    background: BackgroundConfig,
+    pending: Boolean,
+    brush: BrushMode?,
+    brushSize: Double,
+    onBrush: (BrushMode?) -> Unit,
+    onBrushSize: (Double) -> Unit,
+    onClearTouchUps: () -> Unit,
+) {
     if (background.mode != BackgroundMode.KEEP && !pending) {
         ChoiceRow {
             Text("Fix the edge", color = StudioTheme.colors.textMuted, style = MaterialTheme.typography.bodyMedium)
@@ -110,6 +150,31 @@ fun BackgroundControls(
     }
 }
 
+/** A section's name in the tab, quiet above its choices. */
 @Composable
-private fun Swatch(colour: Color) =
-    Box(Modifier.size(18.dp).background(colour, CircleShape).border(1.dp, StudioTheme.colors.outline, CircleShape))
+private fun Heading(text: String) =
+    Text(text, style = MaterialTheme.typography.labelLarge, color = StudioTheme.colors.textMuted, modifier = Modifier.padding(top = 4.dp))
+
+/** The colours a border comes in, as the operator names them; black is the usual. */
+private val BORDER_COLOURS = listOf("Black" to BorderConfig.BLACK, "Grey" to 0xFF808080, "White" to 0xFFFFFFFF)
+
+/** A border's thicknesses, as the operator names them. */
+private val BORDER_WIDTHS = listOf("Thin" to BorderConfig.THIN_MM, "Thick" to BorderConfig.THICK_MM)
+
+/**
+ * The thin line along each photo's edge: off, thin or thick, then its colour. Choices are one undo
+ * step each through [onChange]; the colour picker shows live through [onPreview] until [onCommit].
+ */
+@Composable
+private fun BorderControls(border: BorderConfig, onChange: (BorderConfig) -> Unit, onPreview: (BorderConfig) -> Unit, onCommit: () -> Unit, customColour: Long) {
+    ChoiceRow {
+        ChoiceChip("Off", selected = !border.show, onClick = { if (border.show) onChange(border.copy(show = false)) })
+        for ((name, mm) in BORDER_WIDTHS) {
+            ChoiceChip(name, selected = border.show && border.widthMm == mm, onClick = { onChange(border.copy(show = true, widthMm = mm)) })
+        }
+    }
+    if (!border.show) return
+    val custom = BORDER_COLOURS.none { it.second == border.colorArgb }
+    ColourChoices(BORDER_COLOURS, border.colorArgb, customColour, { onChange(border.copy(colorArgb = it)) }, { onChange(border.copy(colorArgb = customColour)) })
+    if (custom) ColourPicker(border.colorArgb, { onPreview(border.copy(colorArgb = it)) }, onCommit)
+}
