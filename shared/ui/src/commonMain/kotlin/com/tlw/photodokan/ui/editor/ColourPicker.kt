@@ -1,31 +1,47 @@
 package com.tlw.photodokan.ui.editor
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.ui.components.StudioSlider
+import com.tlw.photodokan.ui.components.glow
 import com.tlw.photodokan.ui.theme.StudioTheme
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -92,6 +108,16 @@ internal fun ColourChoices(choices: List<Pair<String, Long>>, selected: Long, cu
 /** All the hues round a circle, for the Custom sample. */
 private val HueRing = Brush.sweepGradient(List(7) { Color.hsl(it * 60f % 360f, 0.75f, 0.55f) })
 
+/** A highlight on one side of a ring, clear elsewhere: turned, it is light running round the ring. */
+private val Shine = Brush.sweepGradient(
+    0f to Color.Transparent,
+    0.62f to Color.Transparent,
+    0.8f to Color.White.copy(alpha = 0.95f),
+    0.86f to Color.White,
+    0.92f to Color.White.copy(alpha = 0.35f),
+    1f to Color.Transparent,
+)
+
 /**
  * One colour to choose, [SAMPLE] across inside a 44 dp target. Chosen, it has a ring in the accent
  * just outside it; [hues] puts a ring of every hue round the colour instead of a plain edge.
@@ -102,6 +128,7 @@ private fun ColourSample(name: String, colour: Color, selected: Boolean, onClick
     Box(
         Modifier
             .size(44.dp)
+            .then(if (hues) Modifier.huesGlow(colour) else Modifier)
             .clip(CircleShape)
             .border(2.dp, if (selected) c.accent else Color.Transparent, CircleShape)
             .clickable(role = Role.RadioButton, onClick = onClick)
@@ -111,15 +138,50 @@ private fun ColourSample(name: String, colour: Color, selected: Boolean, onClick
             },
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            Modifier
-                .size(SAMPLE)
-                .then(if (hues) Modifier.background(HueRing, CircleShape).padding(4.dp) else Modifier)
-                .background(colour, CircleShape)
-                .border(1.dp, c.outline, CircleShape),
-        )
+        if (hues) {
+            HueSample(colour)
+        } else {
+            Box(Modifier.size(SAMPLE).background(colour, CircleShape).border(1.dp, c.outline, CircleShape))
+        }
     }
 }
+
+/**
+ * The Custom sample: [colour] inside a ring of every hue that turns slowly, with a highlight
+ * running round it a little faster, like light catching the edge of a turning glass, so it reads
+ * as "make your own" and draws the eye without asking for it.
+ */
+@Composable
+private fun HueSample(colour: Color) {
+    val c = StudioTheme.colors
+    val motion = rememberInfiniteTransition(label = "hues")
+    val turn by motion.animateFloat(0f, 360f, infiniteRepeatable(tween(HUE_TURN_MILLIS, easing = LinearEasing)), label = "turn")
+    // The highlight eases round, quick across the top and slow underneath, as a reflection does.
+    val shine by motion.animateFloat(0f, 360f, infiniteRepeatable(tween(SHINE_TURN_MILLIS, easing = FastOutSlowInEasing)), label = "shine")
+    Canvas(Modifier.size(SAMPLE)) {
+        val ring = 4.dp.toPx()
+        val radius = size.minDimension / 2
+        rotate(turn) { drawCircle(HueRing, radius) }
+        drawCircle(colour, radius - ring)
+        drawCircle(c.outline, radius - ring, style = Stroke(1.dp.toPx()))
+        rotate(shine) { drawCircle(Shine, radius - ring / 2, style = Stroke(ring * 0.9f)) }
+        // A small bright point at the head of the highlight, as a glint.
+        val angle = (shine - 50f) * PI.toFloat() / 180f
+        val glint = Offset(center.x + cos(angle) * (radius - ring / 2), center.y + sin(angle) * (radius - ring / 2))
+        drawCircle(Brush.radialGradient(listOf(Color.White, Color.Transparent), center = glint, radius = ring * 1.6f), ring * 1.6f, glint)
+    }
+}
+
+/** A soft light round the Custom sample in its own colour, slowly brightening and fading. */
+private fun Modifier.huesGlow(colour: Color): Modifier = composed {
+    val motion = rememberInfiniteTransition(label = "huesGlow")
+    val breath by motion.animateFloat(0.35f, 0.8f, infiniteRepeatable(tween(BREATH_MILLIS, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "breath")
+    glow(colour.copy(alpha = 0.9f), CircleShape, radius = 12.dp, amount = breath)
+}
+
+private const val HUE_TURN_MILLIS = 9_000
+private const val SHINE_TURN_MILLIS = 2_600
+private const val BREATH_MILLIS = 1_600
 
 private val SAMPLE = 34.dp
 
