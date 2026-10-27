@@ -4,7 +4,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -19,11 +22,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -45,6 +48,7 @@ enum class ButtonTone { Accent, Ok }
  * The one main action on a screen: Print, Add to sheet, Save. It is lit very slightly from above
  * and has a soft glow, so it is always obvious what to press. Use at most one per screen.
  * [ButtonTone.Ok] turns it green once the action is already done ("On the sheet").
+ * Whenever [shineKey] changes, e.g. to the button's new words, a band of light sweeps across it once.
  */
 @Composable
 fun PrimaryButton(
@@ -52,6 +56,7 @@ fun PrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     tone: ButtonTone = ButtonTone.Accent,
+    shineKey: Any? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
     val c = StudioTheme.colors
@@ -64,6 +69,7 @@ fun PrimaryButton(
         fill = Brush.verticalGradient(listOf(top, bottom)),
         contentColor = if (tone == ButtonTone.Ok) c.onOk else c.onAccent,
         glow = if (tone == ButtonTone.Ok) c.okGlow else c.accentGlow,
+        shineKey = shineKey,
         content = content,
     )
 }
@@ -132,18 +138,23 @@ private fun StudioButton(
     padding: Dp = 20.dp,
     shape: Shape = ButtonShape,
     textStyle: TextStyle = MaterialTheme.typography.titleMedium,
+    shineKey: Any? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
     val c = StudioTheme.colors
     val source = remember { MutableInteractionSource() }
     val lit = enabled && glow != null
+    // The glow comes up as the button is enabled and brightens under the finger.
+    val pressed by source.collectIsPressedAsState()
+    val light by animateFloatAsState(if (!lit) 0f else if (pressed) 1f else 0.85f, tween(220), label = "glow")
     Row(
         modifier
             .pressScale(source)
             .defaultMinSize(minHeight = minHeight)
-            .then(if (lit) Modifier.shadow(14.dp, shape, ambientColor = glow!!, spotColor = glow) else Modifier)
+            .then(if (glow != null) Modifier.glow(glow, shape, radius = 22.dp + 10.dp * light, amount = light) else Modifier)
             .clip(shape)
             .background(if (enabled) fill else SolidColor(c.well))
+            .then(if (lit) Modifier.edgeLight().sheen(shineKey) else Modifier)
             .clickable(interactionSource = source, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = padding),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),

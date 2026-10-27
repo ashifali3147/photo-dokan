@@ -5,7 +5,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.defaultMinSize
@@ -19,11 +26,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -46,13 +54,16 @@ fun ChoiceChip(
     val c = StudioTheme.colors
     val shape = RoundedCornerShape(12.dp)
     val source = remember { MutableInteractionSource() }
+    // Choosing lights the chip up over a moment rather than all at once.
+    val on by animateFloatAsState(if (selected) 1f else 0f, tween(200), label = "chosen")
     Row(
         modifier
             .defaultMinSize(minHeight = 44.dp)
             .pressScale(source)
+            .glow(c.accentGlow, shape, radius = 14.dp, amount = on * 0.7f)
             .clip(shape)
-            .background(if (selected) c.accentWash else c.surface)
-            .border(if (selected) 2.dp else 1.dp, if (selected) c.accent else c.outline, shape)
+            .background(lerp(c.surface, c.accentWash, on))
+            .border((1f + on).dp, lerp(c.outline, c.accent, on), shape)
             .clickable(interactionSource = source, indication = null, role = Role.RadioButton, onClick = onClick)
             .semantics { this.selected = selected }
             .padding(horizontal = 14.dp),
@@ -60,7 +71,7 @@ fun ChoiceChip(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         leading?.invoke()
-        Text(label, style = MaterialTheme.typography.labelLarge, color = if (selected) c.accentText else c.text, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = lerp(c.text, c.accentText, on), maxLines = 1)
     }
 }
 
@@ -77,32 +88,48 @@ fun ChoiceRow(modifier: Modifier = Modifier, content: @Composable RowScope.() ->
 
 /**
  * Two or three ways of seeing the same tool, e.g. Background or Border, in a recessed track like
- * the tool dock. It reads as "which part" rather than as one more choice to make.
+ * the tool dock. It reads as "which part" rather than as one more choice to make. The lit part
+ * slides to the one chosen.
  */
 @Composable
 fun <T> SegmentedChoice(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
     val c = StudioTheme.colors
-    Row(
-        modifier.height(44.dp).clip(RoundedCornerShape(12.dp)).background(c.well).padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        for ((value, label) in options) {
-            val chosen = value == selected
-            Text(
-                label,
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(if (chosen) (if (c.isDark) c.accentWash else c.surface) else Color.Transparent)
-                    .clickable(role = Role.Tab) { onSelect(value) }
-                    .semantics { this.selected = chosen }
-                    .wrapContentHeight(),
-                style = MaterialTheme.typography.labelLarge,
-                color = if (chosen) c.accentText else c.textMuted,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-            )
+    val index = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
+    val position by animateFloatAsState(index.toFloat(), settle(), label = "segment")
+    val pill = RoundedCornerShape(9.dp)
+    BoxWithConstraints(modifier.height(44.dp).clip(RoundedCornerShape(12.dp)).background(c.well).padding(3.dp)) {
+        val gap = 3.dp
+        val width = (maxWidth - gap * (options.size - 1)) / options.size
+        Box(
+            Modifier
+                .offset(x = (width + gap) * position)
+                .width(width)
+                .fillMaxHeight()
+                .glow(c.accentGlow, pill, radius = 10.dp, amount = 0.7f)
+                .clip(pill)
+                .background(if (c.isDark) c.accentWash else c.surface)
+                .border(1.dp, c.accent.copy(alpha = if (c.isDark) 0.55f else 0.25f), pill)
+                .edgeLight(),
+        )
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+            options.forEachIndexed { i, (value, label) ->
+                val chosen = i == index
+                val near = (1f - kotlin.math.abs(position - i)).coerceIn(0f, 1f)
+                Text(
+                    label,
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(pill)
+                        .clickable(role = Role.Tab) { onSelect(value) }
+                        .semantics { this.selected = chosen }
+                        .wrapContentHeight(),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = lerp(c.textMuted, c.accentText, near),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

@@ -25,10 +25,27 @@ import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.ui.theme.StudioTheme
 import kotlin.math.max
 
-/** The window behind a screen: plain warm paper-grey in light, near-black in dark. */
+/**
+ * The window behind a screen: warm paper-grey in light, deep ink in dark, with the theme's
+ * [ambient][com.tlw.photodokan.ui.theme.StudioColors.ambient] light falling from the top centre.
+ */
 @Composable
 fun StudioBackground(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
-    Box(modifier.background(StudioTheme.colors.base), content = content)
+    val c = StudioTheme.colors
+    Box(
+        modifier.background(c.base).drawBehind {
+            if (c.ambient.alpha > 0f) {
+                drawRect(
+                    Brush.radialGradient(
+                        listOf(c.ambient, Color.Transparent),
+                        center = Offset(size.width / 2, 0f),
+                        radius = max(size.width, size.height * 0.6f),
+                    ),
+                )
+            }
+        },
+        content = content,
+    )
 }
 
 /** A white card with a thin border; the unit every screen is built from. */
@@ -39,7 +56,7 @@ fun Card(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val c = StudioTheme.colors
-    Box(modifier.clip(shape).background(c.surface).border(1.dp, c.line, shape), content = content)
+    Box(modifier.clip(shape).background(c.surface).border(1.dp, c.line, shape).edgeLight(), content = content)
 }
 
 /**
@@ -52,9 +69,13 @@ fun GreyStage(
     shape: Shape = RoundedCornerShape(20.dp),
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val grey = StudioTheme.colors.stage
+    val c = StudioTheme.colors
+    val grey = c.stage
     Box(
         modifier
+            // At night a faint neutral light around the stage lifts it off the dark; the grey
+            // itself never changes, so skin is judged the same in both themes.
+            .then(if (c.isDark) Modifier.glow(Color.White.copy(alpha = 0.18f), shape, radius = 20.dp) else Modifier)
             .clip(shape)
             .drawBehind {
                 val centre = Offset(size.width / 2, size.height * 0.4f)
@@ -67,8 +88,11 @@ fun GreyStage(
                 )
             },
         contentAlignment = Alignment.Center,
-        content = content,
-    )
+    ) {
+        content()
+        // A hairline of light along the stage's edge, as on the rim of a lit table.
+        Box(Modifier.matchParentSize().border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.04f))), shape))
+    }
 }
 
 /** The glow around the selected photo: a ring that leaves a gap, then a soft halo. */
