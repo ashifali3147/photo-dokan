@@ -67,25 +67,21 @@ fun BackgroundControls(
 ) {
     if (canChangeBackground) {
         Heading("Background")
-        BackgroundChoices(background, pending, onChange, onPreview, onCommit, customColour, brush, brushSize, onBrush, onBrushSize, onClearTouchUps)
+        BackgroundChoices(background, onChange, onPreview, onCommit, customColour)
     }
     Heading("Border")
     BorderControls(border, onBorder, onBorderPreview, onCommit, customBorderColour)
+    // Fixing the cut-out is needed now and then, so it comes after the choices made for every photo.
+    if (canChangeBackground) EdgeFix(background, pending, brush, brushSize, onBrush, onBrushSize, onClearTouchUps)
 }
 
 @Composable
 private fun BackgroundChoices(
     background: BackgroundConfig,
-    pending: Boolean,
     onChange: (BackgroundConfig) -> Unit,
     onPreview: (BackgroundConfig) -> Unit,
     onCommit: () -> Unit,
     customColour: Long,
-    brush: BrushMode?,
-    brushSize: Double,
-    onBrush: (BrushMode?) -> Unit,
-    onBrushSize: (Double) -> Unit,
-    onClearTouchUps: () -> Unit,
 ) {
     ChoiceRow {
         for ((mode, label) in listOf(BackgroundMode.BLUR to "Soft blur", BackgroundMode.REPLACE to "Plain colour", BackgroundMode.KEEP to "As shot")) {
@@ -104,27 +100,26 @@ private fun BackgroundChoices(
             )
         }
         BackgroundMode.REPLACE -> {
-            val custom = COLOURS.none { it.second == background.replaceColorArgb }
-            ChoiceRow {
-                for ((name, argb) in COLOURS) {
-                    ChoiceChip(
-                        name,
-                        selected = background.replaceColorArgb == argb,
-                        onClick = { onChange(background.copy(replaceColorArgb = argb)) },
-                        leading = { Swatch(Color(argb.toInt())) },
-                    )
-                }
-                ChoiceChip(
-                    "Custom",
-                    selected = custom,
-                    onClick = { if (!custom) onChange(background.copy(replaceColorArgb = customColour)) },
-                    leading = { Swatch(Color((if (custom) background.replaceColorArgb else customColour).toInt())) },
-                )
+            ColourChoices(COLOURS, background.replaceColorArgb, customColour, { onChange(background.copy(replaceColorArgb = it)) }, { onChange(background.copy(replaceColorArgb = customColour)) })
+            if (COLOURS.none { it.second == background.replaceColorArgb }) {
+                ColourPicker(background.replaceColorArgb, { onPreview(background.copy(replaceColorArgb = it)) }, onCommit)
             }
-            if (custom) ColourPicker(background.replaceColorArgb, { onPreview(background.copy(replaceColorArgb = it)) }, onCommit)
         }
         BackgroundMode.KEEP -> Unit
     }
+}
+
+/** The touch-up brush for where the cut-out went wrong, or a note while the person is still being cut out. */
+@Composable
+private fun EdgeFix(
+    background: BackgroundConfig,
+    pending: Boolean,
+    brush: BrushMode?,
+    brushSize: Double,
+    onBrush: (BrushMode?) -> Unit,
+    onBrushSize: (Double) -> Unit,
+    onClearTouchUps: () -> Unit,
+) {
     if (background.mode != BackgroundMode.KEEP && !pending) {
         ChoiceRow {
             Text("Fix the edge", color = StudioTheme.colors.textMuted, style = MaterialTheme.typography.bodyMedium)
@@ -180,16 +175,6 @@ private fun BorderControls(border: BorderConfig, onChange: (BorderConfig) -> Uni
     }
     if (!border.show) return
     val custom = BORDER_COLOURS.none { it.second == border.colorArgb }
-    ChoiceRow {
-        for ((name, argb) in BORDER_COLOURS) {
-            ChoiceChip(name, selected = border.colorArgb == argb, onClick = { onChange(border.copy(colorArgb = argb)) }, leading = { Swatch(Color(argb.toInt())) })
-        }
-        ChoiceChip(
-            "Custom",
-            selected = custom,
-            onClick = { if (!custom) onChange(border.copy(colorArgb = customColour)) },
-            leading = { Swatch(Color((if (custom) border.colorArgb else customColour).toInt())) },
-        )
-    }
+    ColourChoices(BORDER_COLOURS, border.colorArgb, customColour, { onChange(border.copy(colorArgb = it)) }, { onChange(border.copy(colorArgb = customColour)) })
     if (custom) ColourPicker(border.colorArgb, { onPreview(border.copy(colorArgb = it)) }, onCommit)
 }

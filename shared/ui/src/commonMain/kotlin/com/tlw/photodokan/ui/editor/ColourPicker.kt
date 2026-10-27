@@ -2,17 +2,26 @@ package com.tlw.photodokan.ui.editor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.ui.components.StudioSlider
 import com.tlw.photodokan.ui.theme.StudioTheme
@@ -25,12 +34,14 @@ import kotlin.math.roundToInt
 private const val PICK_SATURATION = 0.55
 
 /**
- * Any colour, picked with two sliders: its colour round the wheel and how light it is. Moving
- * them shows live through [onPreview]; letting go calls [onCommit].
+ * Any colour, picked with two sliders: its colour round the wheel and how light it is. Each
+ * slider's track shows the colours it runs through, and its thumb the colour picked. Moving them
+ * shows live through [onPreview]; letting go calls [onCommit].
  */
 @Composable
 fun ColourPicker(argb: Long, onPreview: (Long) -> Unit, onCommit: () -> Unit) {
     val (hue, _, lightness) = hsl(argb)
+    val picked = Color(argb.toInt())
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("Colour", Modifier.width(96.dp))
         StudioSlider(
@@ -39,8 +50,9 @@ fun ColourPicker(argb: Long, onPreview: (Long) -> Unit, onCommit: () -> Unit) {
             onValueChangeFinished = onCommit,
             valueRange = 0f..359f,
             modifier = Modifier.weight(1f),
+            trackBrush = Brush.horizontalGradient(List(7) { Color(fromHsl(it * 60.0 % 360, PICK_SATURATION, lightness).toInt()) }),
+            thumbColour = picked,
         )
-        Swatch(Color(argb.toInt()))
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("Light", Modifier.width(96.dp))
@@ -48,18 +60,69 @@ fun ColourPicker(argb: Long, onPreview: (Long) -> Unit, onCommit: () -> Unit) {
             value = lightness.toFloat(),
             onValueChange = { onPreview(fromHsl(hue, PICK_SATURATION, (it * 50).roundToInt() / 50.0)) },
             onValueChangeFinished = onCommit,
-            valueRange = 0.1f..0.95f,
+            valueRange = LIGHTEST.start..LIGHTEST.endInclusive,
             modifier = Modifier.weight(1f),
+            trackBrush = Brush.horizontalGradient(List(5) { Color(fromHsl(hue, PICK_SATURATION, LIGHTEST.start + it * (LIGHTEST.endInclusive - LIGHTEST.start) / 4.0).toInt()) }),
+            thumbColour = picked,
         )
-        // Keeps the two sliders the same length.
-        Box(Modifier.size(18.dp))
     }
 }
 
-/** A small round sample of [colour]. */
+/** How dark to how light a picked colour can be. */
+private val LIGHTEST = 0.1f..0.95f
+
+/**
+ * Colours to choose from, shown as the colours themselves: a round sample each, ringed in the
+ * accent once chosen, with the chosen one's name underneath so it isn't told by colour alone. The
+ * last sample is Custom: [customColour] inside a ring of every hue, which [onCustom] switches to.
+ */
 @Composable
-internal fun Swatch(colour: Color) =
-    Box(Modifier.size(18.dp).background(colour, CircleShape).border(1.dp, StudioTheme.colors.outline, CircleShape))
+internal fun ColourChoices(choices: List<Pair<String, Long>>, selected: Long, customColour: Long, onPick: (Long) -> Unit, onCustom: () -> Unit) {
+    val custom = choices.none { it.second == selected }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        for ((name, argb) in choices) ColourSample(name, Color(argb.toInt()), selected = argb == selected, onClick = { if (argb != selected) onPick(argb) })
+        ColourSample("Custom", Color((if (custom) selected else customColour).toInt()), selected = custom, onClick = { if (!custom) onCustom() }, hues = true)
+    }
+    Text(
+        choices.firstOrNull { it.second == selected }?.first ?: "Custom",
+        style = MaterialTheme.typography.bodyMedium,
+        color = StudioTheme.colors.textMuted,
+    )
+}
+
+/** All the hues round a circle, for the Custom sample. */
+private val HueRing = Brush.sweepGradient(List(7) { Color.hsl(it * 60f % 360f, 0.75f, 0.55f) })
+
+/**
+ * One colour to choose, [SAMPLE] across inside a 44 dp target. Chosen, it has a ring in the accent
+ * just outside it; [hues] puts a ring of every hue round the colour instead of a plain edge.
+ */
+@Composable
+private fun ColourSample(name: String, colour: Color, selected: Boolean, onClick: () -> Unit, hues: Boolean = false) {
+    val c = StudioTheme.colors
+    Box(
+        Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .border(2.dp, if (selected) c.accent else Color.Transparent, CircleShape)
+            .clickable(role = Role.RadioButton, onClick = onClick)
+            .semantics {
+                contentDescription = name
+                this.selected = selected
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .size(SAMPLE)
+                .then(if (hues) Modifier.background(HueRing, CircleShape).padding(4.dp) else Modifier)
+                .background(colour, CircleShape)
+                .border(1.dp, c.outline, CircleShape),
+        )
+    }
+}
+
+private val SAMPLE = 34.dp
 
 /** [argb]'s hue (0–360), saturation and lightness (0–1). */
 internal fun hsl(argb: Long): Triple<Double, Double, Double> {
