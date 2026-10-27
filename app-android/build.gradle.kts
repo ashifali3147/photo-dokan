@@ -14,7 +14,7 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = providers.gradleProperty("photodokan.version").get()
         // ONNX Runtime's native library is large: only phones, 64- and 32-bit ARM.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
