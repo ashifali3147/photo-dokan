@@ -11,6 +11,7 @@ import com.tlw.photodokan.core.matte.Background
 import com.tlw.photodokan.core.matte.Matte
 import com.tlw.photodokan.core.model.BackgroundConfig
 import com.tlw.photodokan.core.model.BackgroundMode
+import com.tlw.photodokan.core.model.BorderConfig
 import com.tlw.photodokan.core.model.BrushMode
 import com.tlw.photodokan.core.model.CropConfig
 import com.tlw.photodokan.core.model.MaskPoint
@@ -785,6 +786,36 @@ class CustomersViewModelTest {
         // The slot crop shows the middle of the photo: its left part is background.
         assertTrue((final.getRGB(5, final.height / 2) and 0xff) > 245, "white in final.jpg")
         assertTrue((final.getRGB(final.width - 5, final.height / 2) and 0xff) in 118..138, "grey person in final.jpg")
+    }
+
+    @Test
+    fun aBorderAndBlackAndWhiteAreSavedInFinalJpg() {
+        withMatter()
+        vm.import(photo())
+        vm.setBorder(BorderConfig(show = true))
+        vm.setBlackAndWhite(true)
+        vm.setBackground(BackgroundConfig(mode = BackgroundMode.REPLACE, replaceColorArgb = BackgroundConfig.SKY_BLUE))
+        vm.saveDraft()
+        val customer = library.customersOn(now).single()
+        val recipe = assertNotNull(library.readRecipe(customer))
+        assertTrue(recipe.border.show && recipe.blackAndWhite)
+        val final = ImageIO.read(ByteArrayInputStream(assertNotNull(library.readFinal(customer))))
+        assertTrue((final.getRGB(0, final.height / 2) and 0xffffff).let { (it shr 16) < 40 && (it and 0xff) < 40 }, "dark border at the edge")
+        // Each was its own undo step: the background, black and white, then the border.
+        vm.undo(); vm.undo(); vm.undo()
+        val live = vm.state.value.edit!!.recipe
+        assertFalse(live.border.show || live.blackAndWhite)
+    }
+
+    @Test
+    fun theCustomColourStartsFromTheLastOnePicked() {
+        withMatter()
+        vm.import(photo())
+        vm.previewBackground(BackgroundConfig(mode = BackgroundMode.REPLACE, replaceColorArgb = 0xFFF0D0E0))
+        vm.commit()
+        assertEquals(0xFFF0D0E0, vm.customBackdropColour)
+        vm.previewBorder(BorderConfig(show = true, colorArgb = 0xFF336699))
+        assertEquals(0xFF336699, vm.customBorderColour)
     }
 
     @Test

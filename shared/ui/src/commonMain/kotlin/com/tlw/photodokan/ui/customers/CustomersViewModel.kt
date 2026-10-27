@@ -14,6 +14,7 @@ import com.tlw.photodokan.core.library.StudioDate
 import com.tlw.photodokan.core.matte.Matte
 import com.tlw.photodokan.core.model.BackgroundConfig
 import com.tlw.photodokan.core.model.BackgroundMode
+import com.tlw.photodokan.core.model.BorderConfig
 import com.tlw.photodokan.core.model.CropConfig
 import com.tlw.photodokan.core.model.EditHistory
 import com.tlw.photodokan.core.model.EditRecipe
@@ -28,6 +29,7 @@ import com.tlw.photodokan.ui.editor.painting
 import com.tlw.photodokan.ui.editor.studioLight
 import com.tlw.photodokan.ui.editor.backdrop
 import com.tlw.photodokan.ui.editor.faceFit
+import com.tlw.photodokan.ui.editor.frameLine
 import com.tlw.photodokan.ui.editor.faceLight
 import com.tlw.photodokan.ui.editor.facePortrait
 import com.tlw.photodokan.ui.editor.firstEdit
@@ -394,8 +396,28 @@ class CustomersViewModel(
 
     /** Light and colour as shot, the studio look, fair skin and smoothing off, as one undo step. */
     fun resetAdjustments() = step {
-        it.live.copy(exposure = 0.0, contrast = 0.0, warmth = 0.0, tint = 0.0, saturation = 0.0, enhance = 0.0, fairness = 0.0, retouch = 0.0)
+        it.live.copy(exposure = 0.0, contrast = 0.0, warmth = 0.0, tint = 0.0, saturation = 0.0, enhance = 0.0, fairness = 0.0, retouch = 0.0, blackAndWhite = false)
     }
+
+    /** Turns black and white on or off, as one undo step. */
+    fun setBlackAndWhite(on: Boolean) = step { it.live.copy(blackAndWhite = on) }
+
+    /** Changes the line along the photo's edge as one undo step: on or off, or its colour. */
+    fun setBorder(border: BorderConfig) = step { it.live.copy(border = border) }
+
+    /** Shows a border colour live while it is picked by hand; call [commit] when the slider is let go. */
+    fun previewBorder(border: BorderConfig) {
+        customBorderColour = border.colorArgb
+        preview { it.live.copy(border = border) }
+    }
+
+    /** The last colour picked by hand for a plain background, which the Custom choice starts from. */
+    var customBackdropColour: Long = BackgroundConfig.LIGHT_BLUE
+        private set
+
+    /** The last colour picked by hand for a border. */
+    var customBorderColour: Long = 0xFF1F3A93
+        private set
 
     /** Shows a change to the studio look's strength live; call [commit] when the slider is let go. */
     fun enhance(strength: Double) = preview { it.live.copy(enhance = strength.coerceIn(0.0, 1.0)) }
@@ -412,10 +434,6 @@ class CustomersViewModel(
         if (background.mode == BackgroundMode.REPLACE) customBackdropColour = background.replaceColorArgb
         preview { it.live.copy(background = background) }
     }
-
-    /** The last colour picked by hand for a plain background, which the Custom choice starts from. */
-    var customBackdropColour: Long = BackgroundConfig.LIGHT_BLUE
-        private set
 
     /** Changes the background as one undo step: keep, blur, or a plain colour. */
     fun setBackground(background: BackgroundConfig) = step { it.live.copy(background = background) }
@@ -569,7 +587,7 @@ class CustomersViewModel(
         val rect = CropGeometry.rect(image.width, image.height, preset.aspect, edit.live.crop)
         val width = mmToPixels(preset.size.width, FINAL_DPI).roundToInt()
         val height = mmToPixels(preset.size.height, FINAL_DPI).roundToInt()
-        return timed("Make final.jpg") { encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(edit.live), backdrop(wanted.background))) }
+        return timed("Make final.jpg") { encodeJpeg(renderCrop(image, rect, width, height, ColorAdjustment.matrix(edit.live), backdrop(wanted.background), frameLine(edit.live.border, preset.size.width))) }
     }
 
     private fun refresh() = launchWork { loadList() }

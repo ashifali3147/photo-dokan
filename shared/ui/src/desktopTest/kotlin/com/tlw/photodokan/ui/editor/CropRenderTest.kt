@@ -4,12 +4,15 @@ import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.imaging.CropRect
+import com.tlw.photodokan.core.model.BorderConfig
 import com.tlw.photodokan.core.model.EditRecipe
 import java.awt.Color
 import java.awt.image.BufferedImage
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CropRenderTest {
@@ -52,6 +55,25 @@ class CropRenderTest {
         val grey = ColorAdjustment.matrix(EditRecipe("studio-slot", saturation = -1.0))
         val g = Color(renderCrop(photo, CropRect(20.0, 10.0, 20.0, 20.0, 0.0), 100, 100, grey).toAwtImage().getRGB(25, 50))
         assertTrue(abs(g.red - g.green) <= 2 && abs(g.green - g.blue) <= 2, "no colour gives grey, was $g")
+    }
+
+    @Test
+    fun aBorderRunsAlongTheEdgeInMillimetres() {
+        // 0.3 mm on a photo 30 mm wide is a hundredth of its width: 3 pixels of 300.
+        val line = assertNotNull(frameLine(BorderConfig(show = true), widthMm = 30.0))
+        val out = renderCrop(photo, CropRect(20.0, 10.0, 20.0, 20.0, 0.0), 300, 300, border = line).toAwtImage()
+        for ((x, y) in listOf(0 to 150, 2 to 150, 299 to 150, 150 to 0, 150 to 297)) {
+            assertEquals(0x000000, out.getRGB(x, y) and 0xffffff, "black at $x, $y")
+        }
+        assertTrue(out.isRed(5, 150) && out.isBlue(294, 150), "the photo just inside")
+        assertNull(frameLine(BorderConfig(show = false), widthMm = 30.0))
+    }
+
+    @Test
+    fun aBorderKeepsItsColour() {
+        val line = assertNotNull(frameLine(BorderConfig(show = true, colorArgb = 0xFF2040A0), widthMm = 30.0))
+        val out = renderCrop(photo, CropRect(20.0, 10.0, 20.0, 20.0, 0.0), 300, 300, border = line).toAwtImage()
+        assertEquals(0x2040A0, out.getRGB(1, 150) and 0xffffff)
     }
 
     @Test

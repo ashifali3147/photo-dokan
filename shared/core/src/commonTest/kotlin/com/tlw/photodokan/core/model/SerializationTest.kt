@@ -7,6 +7,7 @@ import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 class SerializationTest {
 
@@ -31,6 +32,8 @@ class SerializationTest {
             enhance = 0.8,
             fairness = 0.35,
             portrait = Portrait(skinLevel = 0.42, faceHeight = 0.27),
+            blackAndWhite = true,
+            border = BorderConfig(show = true, colorArgb = 0xFF1F3A93, widthMm = 0.5),
         )
         assertEquals(recipe, roundTrip(recipe))
     }
@@ -41,6 +44,8 @@ class SerializationTest {
         val recipe = Json.decodeFromString<EditRecipe>("""{"presetId":"studio-slot"}""")
         assertEquals(EditRecipe(presetId = "studio-slot"), recipe)
         assertEquals(BackgroundMode.BLUR, recipe.background.mode)
+        assertFalse(recipe.blackAndWhite)
+        assertFalse(recipe.border.show)
     }
 
     @Test
@@ -51,7 +56,8 @@ class SerializationTest {
              "exposure":0.1,"contrast":0.2,"warmth":-0.1,"tint":0.15,"saturation":0.3,
              "background":{"mode":"REPLACE","blurStrength":0.5,"replaceColorArgb":4294967295,
                "touchUps":[{"mode":"KEEP","radius":0.03,"points":[{"x":0.1,"y":0.2}]}]},"retouch":0.2,
-             "enhance":0.7,"fairness":0.4,"portrait":{"skinLevel":0.45,"faceHeight":0.25}}
+             "enhance":0.7,"fairness":0.4,"portrait":{"skinLevel":0.45,"faceHeight":0.25},
+             "blackAndWhite":true,"border":{"show":true,"colorArgb":4278190080,"widthMm":0.3}}
         """.trimIndent()
         val expected = EditRecipe(
             presetId = "passport-35x45",
@@ -66,6 +72,8 @@ class SerializationTest {
             enhance = 0.7,
             fairness = 0.4,
             portrait = Portrait(0.45, 0.25),
+            blackAndWhite = true,
+            border = BorderConfig(show = true),
         )
         assertEquals(expected, Json.decodeFromString<EditRecipe>(json))
     }
@@ -74,6 +82,9 @@ class SerializationTest {
     fun decodingStillValidatesRanges() {
         assertFailsWith<IllegalArgumentException> {
             Json.decodeFromString<EditRecipe>("""{"presetId":"studio-slot","exposure":3.0}""")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            Json.decodeFromString<EditRecipe>("""{"presetId":"studio-slot","border":{"widthMm":0.0}}""")
         }
         assertFailsWith<IllegalArgumentException> {
             Json.decodeFromString<Order>("""{"id":"A","customerLabel":"0001","copies":0}""")

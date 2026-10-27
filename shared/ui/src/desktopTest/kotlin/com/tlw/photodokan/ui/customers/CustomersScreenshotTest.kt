@@ -11,6 +11,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -64,7 +66,14 @@ class CustomersScreenshotTest {
         return library
     }
 
-    private fun shoot(name: String, width: Dp, height: Dp, mode: ThemeMode, openCustomer: Boolean) = runComposeUiTest {
+    private fun shoot(
+        name: String,
+        width: Dp,
+        height: Dp,
+        mode: ThemeMode,
+        openCustomer: Boolean,
+        then: androidx.compose.ui.test.ComposeUiTest.() -> Unit = {},
+    ) = runComposeUiTest {
         val library = library()
         val koin = koinApplication {
             modules(appModule, module {
@@ -81,6 +90,8 @@ class CustomersScreenshotTest {
             waitUntil(timeoutMillis = 10_000) { showsText("Crop") }
             mainClock.advanceTimeBy(1_000)
         }
+        then()
+        mainClock.advanceTimeBy(1_000)
         val folder = File("build/reports/screens").apply { mkdirs() }
         ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(folder, "$name.png"))
     }
@@ -95,4 +106,12 @@ class CustomersScreenshotTest {
     @Test fun wideDark() = shoot("customers-wide-dark", 1280.dp, 800.dp, ThemeMode.Dark, openCustomer = true)
     @Test fun phoneGrid() = shoot("customers-phone-light", 390.dp, 844.dp, ThemeMode.Light, openCustomer = false)
     @Test fun phoneEditor() = shoot("customers-phone-editor", 390.dp, 844.dp, ThemeMode.Light, openCustomer = true)
+    @Test fun wideBorder() = shoot("customers-wide-border", 1280.dp, 800.dp, ThemeMode.Light, openCustomer = true) {
+        onAllNodesWithText("Backdrop").onFirst().performClick()
+        onNodeWithText("Thick").performClick()
+    }
+    @Test fun wideBlackAndWhite() = shoot("customers-wide-black-and-white", 1280.dp, 800.dp, ThemeMode.Light, openCustomer = true) {
+        onAllNodesWithText("Look").onFirst().performClick()
+        onNodeWithText("Black & white").performClick()
+    }
 }

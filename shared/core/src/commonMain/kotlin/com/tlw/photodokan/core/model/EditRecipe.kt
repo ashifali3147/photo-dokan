@@ -36,6 +36,28 @@ data class BackgroundConfig(
     }
 }
 
+/**
+ * A thin line along the edge of each photo, as on passport and stamp photos, so a cut photo has a
+ * clean edge. In millimetres, so it prints the same on every photo size.
+ */
+@Serializable
+data class BorderConfig(
+    val show: Boolean = false,
+    /** ARGB, black by default. Kept when the border is turned off, for when it is turned on again. */
+    val colorArgb: Long = BLACK,
+    val widthMm: Double = THIN_MM,
+) {
+    init {
+        require(widthMm in 0.05..3.0) { "Border width must be in 0.05..3 mm, was $widthMm" }
+    }
+
+    companion object {
+        const val BLACK = 0xFF000000
+        const val THIN_MM = 0.3
+        const val THICK_MM = 0.6
+    }
+}
+
 /** Crop in normalised image coordinates: centre in 0..1, scale ≥ 1 zooms in. */
 @Serializable
 data class CropConfig(
@@ -74,6 +96,9 @@ data class EditRecipe(
     val fairness: Double = 0.0,
     /** The face as measured when the photo was opened, which the studio look works from; null without one. */
     val portrait: Portrait? = null,
+    /** The photo in shades of grey; a plain background keeps its colour. */
+    val blackAndWhite: Boolean = false,
+    val border: BorderConfig = BorderConfig(),
 ) {
     init {
         for ((name, value) in listOf("exposure" to exposure, "contrast" to contrast, "warmth" to warmth, "tint" to tint, "saturation" to saturation)) {
