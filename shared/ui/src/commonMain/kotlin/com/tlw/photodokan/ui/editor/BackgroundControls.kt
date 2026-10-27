@@ -53,7 +53,7 @@ fun BackgroundControls(
     onChange: (BackgroundConfig) -> Unit,
     onPreview: (BackgroundConfig) -> Unit,
     onCommit: () -> Unit,
-    customColour: Long = BackgroundConfig.LIGHT_BLUE,
+    customColour: Long = FIRST_CUSTOM_BACKDROP,
     brush: BrushMode? = null,
     brushSize: Double = SMALL_BRUSH,
     onBrush: (BrushMode?) -> Unit = {},
@@ -63,7 +63,7 @@ fun BackgroundControls(
     border: BorderConfig = BorderConfig(),
     onBorder: (BorderConfig) -> Unit = {},
     onBorderPreview: (BorderConfig) -> Unit = {},
-    customBorderColour: Long = BorderConfig.BLACK,
+    customBorderColour: Long = FIRST_CUSTOM_BORDER,
 ) {
     if (canChangeBackground) {
         Heading("Background")
