@@ -7,6 +7,23 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
+// The version in gradle.properties as a constant, for Settings → About.
+val generateAppVersion by tasks.registering {
+    val version = providers.gradleProperty("photodokan.version")
+    val out = layout.buildDirectory.dir("generated/appVersion/kotlin")
+    inputs.property("version", version)
+    outputs.dir(out)
+    doLast {
+        val file = out.get().file("com/tlw/photodokan/ui/AppVersion.kt").asFile
+        file.parentFile.mkdirs()
+        file.writeText(
+            "package com.tlw.photodokan.ui\n\n" +
+                "/** The app's version, from photodokan.version in gradle.properties. */\n" +
+                "const val APP_VERSION: String = \"${version.get()}\"\n",
+        )
+    }
+}
+
 kotlin {
     androidTarget {
         compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
@@ -16,6 +33,9 @@ kotlin {
     }
 
     sourceSets {
+        commonMain {
+            kotlin.srcDir(generateAppVersion)
+        }
         commonMain.dependencies {
             api(project(":shared:core"))
             implementation(project(":shared:print"))

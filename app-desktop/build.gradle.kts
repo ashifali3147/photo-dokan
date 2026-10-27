@@ -36,7 +36,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Dmg)
             packageName = "Photo Dokan"
-            packageVersion = "1.0.0"
+            packageVersion = providers.gradleProperty("photodokan.version").get()
             description = "Passport and stamp photo studio software"
             vendor = "Photo Dokan"
             licenseFile.set(rootProject.file("LICENSE"))
