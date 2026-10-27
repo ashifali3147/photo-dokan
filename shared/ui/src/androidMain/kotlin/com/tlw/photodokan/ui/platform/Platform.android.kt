@@ -1,6 +1,7 @@
 package com.tlw.photodokan.ui.platform
 
 import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
 import android.os.Debug
 import android.os.SystemClock
 import android.util.Log
@@ -13,6 +14,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.tlw.photodokan.core.library.StudioDate
@@ -26,6 +28,10 @@ actual fun encodeJpeg(image: ImageBitmap, quality: Int): ByteArray =
 
 actual fun imageBitmapOf(argb: IntArray, width: Int, height: Int): ImageBitmap =
     Bitmap.createBitmap(argb, width, height, Bitmap.Config.ARGB_8888).asImageBitmap()
+
+actual fun Paint.blur(radius: Float) {
+    asFrameworkPaint().maskFilter = if (radius > 0f) BlurMaskFilter(radius, BlurMaskFilter.Blur.NORMAL) else null
+}
 
 actual val tapVerb: String = "tap"
 
