@@ -50,8 +50,8 @@ class FaceCropTest {
         val fit = assertNotNull(FaceCrop.fit(1000, 1500, passport, face()))
         assertTrue(fit.fits)
         assertEquals(0.0, fit.crop.rotationDegrees)
-        // Top of the head 1.7 eye-to-mouth distances above the eyes, the chin 1.85 below.
-        near(PointPx(500.0, 430.0), inPhoto(1000, 1500, passport, fit, 0.5, passport.guide.headTop))
+        // Top of the hair 2.1 eye-to-mouth distances above the eyes, the chin 1.85 below.
+        near(PointPx(500.0, 390.0), inPhoto(1000, 1500, passport, fit, 0.5, passport.guide.headTop))
         near(PointPx(500.0, 785.0), inPhoto(1000, 1500, passport, fit, 0.5, passport.guide.chin))
     }
 
@@ -65,7 +65,7 @@ class FaceCropTest {
         val a = rect.rotationDegrees * PI / 180
         fun frameY(p: PointPx) = -(p.x - rect.centerX) * sin(-a) + (p.y - rect.centerY) * cos(-a)
         assertTrue(abs(frameY(f.eyeLeft) - frameY(f.eyeRight)) < 1e-6)
-        val crown = PointPx(500 + 170 * sin(8 * PI / 180), 600 - 170 * cos(8 * PI / 180))
+        val crown = PointPx(500 + 210 * sin(8 * PI / 180), 600 - 210 * cos(8 * PI / 180))
         near(crown, inPhoto(1000, 1500, passport, fit, 0.5, passport.guide.headTop))
     }
 
@@ -73,10 +73,22 @@ class FaceCropTest {
     fun eachPhotoSizeUsesItsOwnGuide() {
         val low = passport.copy(guide = FaceGuide(headTop = 0.2, chin = 0.9))
         val fit = assertNotNull(FaceCrop.fit(1000, 1500, low, face()))
-        near(PointPx(500.0, 430.0), inPhoto(1000, 1500, low, fit, 0.5, 0.2))
+        near(PointPx(500.0, 390.0), inPhoto(1000, 1500, low, fit, 0.5, 0.2))
         near(PointPx(500.0, 785.0), inPhoto(1000, 1500, low, fit, 0.5, 0.9))
         val wide = assertNotNull(FaceCrop.fit(1000, 1500, PhotoSizePreset.STUDIO_SLOT, face()))
-        near(PointPx(500.0, 430.0), inPhoto(1000, 1500, PhotoSizePreset.STUDIO_SLOT, wide, 0.5, PhotoSizePreset.STUDIO_SLOT.guide.headTop))
+        near(PointPx(500.0, 390.0), inPhoto(1000, 1500, PhotoSizePreset.STUDIO_SLOT, wide, 0.5, PhotoSizePreset.STUDIO_SLOT.guide.headTop))
+    }
+
+    @Test
+    fun theStudioSlotLeavesRoomAboveTheHairAndShowsTheShoulders() {
+        val slot = PhotoSizePreset.STUDIO_SLOT
+        val fit = assertNotNull(FaceCrop.fit(1000, 1500, slot, face()))
+        assertTrue(fit.fits)
+        // The head from the top of the hair to the chin takes under three quarters of the frame.
+        val top = inPhoto(1000, 1500, slot, fit, 0.5, 0.0).y
+        val bottom = inPhoto(1000, 1500, slot, fit, 0.5, 1.0).y
+        assertTrue((785.0 - 390.0) / (bottom - top) < 0.65, "head share ${(785.0 - 390.0) / (bottom - top)}")
+        assertTrue(390.0 - top > 0.08 * (bottom - top), "room above the hair")
     }
 
     @Test
