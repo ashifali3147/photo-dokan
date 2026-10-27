@@ -2,6 +2,9 @@ package com.tlw.photodokan.ui.customers
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,6 +13,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,14 +49,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.library.Customer
 import com.tlw.photodokan.core.model.PrintQueue
-import com.tlw.photodokan.ui.components.ButtonTone
 import com.tlw.photodokan.ui.components.CopyChoices
 import com.tlw.photodokan.ui.components.CopyNudge
 import com.tlw.photodokan.ui.components.Notice
@@ -63,17 +68,22 @@ import com.tlw.photodokan.ui.editor.EditorIcons
 import com.tlw.photodokan.ui.theme.StudioTheme
 import kotlinx.coroutines.delay
 
-/** The height of the open tool's controls on a phone; longer ones scroll. */
-private val TOOL_HEIGHT = 184.dp
+/**
+ * The most the open tool's controls take on a phone. Each tool is laid out to fit below this, so
+ * nothing hides under a scroll; the scroll is only a safety net for very short screens.
+ */
+private val TOOL_MAX_HEIGHT = 300.dp
 
 /** How long a good-news message stays over the photo on a phone before it fades. */
 private const val NOTICE_MILLIS = 3_000L
 
 /**
- * The editor on a phone, where height is short: a slim top bar (back, number, undo and redo),
- * the photo on the grey stage taking all the room it can, the open tool's controls (tap the
- * tool again to fold them away), the tool dock, and one main button at the bottom. Copies open
- * in a sheet from the bottom, so they don't cost height while editing.
+ * The editor on a phone, where height is short: a slim top bar (back, number, whether the photo
+ * is on the sheet, undo and redo), the photo on the grey stage taking all the room it can, the
+ * open tool's controls, the tool dock with a button that folds the controls away, and one main
+ * button at the bottom. Copies open in a sheet from the bottom, so they don't cost height while
+ * editing. The head and chin guide shows only while cropping, so it never covers the face
+ * while the skin or background is judged.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,7 +108,7 @@ internal fun PhoneEditor(
     val (copies, chooseCopies) = if (selected != null) rememberCopies(selected, queued, viewModel) else 5 to { _: Int -> }
 
     Column(modifier.fillMaxSize()) {
-        TopBar(state, edit, viewModel, pickPhoto, takePhoto, onBack, onAddDetails = { showDetails = true })
+        TopBar(state, edit, viewModel, queued?.copies, pickPhoto, takePhoto, onBack, onAddDetails = { showDetails = true })
 
         if (draft != null && (showDetails || draft.name.isNotEmpty() || draft.phone.isNotEmpty())) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -110,19 +120,29 @@ internal fun PhoneEditor(
             }
         }
 
-        EditorStage(edit, viewModel, tools, Modifier.weight(1f).heightIn(min = 240.dp).fillMaxWidth().padding(horizontal = 12.dp)) {
+        EditorStage(
+            edit,
+            viewModel,
+            tools,
+            Modifier.weight(1f).heightIn(min = 220.dp).fillMaxWidth().padding(horizontal = 8.dp),
+            inset = 6.dp,
+            showGuide = tools.tab == EditorTab.Crop,
+        ) {
             FloatingNotice(state, Modifier.align(Alignment.BottomCenter).padding(10.dp))
         }
 
         AnimatedVisibility(tools.showControls, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-            // One height for every tool, so the photo doesn't jump when switching between them.
-            AnimatedContent(tools.tab, Modifier.height(TOOL_HEIGHT), transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "tool") { tab ->
+            // Each tool takes the height it needs; the photo above eases to the new size.
+            AnimatedContent(tools.tab, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "tool") { tab ->
                 val scroll = rememberScrollState()
                 Column(
-                    Modifier.fillMaxSize().scrollFade(scroll, c.base).verticalScroll(scroll).padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    // A choice that adds or takes away a row (Plain colour, a border) eases the height.
+                    Modifier.fillMaxWidth().animateContentSize(tween(220, easing = FastOutSlowInEasing)).heightIn(max = TOOL_MAX_HEIGHT)
+                        .scrollFade(scroll, c.base).verticalScroll(scroll)
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    ToolControls(edit, viewModel, tools, tab)
+                    ToolControls(edit, viewModel, tools, tab, compact = true)
                 }
             }
         }
@@ -130,8 +150,8 @@ internal fun PhoneEditor(
         EditorDock(
             viewModel,
             tools,
-            Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            // Tapping the open tool again folds its controls away, so the photo gets the room.
+            Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            // Tapping the open tool again folds its controls away, as does the button at the end.
             onTab = { t ->
                 if (t == tools.tab) {
                     tools.showControls = !tools.showControls
@@ -140,10 +160,12 @@ internal fun PhoneEditor(
                     tools.showControls = true
                 }
             },
+            tabHeight = 52.dp,
+            trailing = { FoldButton(tools.showControls) { tools.showControls = !tools.showControls } },
         )
 
         Row(
-            Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -158,7 +180,8 @@ internal fun PhoneEditor(
                         // Saving comes first: the sheet prints what was saved.
                         edit.changed -> PrimaryButton(viewModel::saveChanges, Modifier.weight(1f), enabled = !state.busy) { Text("Save changes") }
                         queued == null -> PrimaryButton({ viewModel.addToPrint(copies) }, Modifier.weight(1f), enabled = !state.busy) { Text("Add to sheet") }
-                        else -> PrimaryButton({ showCopies = true }, Modifier.weight(1f), tone = ButtonTone.Ok, enabled = !state.busy) { Text("On the sheet") }
+                        // Already on the sheet (the top bar says so): what's left is the next customer.
+                        else -> PrimaryButton(onBack, Modifier.weight(1f), enabled = !state.busy) { Text("Next customer") }
                     }
                 }
             }
@@ -177,6 +200,7 @@ private fun TopBar(
     state: CustomersState,
     edit: EditSession,
     viewModel: CustomersViewModel,
+    queuedCopies: Int?,
     pickPhoto: () -> Unit,
     takePhoto: (() -> Unit)?,
     onBack: () -> Unit,
@@ -186,7 +210,7 @@ private fun TopBar(
     val draft = state.draft
     val selected = state.selected
     var menu by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to customers") }
         Column(Modifier.weight(1f)) {
             Text(
@@ -195,31 +219,50 @@ private fun TopBar(
                 style = StudioTheme.type.number,
                 color = c.text,
             )
-            when {
-                draft != null && draft.name.isEmpty() && draft.phone.isEmpty() ->
-                    // Busy days run on numbers alone, so name and phone are only a tap away, never asked for.
-                    Text(
-                        "New photo · add name or phone",
-                        Modifier.clickable(role = Role.Button, onClick = onAddDetails).padding(vertical = 4.dp),
+            // One line, the same height whatever it says, so the bar doesn't change height on saving.
+            Box(Modifier.heightIn(min = 28.dp), contentAlignment = Alignment.CenterStart) {
+                when {
+                    draft != null && draft.name.isEmpty() && draft.phone.isEmpty() ->
+                        // Busy days run on numbers alone, so name and phone are only a tap away, never asked for.
+                        Text(
+                            "New photo · add name or phone",
+                            Modifier.clickable(role = Role.Button, onClick = onAddDetails),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = c.accentText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    draft != null -> Text("New photo, not saved yet", style = MaterialTheme.typography.bodyMedium, color = c.textMuted, maxLines = 1)
+                    // Whether the photo is on the sheet, and how often: the one thing to know here.
+                    // The photo size is not repeated; the Crop tool shows it.
+                    queuedCopies != null -> Text(
+                        listOfNotNull("✓ On the sheet · $queuedCopies copies", selected?.name).joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = c.accentText,
+                        color = c.ok,
+                        maxLines = 1,
                     )
-                draft != null -> Text("New photo, not saved yet", style = MaterialTheme.typography.bodyMedium, color = c.textMuted)
-                else -> Text(
-                    listOfNotNull(selected?.name, viewModel.presetOf(edit.recipe).name).joinToString(" · "),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = c.textMuted,
-                    maxLines = 1,
-                )
+                    else -> Text(
+                        listOfNotNull(selected?.name, "Not on the sheet yet").joinToString(" · "),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = c.textMuted,
+                        maxLines = 1,
+                    )
+                }
             }
         }
-        if (state.busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+        // Its place is kept while idle, so undo and redo don't shift when saving starts.
+        Box(Modifier.size(22.dp)) { if (state.busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) }
         IconButton(viewModel::undo, enabled = edit.canUndo) { Icon(EditorIcons.Undo, contentDescription = "Undo") }
         IconButton(viewModel::redo, enabled = edit.canRedo) { Icon(EditorIcons.Redo, contentDescription = "Redo") }
-        IconButton({ menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
-        DropdownMenu(menu, onDismissRequest = { menu = false }) {
-            takePhoto?.let { DropdownMenuItem(text = { Text("Take a new photo") }, onClick = { menu = false; it() }, enabled = !state.busy) }
-            DropdownMenuItem(text = { Text("Choose another photo") }, onClick = { menu = false; pickPhoto() }, enabled = !state.busy)
+        // In a Box, so the menu opens under the button rather than at the far side of the bar.
+        Box {
+            IconButton({ menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
+            DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                // A new photo replaces an unsaved one, but next to a saved customer it starts the next one.
+                val (take, choose) = if (draft != null) "Take it again" to "Choose a different photo" else "New customer · take photo" to "New customer · choose photo"
+                takePhoto?.let { DropdownMenuItem(text = { Text(take) }, onClick = { menu = false; it() }, enabled = !state.busy) }
+                DropdownMenuItem(text = { Text(choose) }, onClick = { menu = false; pickPhoto() }, enabled = !state.busy)
+            }
         }
     }
 }
@@ -243,22 +286,41 @@ private fun FloatingNotice(state: CustomersState, modifier: Modifier) {
     }
 }
 
-/** A square button with the copies count, which opens the copies sheet. */
+/** The copies count with a down arrow, so it reads as something to open: the copies sheet. */
 @Composable
 private fun CopiesButton(copies: Int, enabled: Boolean, onClick: () -> Unit) {
     val c = StudioTheme.colors
     val shape = RoundedCornerShape(14.dp)
-    Column(
+    Row(
         Modifier
-            .size(60.dp)
+            .height(56.dp)
+            .clip(shape)
             .border(1.dp, c.outline, shape)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = "$copies copies. Change" },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+            .semantics(mergeDescendants = true) { contentDescription = "$copies copies. Change" }
+            .padding(start = 14.dp, end = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("$copies", style = StudioTheme.type.number, color = c.text)
-        Text("copies", style = MaterialTheme.typography.labelSmall, color = c.textMuted)
+        Text("copies", style = MaterialTheme.typography.labelLarge, color = c.textMuted)
+        Icon(EditorIcons.FoldDown, contentDescription = null, tint = c.textMuted, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** Folds the open tool's controls away so the photo gets the room, or brings them back. */
+@Composable
+private fun FoldButton(open: Boolean, onClick: () -> Unit) {
+    val c = StudioTheme.colors
+    Box(
+        Modifier
+            .size(width = 44.dp, height = 52.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = if (open) "Hide tools" else "Show tools" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(if (open) EditorIcons.FoldDown else EditorIcons.FoldUp, contentDescription = null, tint = c.textMuted)
     }
 }
 

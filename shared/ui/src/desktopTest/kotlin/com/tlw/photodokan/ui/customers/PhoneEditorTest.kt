@@ -93,6 +93,21 @@ class PhoneEditorTest {
         waitForIdle()
         assertEquals(listOf(10), koin.koin.get<PrintOrders>().queue.value.orders.map { it.copies })
         onNodeWithContentDescription("10 copies. Change").assertExists()
-        onNodeWithText("On the sheet").assertExists()
+        // The top bar says it is on the sheet; the main button moves on to the next customer.
+        onNodeWithText("✓ On the sheet · 10 copies").assertExists()
+        onNodeWithText("Next customer").performClick()
+        waitForIdle()
+        onNode(hasText("Print") and hasClickAction()).assertExists()
+    }
+
+    @Test
+    fun theFoldButtonHidesAndShowsTheTools() = runComposeUiTest {
+        openFirstCustomerOnAPhone()
+        onNodeWithContentDescription("Hide tools").performClick()
+        waitForIdle()
+        assertTrue(!shows("Zoom in"), "the crop controls fold away")
+        onNodeWithContentDescription("Show tools").performClick()
+        waitForIdle()
+        assertTrue(shows("Zoom in"), "and come back")
     }
 }

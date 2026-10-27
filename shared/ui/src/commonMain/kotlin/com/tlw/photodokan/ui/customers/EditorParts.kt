@@ -2,6 +2,7 @@ package com.tlw.photodokan.ui.customers
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -14,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.core.library.Customer
@@ -23,6 +25,7 @@ import com.tlw.photodokan.core.model.QueuedOrder
 import com.tlw.photodokan.ui.components.DockTab
 import com.tlw.photodokan.ui.components.GreyStage
 import com.tlw.photodokan.ui.components.ToolDock
+import com.tlw.photodokan.ui.editor.BackdropPart
 import com.tlw.photodokan.ui.editor.BackgroundControls
 import com.tlw.photodokan.ui.editor.CropControls
 import com.tlw.photodokan.ui.editor.CropEditor
@@ -53,10 +56,14 @@ internal class EditorTools {
     var showControls by mutableStateOf(true)
     var brushMode by mutableStateOf<BrushMode?>(null)
     var brushSize by mutableStateOf(SMALL_BRUSH)
+    /** On a phone, which half of the Backdrop tab shows. */
+    var backdropPart by mutableStateOf(BackdropPart.Background)
 
     /** The brush paints only on the backdrop tab, while the background is being changed. */
     fun brushFor(edit: EditSession): BrushMode? =
-        brushMode?.takeIf { tab == EditorTab.Backdrop && edit.recipe.background.mode != BackgroundMode.KEEP }
+        brushMode?.takeIf {
+            tab == EditorTab.Backdrop && backdropPart == BackdropPart.Background && edit.recipe.background.mode != BackgroundMode.KEEP
+        }
 }
 
 /** Fresh tools for each photo opened: [key] is the photo's preview. */
@@ -65,7 +72,8 @@ internal fun rememberEditorTools(key: Any?): EditorTools = remember(key) { Edito
 
 /**
  * The photo on the grey stage, cropped live, with a drop target for another photo. [overlay]
- * floats over the photo, e.g. undo and redo or a message.
+ * floats over the photo, e.g. undo and redo or a message. [inset] is the grey left around the
+ * photo; [showGuide] draws where the head and chin go.
  */
 @Composable
 internal fun EditorStage(
@@ -73,6 +81,8 @@ internal fun EditorStage(
     viewModel: CustomersViewModel,
     tools: EditorTools,
     modifier: Modifier = Modifier,
+    inset: Dp = 12.dp,
+    showGuide: Boolean = true,
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     val c = StudioTheme.colors
@@ -89,19 +99,20 @@ internal fun EditorStage(
             crop = edit.recipe.crop,
             onCropChange = viewModel::updateCrop,
             onCommit = viewModel::commit,
-            modifier = Modifier.fillMaxSize().padding(12.dp),
+            modifier = Modifier.fillMaxSize().padding(inset),
             colorMatrix = ColorAdjustment.matrix(edit.recipe),
             backdrop = backdrop(edit.recipe),
             border = frameLine(edit.recipe, viewModel.presetOf(edit.recipe).size.width),
             brush = brush?.let { TouchUpBrush(it, tools.brushSize, viewModel::touchUp) },
+            showGuide = showGuide,
         )
         overlay()
     }
 }
 
-/** The controls of [tab], by default the open tool. */
+/** The controls of [tab], by default the open tool; [compact] on a phone, where height is short. */
 @Composable
-internal fun ToolControls(edit: EditSession, viewModel: CustomersViewModel, tools: EditorTools, tab: EditorTab = tools.tab) {
+internal fun ToolControls(edit: EditSession, viewModel: CustomersViewModel, tools: EditorTools, tab: EditorTab = tools.tab, compact: Boolean = false) {
     when (tab) {
         EditorTab.Crop -> CropControls(
             presets = viewModel.presets,
@@ -112,6 +123,7 @@ internal fun ToolControls(edit: EditSession, viewModel: CustomersViewModel, tool
             onCommit = viewModel::commit,
             onReset = viewModel::resetCrop,
             onFitFace = if (viewModel.canFitFace) viewModel::fitFace else null,
+            compact = compact,
         )
         EditorTab.Look -> LookControls(
             recipe = edit.recipe,
@@ -120,6 +132,7 @@ internal fun ToolControls(edit: EditSession, viewModel: CustomersViewModel, tool
             onReset = viewModel::resetAdjustments,
             onAuto = if (viewModel.canAutoLight) viewModel::autoLight else null,
             onBlackAndWhite = viewModel::setBlackAndWhite,
+            compact = compact,
         )
         EditorTab.Retouch -> RetouchControls(
             recipe = edit.recipe,
@@ -128,10 +141,11 @@ internal fun ToolControls(edit: EditSession, viewModel: CustomersViewModel, tool
             // Fair and smooth skin go by the face, so only a photo with one has them.
             onFairness = if (edit.recipe.portrait != null) viewModel::fairness else null,
             onRetouch = if (edit.recipe.portrait != null) viewModel::retouch else null,
+            compact = compact,
         )
         EditorTab.Backdrop -> BackgroundControls(
             background = edit.recipe.background,
-            pending = edit.backgroundPending,
+            pending = edit.separating,
             onChange = viewModel::setBackground,
             onPreview = viewModel::previewBackground,
             onCommit = viewModel::commit,
@@ -146,6 +160,8 @@ internal fun ToolControls(edit: EditSession, viewModel: CustomersViewModel, tool
             onBorder = viewModel::setBorder,
             onBorderPreview = viewModel::previewBorder,
             customBorderColour = viewModel.customBorderColour,
+            part = if (compact) tools.backdropPart else null,
+            onPart = { tools.backdropPart = it },
         )
     }
 }
@@ -153,6 +169,7 @@ internal fun ToolControls(edit: EditSession, viewModel: CustomersViewModel, tool
 /**
  * The four tools in a recessed track. [onTab] decides what a tap does; by default it opens that
  * tool. Backdrop always shows: its border works even where the background can't be changed.
+ * [tabHeight] is lower on a phone; [trailing] ends the track, e.g. a button that folds the tools away.
  */
 @Composable
 internal fun EditorDock(
@@ -160,13 +177,17 @@ internal fun EditorDock(
     tools: EditorTools,
     modifier: Modifier = Modifier,
     onTab: (EditorTab) -> Unit = { tools.tab = it },
+    tabHeight: Dp = 60.dp,
+    trailing: @Composable RowScope.() -> Unit = {},
 ) {
     ToolDock(modifier) {
         for (t in EditorTab.entries) {
             DockTab(
                 label = t.label,
-                selected = tools.tab == t,
+                // On a phone the tools can be folded away; then no tab shows as open.
+                selected = tools.tab == t && tools.showControls,
                 onClick = { onTab(t) },
+                height = tabHeight,
                 icon = {
                     Icon(
                         when (t) {
@@ -181,6 +202,7 @@ internal fun EditorDock(
                 },
             )
         }
+        trailing()
     }
 }
 
