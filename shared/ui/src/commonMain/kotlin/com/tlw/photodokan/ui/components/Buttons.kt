@@ -70,7 +70,7 @@ fun PrimaryButton(
 
 /**
  * Everything else a screen offers: a white button with a thin outline. Beside a [PrimaryButton],
- * pass [tall] so the two line up.
+ * pass [tall] so the two line up. Several sharing a row on a phone pass a smaller [padding].
  */
 @Composable
 fun QuietButton(
@@ -78,6 +78,7 @@ fun QuietButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     tall: Boolean = false,
+    padding: Dp = 20.dp,
     content: @Composable RowScope.() -> Unit,
 ) {
     val c = StudioTheme.colors
@@ -89,6 +90,7 @@ fun QuietButton(
         contentColor = c.text,
         glow = null,
         minHeight = if (tall) 56.dp else 48.dp,
+        padding = padding,
         textStyle = MaterialTheme.typography.labelLarge,
         content = content,
     )
@@ -127,6 +129,7 @@ private fun StudioButton(
     contentColor: Color,
     glow: Color?,
     minHeight: Dp = 56.dp,
+    padding: Dp = 20.dp,
     shape: Shape = ButtonShape,
     textStyle: TextStyle = MaterialTheme.typography.titleMedium,
     content: @Composable RowScope.() -> Unit,
@@ -142,7 +145,7 @@ private fun StudioButton(
             .clip(shape)
             .background(if (enabled) fill else SolidColor(c.well))
             .clickable(interactionSource = source, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = padding),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
