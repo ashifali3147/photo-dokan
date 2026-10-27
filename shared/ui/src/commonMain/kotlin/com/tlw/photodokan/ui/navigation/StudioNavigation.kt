@@ -75,12 +75,17 @@ fun StudioBottomBar(current: Destination, onSelect: (Destination) -> Unit, waiti
 
 private fun badge(destination: Destination, waiting: Int): Int? = waiting.takeIf { destination == Destination.Print && it > 0 }
 
-/** The app's mark: its initials on a solid block, the one dark (or, in the dark theme, light) thing in the rail. */
+/**
+ * The app's mark: its initials on a solid block, the one dark (or, in the dark theme, light) thing
+ * in the rail. Larger in Settings → About.
+ */
 @Composable
-private fun Mark() {
+internal fun Mark(large: Boolean = false) {
     val c = StudioTheme.colors
-    Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(c.strong), contentAlignment = Alignment.Center) {
-        Text("PD", style = StudioTheme.type.numberSmall.copy(fontSize = MaterialTheme.typography.titleMedium.fontSize), color = c.onStrong)
+    val size = if (large) 64.dp else 44.dp
+    val type = if (large) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleMedium
+    Box(Modifier.size(size).clip(RoundedCornerShape(size * 0.27f)).background(c.strong), contentAlignment = Alignment.Center) {
+        Text("PD", style = StudioTheme.type.numberSmall.copy(fontSize = type.fontSize), color = c.onStrong)
     }
 }
 

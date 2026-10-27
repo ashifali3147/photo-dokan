@@ -3,12 +3,14 @@ package com.tlw.photodokan.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,12 +20,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.tlw.photodokan.core.model.SheetTemplate
 import com.tlw.photodokan.print.PhotoSettings
 import com.tlw.photodokan.ui.components.Card
 import com.tlw.photodokan.ui.components.StudioBackground
 import com.tlw.photodokan.ui.components.riseIn
-import com.tlw.photodokan.ui.intro.IntroReplaySettings
+import com.tlw.photodokan.ui.intro.IntroReplayButton
+import com.tlw.photodokan.ui.navigation.Mark
+import com.tlw.photodokan.ui.APP_VERSION
 import com.tlw.photodokan.ui.print.PrintViewModel
 import com.tlw.photodokan.ui.print.PrinterSettings
 import com.tlw.photodokan.ui.station.StationSettings
@@ -38,8 +43,9 @@ import com.tlw.photodokan.ui.components.QuietButton
 import com.tlw.photodokan.ui.platform.PhotoFolder
 
 /**
- * Everything set up once and rarely touched again, one card each: the printer, the sheet, printing
- * from the phone, the photo folder, how the app looks, and the intro. A card with nothing to say on this device is left out.
+ * Everything set up once and rarely touched again, one card each, in groups: printing (the
+ * printer, the sheet, printing from the phone), photos (where they're kept, what they lie on in
+ * the editor), the app's look, and About. A card with nothing to say on this device is left out.
  */
 @Composable
 fun SettingsScreen(modifier: Modifier = Modifier) {
@@ -55,19 +61,34 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(Modifier.widthIn(max = 880.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.widthIn(max = 880.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Settings", style = MaterialTheme.typography.headlineLarge, color = c.text)
+                Text("Set up once, then rarely changed.", style = MaterialTheme.typography.bodyLarge, color = c.textMuted)
+                Group("Printing", 0)
                 // A phone has no printer of its own: it sends sheets to the PC, set up below.
-                if (print.hasPrinter && printState.photoSettings != PhotoSettings.NotSupported) Section(0) { PrinterSettings(print) }
-                Section(1) { SheetSettings() }
-                if (station.isHost || station.isPhone) Section(2) { StationSettings(station) }
-                folder?.let { Section(3) { PhotoFolderSettings(it) } }
-                Section(4) { AppearanceSettings() }
-                Section(5) { StageLookSettings() }
-                Section(6) { IntroReplaySettings() }
+                if (print.hasPrinter && printState.photoSettings != PhotoSettings.NotSupported) Section(1) { PrinterSettings(print) }
+                Section(2) { SheetSettings() }
+                if (station.isHost || station.isPhone) Section(3) { StationSettings(station) }
+                Group("Photos", 4)
+                folder?.let { Section(5) { PhotoFolderSettings(it) } }
+                Section(6) { StageLookSettings() }
+                Group("App", 7)
+                Section(8) { AppearanceSettings() }
+                Section(9) { About() }
             }
         }
     }
+}
+
+/** A quiet heading over a group of cards, with a little more room above it than between cards. */
+@Composable
+private fun Group(title: String, index: Int) {
+    Text(
+        title.uppercase(),
+        Modifier.padding(start = 4.dp, top = 16.dp).riseIn(index),
+        style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 1.2.sp),
+        color = StudioTheme.colors.textMuted,
+    )
 }
 
 /** A white card that rises in after the ones above it. */
@@ -76,6 +97,30 @@ private fun Section(index: Int, content: @Composable ColumnScope.() -> Unit) {
     Card(Modifier.fillMaxWidth().riseIn(index)) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
     }
+}
+
+/** The app, its version and who made it, with the intro to show again. */
+@Composable
+private fun About() {
+    val c = StudioTheme.colors
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Mark(large = true)
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("Photo Dokan", style = MaterialTheme.typography.titleLarge, color = c.text)
+            Text("Version $APP_VERSION", style = MaterialTheme.typography.bodyMedium, color = c.textMuted)
+        }
+    }
+    Text(
+        "Passport and stamp photos, printed at their true size. Works without the internet: the photos stay in this shop.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = c.textMuted,
+    )
+    HorizontalDivider(color = c.line)
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text("Made by", style = MaterialTheme.typography.labelMedium, color = c.textMuted)
+        Text("Ashif Ali", style = MaterialTheme.typography.titleMedium, color = c.text)
+    }
+    IntroReplayButton()
 }
 
 /** The sheet the app lays photos out on. Fixed for now; it says what the studio prints. */

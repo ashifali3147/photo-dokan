@@ -1,10 +1,8 @@
 package com.tlw.photodokan.ui.intro
 
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import com.tlw.photodokan.ui.components.QuietButton
-import com.tlw.photodokan.ui.theme.StudioTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,15 +62,8 @@ class IntroSettings(private val store: IntroStore) {
     }
 }
 
-/** The Settings card that shows the intro again, e.g. to show someone new how the shop works. */
+/** Shows the intro again, from Settings → About, e.g. to show someone new how the shop works. */
 @Composable
-fun IntroReplaySettings(settings: IntroSettings = koinInject()) {
-    val c = StudioTheme.colors
-    Text("Intro", style = MaterialTheme.typography.titleLarge, color = c.text)
-    Text(
-        "The short tour shown when the app first opened: shoot, edit, fill the sheet, print.",
-        style = MaterialTheme.typography.bodyLarge,
-        color = c.textMuted,
-    )
+fun IntroReplayButton(settings: IntroSettings = koinInject()) {
     QuietButton(settings::replay) { Text("Show the intro again") }
 }
