@@ -2,6 +2,7 @@ package com.tlw.photodokan.ui.platform
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Paint
 import com.tlw.photodokan.core.library.StudioDate
 
 /** Today's date on this device's clock. */
@@ -12,6 +13,9 @@ expect fun encodeJpeg(image: ImageBitmap, quality: Int = 90): ByteArray
 
 /** A [width] × [height] image of [argb] pixels, row by row: the counterpart of [ImageBitmap.readPixels]. */
 expect fun imageBitmapOf(argb: IntArray, width: Int, height: Int): ImageBitmap
+
+/** Softens everything drawn with this paint by about [radius] pixels, for a glow; 0 draws it sharp. */
+expect fun Paint.blur(radius: Float)
 
 /**
  * Runs [block] and, on the phone, logs how long [what] took and how much memory is in use, for

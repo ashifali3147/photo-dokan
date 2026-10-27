@@ -36,7 +36,9 @@ import com.tlw.photodokan.ui.print.StationJobPrinter
 import com.tlw.photodokan.ui.platform.PhotoFolder
 import com.tlw.photodokan.ui.editor.CustomColoursStore
 import com.tlw.photodokan.ui.editor.FileCustomColoursStore
+import com.tlw.photodokan.ui.theme.FileStageLookStore
 import com.tlw.photodokan.ui.theme.FileThemeModeStore
+import com.tlw.photodokan.ui.theme.StageLookStore
 import com.tlw.photodokan.ui.theme.ThemeSettings
 import com.tlw.photodokan.ui.theme.ThemeModeStore
 import com.tlw.photodokan.vision.FaceFinder
@@ -62,6 +64,7 @@ private val desktopModule = module {
     single<PhotoFolder> { DesktopPhotoFolder(libraryFolder) }
     single<PrintQueueStore> { FilePrintQueueStore(Path(appDataDir(), "print-queue.json")) }
     single<ThemeModeStore> { FileThemeModeStore(Path(appDataDir(), "theme.txt")) }
+    single<StageLookStore> { FileStageLookStore(Path(appDataDir(), "stage.txt")) }
     single<CustomColoursStore> { FileCustomColoursStore(Path(appDataDir(), "colours.txt")) }
     // Away from Windows (developing on a Mac) Print saves an actual-size PDF instead.
     single<SheetPrinter> {

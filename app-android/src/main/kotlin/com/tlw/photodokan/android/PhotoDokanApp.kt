@@ -15,7 +15,9 @@ import com.tlw.photodokan.station.StationConnector
 import com.tlw.photodokan.station.StationLinkStore
 import com.tlw.photodokan.ui.editor.CustomColoursStore
 import com.tlw.photodokan.ui.editor.FileCustomColoursStore
+import com.tlw.photodokan.ui.theme.FileStageLookStore
 import com.tlw.photodokan.ui.theme.FileThemeModeStore
+import com.tlw.photodokan.ui.theme.StageLookStore
 import com.tlw.photodokan.ui.theme.ThemeModeStore
 import com.tlw.photodokan.ui.di.initKoin
 import com.tlw.photodokan.ui.print.AndroidPhonePrinter
@@ -48,6 +50,7 @@ class PhotoDokanApp : Application() {
                     single<PhotoLibrary> { FilePhotoLibrary(photoFolder) }
                     single<PrintQueueStore> { FilePrintQueueStore(Path(filesDir.path, "print-queue.json")) }
                     single<ThemeModeStore> { FileThemeModeStore(Path(filesDir.path, "theme.txt")) }
+                    single<StageLookStore> { FileStageLookStore(Path(filesDir.path, "stage.txt")) }
                     single<CustomColoursStore> { FileCustomColoursStore(Path(filesDir.path, "colours.txt")) }
                     // Sheets usually go to the PC as PDFs.
                     single<SheetSharer> { AndroidSheetSharer(this@PhotoDokanApp) }

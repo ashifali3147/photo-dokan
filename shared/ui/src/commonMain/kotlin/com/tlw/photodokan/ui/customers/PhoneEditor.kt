@@ -1,6 +1,12 @@
 package com.tlw.photodokan.ui.customers
 
 import androidx.compose.animation.AnimatedContent
+import com.tlw.photodokan.ui.components.edgeLight
+import com.tlw.photodokan.ui.components.settle
+import androidx.compose.foundation.background
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -133,7 +139,11 @@ internal fun PhoneEditor(
 
         AnimatedVisibility(tools.showControls, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             // Each tool takes the height it needs; the photo above eases to the new size.
-            AnimatedContent(tools.tab, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "tool") { tab ->
+            AnimatedContent(
+                tools.tab,
+                transitionSpec = { (fadeIn(tween(220, delayMillis = 60)) + slideInVertically(tween(260)) { it / 10 }) togetherWith fadeOut(tween(120)) },
+                label = "tool",
+            ) { tab ->
                 val scroll = rememberScrollState()
                 Column(
                     // A choice that adds or takes away a row (Plain colour, a border) eases the height.
@@ -172,16 +182,16 @@ internal fun PhoneEditor(
             when {
                 draft != null -> {
                     QuietButton(viewModel::discardDraft, enabled = !state.busy, tall = true) { Text("Discard") }
-                    PrimaryButton(viewModel::saveDraft, Modifier.weight(1f), enabled = !state.busy) { Text("Save as ${draft.numberLabel}") }
+                    PrimaryButton(viewModel::saveDraft, Modifier.weight(1f), enabled = !state.busy, shineKey = "save") { Text("Save as ${draft.numberLabel}") }
                 }
                 selected != null -> {
                     CopiesButton(copies, enabled = !state.busy) { showCopies = true }
                     when {
                         // Saving comes first: the sheet prints what was saved.
-                        edit.changed -> PrimaryButton(viewModel::saveChanges, Modifier.weight(1f), enabled = !state.busy) { Text("Save changes") }
-                        queued == null -> PrimaryButton({ viewModel.addToPrint(copies) }, Modifier.weight(1f), enabled = !state.busy) { Text("Add to sheet") }
+                        edit.changed -> PrimaryButton(viewModel::saveChanges, Modifier.weight(1f), enabled = !state.busy, shineKey = "changes") { Text("Save changes") }
+                        queued == null -> PrimaryButton({ viewModel.addToPrint(copies) }, Modifier.weight(1f), enabled = !state.busy, shineKey = "add") { Text("Add to sheet") }
                         // Already on the sheet (the top bar says so): what's left is the next customer.
-                        else -> PrimaryButton(onBack, Modifier.weight(1f), enabled = !state.busy) { Text("Next customer") }
+                        else -> PrimaryButton(onBack, Modifier.weight(1f), enabled = !state.busy, shineKey = "next") { Text("Next customer") }
                     }
                 }
             }
@@ -220,33 +230,47 @@ private fun TopBar(
                 color = c.text,
             )
             // One line, the same height whatever it says, so the bar doesn't change height on saving.
-            Box(Modifier.heightIn(min = 28.dp), contentAlignment = Alignment.CenterStart) {
-                when {
-                    draft != null && draft.name.isEmpty() && draft.phone.isEmpty() ->
-                        // Busy days run on numbers alone, so name and phone are only a tap away, never asked for.
-                        Text(
-                            "New photo · add name or phone",
-                            Modifier.clickable(role = Role.Button, onClick = onAddDetails),
+            // What the line says changes with a short rise, e.g. when the photo goes on the sheet.
+            val status = when {
+                draft != null -> 0
+                queuedCopies != null -> 1
+                else -> 2
+            }
+            AnimatedContent(
+                status,
+                Modifier.heightIn(min = 28.dp),
+                transitionSpec = { (fadeIn(tween(240)) + slideInVertically(settle()) { it / 2 }) togetherWith fadeOut(tween(120)) },
+                contentAlignment = Alignment.CenterStart,
+                label = "status",
+            ) { _ ->
+                Box(Modifier.heightIn(min = 28.dp), contentAlignment = Alignment.CenterStart) {
+                    when {
+                        draft != null && draft.name.isEmpty() && draft.phone.isEmpty() ->
+                            // Busy days run on numbers alone, so name and phone are only a tap away, never asked for.
+                            Text(
+                                "New photo · add name or phone",
+                                Modifier.clickable(role = Role.Button, onClick = onAddDetails),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = c.accentText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        draft != null -> Text("New photo, not saved yet", style = MaterialTheme.typography.bodyMedium, color = c.textMuted, maxLines = 1)
+                        // Whether the photo is on the sheet, and how often: the one thing to know here.
+                        // The photo size is not repeated; the Crop tool shows it.
+                        queuedCopies != null -> Text(
+                            listOfNotNull("✓ On the sheet · $queuedCopies copies", selected?.name).joinToString(" · "),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = c.accentText,
+                            color = c.ok,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
-                    draft != null -> Text("New photo, not saved yet", style = MaterialTheme.typography.bodyMedium, color = c.textMuted, maxLines = 1)
-                    // Whether the photo is on the sheet, and how often: the one thing to know here.
-                    // The photo size is not repeated; the Crop tool shows it.
-                    queuedCopies != null -> Text(
-                        listOfNotNull("✓ On the sheet · $queuedCopies copies", selected?.name).joinToString(" · "),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = c.ok,
-                        maxLines = 1,
-                    )
-                    else -> Text(
-                        listOfNotNull(selected?.name, "Not on the sheet yet").joinToString(" · "),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = c.textMuted,
-                        maxLines = 1,
-                    )
+                        else -> Text(
+                            listOfNotNull(selected?.name, "Not on the sheet yet").joinToString(" · "),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = c.textMuted,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }
@@ -281,7 +305,12 @@ private fun FloatingNotice(state: CustomersState, modifier: Modifier) {
             hidden = true
         }
     }
-    AnimatedVisibility(message != null && !hidden, modifier, enter = fadeIn(), exit = fadeOut()) {
+    AnimatedVisibility(
+        message != null && !hidden,
+        modifier,
+        enter = fadeIn(tween(200)) + slideInVertically(settle()) { it / 2 } + scaleIn(settle(), initialScale = 0.92f),
+        exit = fadeOut(tween(180)) + slideOutVertically(tween(180)) { it / 3 },
+    ) {
         Notice(message.orEmpty(), state.messageIsError, Modifier.clickable { hidden = true })
     }
 }
@@ -295,14 +324,24 @@ private fun CopiesButton(copies: Int, enabled: Boolean, onClick: () -> Unit) {
         Modifier
             .height(56.dp)
             .clip(shape)
+            .background(c.surface)
             .border(1.dp, c.outline, shape)
+            .edgeLight()
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = "$copies copies. Change" }
             .padding(start = 14.dp, end = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("$copies", style = StudioTheme.type.number, color = c.text)
+        // The count rolls up or down as it changes, so the change is seen.
+        AnimatedContent(
+            copies,
+            transitionSpec = {
+                val up = targetState > initialState
+                (slideInVertically(settle()) { if (up) it else -it } + fadeIn()) togetherWith (slideOutVertically(tween(160)) { if (up) -it else it } + fadeOut(tween(120)))
+            },
+            label = "copies",
+        ) { n -> Text("$n", style = StudioTheme.type.number, color = c.text) }
         Text("copies", style = MaterialTheme.typography.labelLarge, color = c.textMuted)
         Icon(EditorIcons.FoldDown, contentDescription = null, tint = c.textMuted, modifier = Modifier.size(20.dp))
     }

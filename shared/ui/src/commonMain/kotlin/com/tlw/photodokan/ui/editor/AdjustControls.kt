@@ -10,8 +10,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.model.EditRecipe
-import com.tlw.photodokan.ui.components.ChoiceChip
-import com.tlw.photodokan.ui.components.ChoiceRow
 import com.tlw.photodokan.ui.components.QuietButton
 import com.tlw.photodokan.ui.components.SegmentedChoice
 import com.tlw.photodokan.ui.theme.StudioTheme
@@ -46,7 +44,7 @@ enum class Adjustment(val label: String) {
     }
 }
 
-/** The colour sliders, which do nothing to a black and white photo. */
+/** The colour sliders, which do nothing (or next to nothing) to a black and white photo. */
 private val COLOUR_ONLY = setOf(Adjustment.Warmth, Adjustment.Tint, Adjustment.Colour)
 
 /** A slider row's height on a phone, where five of them must fit without scrolling. */
@@ -58,10 +56,9 @@ internal fun sliderRow(compact: Boolean): Modifier = if (compact) Modifier.heigh
 /**
  * The Look tab: one slider per [Adjustment]. Dragging updates the photo live; letting go calls
  * [onCommit], so a whole drag is one undo step. [onAuto], when given, sets the light and colour
- * from the face. Colour or black and white comes first, so it is seen before the sliders.
- *
- * [compact] (a phone) puts Auto and Reset on the same line as Colour or B&W, where they are seen
- * without scrolling, keeps the slider rows short and hides the colour sliders in black and white.
+ * from the face. Colour or black and white comes first, so it is seen before the sliders, with
+ * Auto and Reset beside it; in black and white the colour sliders are left out, as they do
+ * nothing there. The same on a phone and on the PC; [compact] (a phone) only keeps the rows short.
  */
 @Composable
 fun LookControls(
@@ -73,20 +70,13 @@ fun LookControls(
     onBlackAndWhite: (Boolean) -> Unit = {},
     compact: Boolean = false,
 ) {
-    if (compact) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            SegmentedChoice(listOf(false to "Colour", true to "B&W"), recipe.blackAndWhite, { if (it != recipe.blackAndWhite) onBlackAndWhite(it) }, Modifier.weight(1f))
-            onAuto?.let { QuietButton(onClick = it, padding = 14.dp) { Text("Auto") } }
-            QuietButton(onClick = onReset, padding = 14.dp) { Text("Reset") }
-        }
-    } else {
-        ChoiceRow {
-            ChoiceChip("Colour", selected = !recipe.blackAndWhite, onClick = { if (recipe.blackAndWhite) onBlackAndWhite(false) })
-            ChoiceChip("Black & white", selected = recipe.blackAndWhite, onClick = { if (!recipe.blackAndWhite) onBlackAndWhite(true) })
-        }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        SegmentedChoice(listOf(false to "Colour", true to "B&W"), recipe.blackAndWhite, { if (it != recipe.blackAndWhite) onBlackAndWhite(it) }, Modifier.weight(1f))
+        onAuto?.let { QuietButton(onClick = it, padding = 14.dp) { Text("Auto") } }
+        QuietButton(onClick = onReset, padding = 14.dp) { Text("Reset") }
     }
     for (adjustment in Adjustment.entries) {
-        if (compact && recipe.blackAndWhite && adjustment in COLOUR_ONLY) continue
+        if (recipe.blackAndWhite && adjustment in COLOUR_ONLY) continue
         val value = adjustment.valueIn(recipe)
         Row(sliderRow(compact), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(adjustment.label, Modifier.width(96.dp))
@@ -99,12 +89,6 @@ fun LookControls(
                 modifier = Modifier.weight(1f),
             )
             Text(formatAmount(value), Modifier.width(44.dp), style = StudioTheme.type.numberSmall)
-        }
-    }
-    if (!compact) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            onAuto?.let { QuietButton(onClick = it) { Text("Auto") } }
-            QuietButton(onClick = onReset) { Text("Reset") }
         }
     }
 }

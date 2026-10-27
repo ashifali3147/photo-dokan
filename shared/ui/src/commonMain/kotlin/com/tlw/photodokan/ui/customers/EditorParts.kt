@@ -24,6 +24,9 @@ import com.tlw.photodokan.core.model.BrushMode
 import com.tlw.photodokan.core.model.QueuedOrder
 import com.tlw.photodokan.ui.components.DockTab
 import com.tlw.photodokan.ui.components.GreyStage
+import com.tlw.photodokan.ui.theme.LocalStageLook
+import androidx.compose.ui.graphics.Color
+import com.tlw.photodokan.ui.components.rememberFrost
 import com.tlw.photodokan.ui.components.ToolDock
 import com.tlw.photodokan.ui.editor.BackdropPart
 import com.tlw.photodokan.ui.editor.BackgroundControls
@@ -88,8 +91,12 @@ internal fun EditorStage(
     val c = StudioTheme.colors
     var hovering by remember { mutableStateOf(false) }
     val brush = tools.brushFor(edit)
+    // What the photo lies on, as chosen in Settings.
+    val look = LocalStageLook.current
+    val stageColour = Color(look.shownColour.toInt())
     GreyStage(
-        modifier
+        colour = stageColour,
+        modifier = modifier
             .then(if (hovering) Modifier.border(3.dp, c.accent, RoundedCornerShape(20.dp)) else Modifier)
             .photoDropTarget(onHoverChange = { hovering = it }, onDrop = viewModel::import),
     ) {
@@ -105,6 +112,10 @@ internal fun EditorStage(
             border = frameLine(edit.recipe, viewModel.presetOf(edit.recipe).size.width),
             brush = brush?.let { TouchUpBrush(it, tools.brushSize, viewModel::touchUp) },
             showGuide = showGuide,
+            frost = rememberFrost(edit.shown, backdrop(edit.recipe), look.style.colourFrost).takeIf { look.style.frost },
+            frostVeil = stageColour,
+            frostVeilAlpha = look.style.veil,
+            glass = look.style.glass,
         )
         overlay()
     }

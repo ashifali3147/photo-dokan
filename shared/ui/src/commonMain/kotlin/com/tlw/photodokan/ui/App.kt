@@ -38,6 +38,8 @@ import com.tlw.photodokan.ui.screens.SettingsScreen
 import com.tlw.photodokan.ui.station.IncomingInvites
 import com.tlw.photodokan.ui.theme.PhotoDokanTheme
 import com.tlw.photodokan.ui.theme.ThemeSettings
+import com.tlw.photodokan.ui.theme.LocalStageLook
+import com.tlw.photodokan.ui.theme.StageSettings
 import org.koin.compose.koinInject
 
 /** Root of the app on both platforms: a side rail on wide windows, a bottom bar on phones. */
@@ -72,9 +74,10 @@ private fun AppContent() {
     SystemBackHandler(enabled = current != Destination.Customers) { current = Destination.Customers }
 
     val theme by koinInject<ThemeSettings>().mode.collectAsState()
+    val stage by koinInject<StageSettings>().look.collectAsState()
     val fullScreen = remember { mutableStateOf(false) }
     PhotoDokanTheme(theme) {
-      CompositionLocalProvider(LocalFullScreen provides fullScreen) {
+      CompositionLocalProvider(LocalFullScreen provides fullScreen, LocalStageLook provides stage) {
         SystemBarsFollowTheme(StudioTheme.colors.isDark)
         // The app's colour runs behind the status and navigation bars; only its content keeps clear of them.
         Surface(Modifier.fillMaxSize()) {

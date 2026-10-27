@@ -2,9 +2,12 @@ package com.tlw.photodokan.ui.platform
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.tlw.photodokan.core.library.StudioDate
+import org.jetbrains.skia.FilterBlurMode
+import org.jetbrains.skia.MaskFilter
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.time.LocalDate
@@ -49,3 +52,8 @@ actual fun SystemBackHandler(enabled: Boolean, onBack: () -> Unit) = Unit
 actual fun SystemBarsFollowTheme(dark: Boolean) = Unit
 
 actual val tapVerb: String = "click"
+
+actual fun Paint.blur(radius: Float) {
+    // Skia blurs by a standard deviation; about half the radius matches Android's look.
+    asFrameworkPaint().maskFilter = if (radius > 0f) MaskFilter.makeBlur(FilterBlurMode.NORMAL, radius / 2) else null
+}

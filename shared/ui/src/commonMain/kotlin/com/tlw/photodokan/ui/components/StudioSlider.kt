@@ -1,6 +1,10 @@
 package com.tlw.photodokan.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -11,12 +15,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Slider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.ui.theme.StudioTheme
 
@@ -43,6 +50,11 @@ fun StudioSlider(
     thumbColour: Color? = null,
 ) {
     val c = StudioTheme.colors
+    val source = remember { MutableInteractionSource() }
+    // Held, the thumb grows a little and its glow comes up, so the finger knows it has hold.
+    val dragged by source.collectIsDraggedAsState()
+    val pressed by source.collectIsPressedAsState()
+    val held by animateFloatAsState(if (dragged || pressed) 1f else 0f, settle(), label = "held")
     Slider(
         value = value,
         onValueChange = onValueChange,
@@ -50,13 +62,18 @@ fun StudioSlider(
         enabled = enabled,
         onValueChangeFinished = onValueChangeFinished,
         valueRange = valueRange,
+        interactionSource = source,
         thumb = {
             Box(
                 Modifier
                     .size(22.dp)
-                    .shadow(6.dp, CircleShape, ambientColor = c.accentGlow, spotColor = c.accentGlow)
+                    .graphicsLayer {
+                        scaleX = 1f + 0.22f * held
+                        scaleY = 1f + 0.22f * held
+                    }
+                    .then(if (enabled) Modifier.glow(thumbColour?.copy(alpha = 0.7f) ?: c.accentGlow, CircleShape, radius = 10.dp, amount = 0.5f + 0.5f * held) else Modifier)
                     .background(if (!enabled) c.textMuted else thumbColour ?: c.accent, CircleShape)
-                    .border(3.dp, c.surface, CircleShape),
+                    .border(3.dp, if (c.isDark) c.text else c.surface, CircleShape),
             )
         },
         track = { state ->
@@ -74,7 +91,16 @@ fun StudioSlider(
                 drawLine(idle, Offset(0f, y), Offset(size.width, y), stroke, StrokeCap.Round)
                 val from = if (centred) size.width / 2 else 0f
                 val to = size.width * fraction
-                if (to != from) drawLine(active, Offset(from, y), Offset(to, y), stroke, StrokeCap.Round)
+                if (to != from) {
+                    if (enabled && c.isDark) {
+                        // A soft light under the filled part, so the track itself seems lit.
+                        drawLine(c.accent.copy(alpha = 0.22f), Offset(from, y), Offset(to, y), stroke * 3.2f, StrokeCap.Round)
+                    }
+                    drawLine(
+                        if (enabled) Brush.horizontalGradient(listOf(c.accentBottom, c.accent), startX = minOf(from, to), endX = maxOf(from, to)) else SolidColor(active),
+                        Offset(from, y), Offset(to, y), stroke, StrokeCap.Round,
+                    )
+                }
                 if (centred) {
                     // The neutral point, so the operator can see where "no change" is.
                     val tick = 7.dp.toPx()
