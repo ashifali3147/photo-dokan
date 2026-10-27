@@ -51,6 +51,9 @@ expect fun SystemBarsFollowTheme(dark: Boolean)
 /** The gesture by name for instructions: "tap" on a phone, "click" on the PC. */
 expect val tapVerb: String
 
+/** Whether this device is the camera (a phone), rather than the PC the studio's camera feeds. */
+expect val deviceIsCamera: Boolean
+
 /** Where this device keeps the customers' photos, for Settings to show and open. */
 interface PhotoFolder {
     /** The folder as the operator would find it, e.g. C:\Users\Studio\Pictures\Photo Dokan. */

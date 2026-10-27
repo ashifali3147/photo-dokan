@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import com.tlw.photodokan.ui.intro.IntroScreen
+import com.tlw.photodokan.ui.intro.IntroSettings
 import com.tlw.photodokan.ui.navigation.Destination
 import com.tlw.photodokan.ui.navigation.LocalFullScreen
 import com.tlw.photodokan.ui.navigation.StudioBottomBar
@@ -70,8 +72,12 @@ private fun AppContent() {
         if (invite != null) current = Destination.Settings
     }
 
+    // The tour on first start, or when asked for again from Settings.
+    val intro = koinInject<IntroSettings>()
+    val showIntro by intro.showing.collectAsState()
+
     // Back from Print or Settings returns to Customers; Back there leaves the app.
-    SystemBackHandler(enabled = current != Destination.Customers) { current = Destination.Customers }
+    SystemBackHandler(enabled = current != Destination.Customers && !showIntro) { current = Destination.Customers }
 
     val theme by koinInject<ThemeSettings>().mode.collectAsState()
     val stage by koinInject<StageSettings>().look.collectAsState()
@@ -81,7 +87,7 @@ private fun AppContent() {
         SystemBarsFollowTheme(StudioTheme.colors.isDark)
         // The app's colour runs behind the status and navigation bars; only its content keeps clear of them.
         Surface(Modifier.fillMaxSize()) {
-            BoxWithConstraints(Modifier.windowInsetsPadding(WindowInsets.safeDrawing)) {
+            if (showIntro) IntroScreen(onDone = intro::finish) else BoxWithConstraints(Modifier.windowInsetsPadding(WindowInsets.safeDrawing)) {
                 val waiting by koinInject<PrintOrders>().queue.collectAsState()
                 val select = { destination: Destination -> current = destination }
                 if (maxWidth >= 600.dp) {
