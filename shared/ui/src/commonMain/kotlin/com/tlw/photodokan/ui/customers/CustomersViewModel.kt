@@ -225,7 +225,7 @@ class CustomersViewModel(
     /** Opens a saved customer in the editor with their last edit. */
     fun select(customer: Customer) = launchWork {
         val original = timed("Read customer ${customer.label}") { library.readOriginal(customer) }
-        val preview = timed("Open photo of ${original.size shr 10} KB") { decodePreview(original) }
+        val preview = timed("Open photo of ${original.size shr 10} KB") { decodePreview(original, scaleDown = true) }
         if (preview == null) {
             error("The photo of customer ${customer.label} could not be opened.")
         } else {
@@ -245,7 +245,7 @@ class CustomersViewModel(
             // E.g. a share whose app took back its permission, or a file on a removed card.
             return@launchWork error("Could not open \"${source.name}\". Choose it with Choose photo instead.")
         }
-        val preview = timed("Open photo of ${original.size shr 10} KB") { decodePreview(original) }
+        val preview = timed("Open photo of ${original.size shr 10} KB") { decodePreview(original, scaleDown = true) }
         if (preview == null) {
             error("\"${source.name}\" is not a photo Photo Dokan can open. Choose a JPEG or PNG photo.")
         } else {

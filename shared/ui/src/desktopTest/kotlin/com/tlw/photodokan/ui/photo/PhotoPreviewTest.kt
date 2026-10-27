@@ -74,6 +74,23 @@ class PhotoPreviewTest {
     }
 
     @Test
+    fun scaledDownPhotoFitsTheSideExactly() {
+        // Whole steps alone leave 1167 × 234 for a 1000 side; scaling takes it the rest of the way.
+        val big = BufferedImage(3500, 700, BufferedImage.TYPE_INT_RGB)
+        val jpeg = ByteArrayOutputStream().also { ImageIO.write(big, "jpg", it) }.toByteArray()
+        val image = decodePreview(jpeg, maxSide = 1000, scaleDown = true)!!.image
+        assertEquals(1000, image.width)
+        assertEquals(200, image.height)
+    }
+
+    @Test
+    fun scalingDownLeavesASmallPhotoAlone() {
+        val image = decodePreview(sidewaysPhoto(6), maxSide = 1000, scaleDown = true)!!.image
+        assertEquals(20, image.width)
+        assertEquals(40, image.height)
+    }
+
+    @Test
     fun notAPhotoGivesNull() {
         assertNull(decodePreview("not a photo".encodeToByteArray()))
         assertNull(decodePreview(ByteArray(0)))

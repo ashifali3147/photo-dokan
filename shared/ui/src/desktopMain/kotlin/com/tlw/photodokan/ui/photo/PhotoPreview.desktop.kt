@@ -2,6 +2,7 @@ package com.tlw.photodokan.ui.photo
 
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.tlw.photodokan.core.imaging.ExifOrientation
+import java.awt.RenderingHints
 import java.awt.geom.AffineTransform
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
@@ -26,7 +27,7 @@ actual fun photoSize(bytes: ByteArray): Pair<Int, Int>? {
     }
 }
 
-actual fun decodePreview(bytes: ByteArray, maxSide: Int): PhotoPreview? {
+actual fun decodePreview(bytes: ByteArray, maxSide: Int, scaleDown: Boolean): PhotoPreview? {
     val input = ImageIO.createImageInputStream(ByteArrayInputStream(bytes)) ?: return null
     input.use {
         val reader = ImageIO.getImageReaders(input).asSequence().firstOrNull() ?: return null
@@ -39,7 +40,8 @@ actual fun decodePreview(bytes: ByteArray, maxSide: Int): PhotoPreview? {
             val step = maxOf(1, maxOf(width, height) / maxSide)
             val param = reader.defaultReadParam.apply { setSourceSubsampling(step, step, 0, 0) }
             val orientation = ExifOrientation.read(bytes)
-            val upright = reader.read(0, param).oriented(orientation)
+            val decoded = reader.read(0, param)
+            val upright = (if (scaleDown) decoded.scaledDown(maxSide) else decoded).oriented(orientation)
             return if (orientation.swapsDimensions) {
                 PhotoPreview(upright.toComposeImageBitmap(), height, width)
             } else {
@@ -49,6 +51,22 @@ actual fun decodePreview(bytes: ByteArray, maxSide: Int): PhotoPreview? {
             return null
         } finally {
             reader.dispose()
+        }
+    }
+}
+
+/** This image scaled smoothly so its longer side is at most [maxSide]. */
+private fun BufferedImage.scaledDown(maxSide: Int): BufferedImage {
+    val longer = maxOf(width, height)
+    if (longer <= maxSide) return this
+    val outWidth = maxOf(1, (width.toLong() * maxSide / longer).toInt())
+    val outHeight = maxOf(1, (height.toLong() * maxSide / longer).toInt())
+    val type = if (colorModel.hasAlpha()) BufferedImage.TYPE_INT_ARGB else BufferedImage.TYPE_INT_RGB
+    return BufferedImage(outWidth, outHeight, type).also { out ->
+        out.createGraphics().apply {
+            setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+            drawImage(this@scaledDown, 0, 0, outWidth, outHeight, null)
+            dispose()
         }
     }
 }
