@@ -1,15 +1,21 @@
 package com.tlw.photodokan.ui.theme
 
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,17 +26,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.tlw.photodokan.ui.components.ChoiceChip
+import com.tlw.photodokan.core.model.CropConfig
+import com.tlw.photodokan.core.model.PhotoSizePreset
 import com.tlw.photodokan.ui.components.GreyStage
+import com.tlw.photodokan.ui.components.glow
+import com.tlw.photodokan.ui.components.pressScale
+import com.tlw.photodokan.ui.components.rememberFrost
 import com.tlw.photodokan.ui.editor.ColourChoices
 import com.tlw.photodokan.ui.editor.ColourPicker
+import com.tlw.photodokan.ui.editor.CropEditor
 import org.koin.compose.koinInject
 
 /**
@@ -48,10 +60,9 @@ private val STAGE_COLOURS = listOf(
 private const val FIRST_CUSTOM_STAGE = 0xFF5E6B7A
 
 /**
- * What photos lie on in the editor: a style and a colour, with a small preview, saved on this
+ * What photos lie on in the editor: a style and a colour, each style shown as it looks, saved on this
  * device. Set here only, so the editor itself stays as simple as it is.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StageLookSettings(settings: StageSettings = koinInject()) = Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
     val c = StudioTheme.colors
@@ -62,13 +73,7 @@ fun StageLookSettings(settings: StageSettings = koinInject()) = Column(verticalA
         style = MaterialTheme.typography.bodyLarge,
         color = c.textMuted,
     )
-    StagePreview(look)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (style in StageStyle.entries) {
-            // A new style starts in its own colour.
-            ChoiceChip(style.label, selected = style == look.style, onClick = { if (style != look.style) settings.choose(StageLook(style)) })
-        }
-    }
+    StyleTiles(look, onChoose = { if (it != look.style) settings.choose(StageLook(it)) })
     Text(look.style.description, style = MaterialTheme.typography.bodyMedium, color = c.textMuted)
 
     Text("Colour", style = MaterialTheme.typography.titleMedium, color = c.text)
@@ -106,33 +111,82 @@ private val StageStyle.description: String
         StageStyle.LightTable -> "Frost behind milky light glass, like a light box. Photos look a little darker than they print."
     }
 
+/** Room for one tile; fewer fit across and the tiles go in two rows of three. */
+private val TILE_MIN = 104.dp
+
 /**
- * A small stage in [look]: a print on it, and for the frosted styles a blurred, larger shape of
- * the print showing through the glass round it.
+ * The styles as small stages to tap, each with a sample photo lying on it as in the editor, in the
+ * style's own colour; the chosen one in the colour chosen. A new style starts in its own colour.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StagePreview(look: StageLook) {
-    val colour = Color(look.shownColour.toInt())
-    GreyStage(Modifier.fillMaxWidth().height(150.dp), colour = colour) {
-        Canvas(Modifier.matchParentSize()) {
-            if (look.style.frost) {
-                // The photo carrying on behind the glass, softened and veiled in the stage's colour.
-                val tone = if (look.style.colourFrost) Color(0xFF5C7FBF) else Color(0xFF6A6A6A)
-                drawRect(
-                    Brush.radialGradient(listOf(tone.copy(alpha = 1f - look.style.veil), Color.Transparent), center = center, radius = size.height),
-                )
-            }
-            if (look.style.glass) {
-                drawRect(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent), start = Offset.Zero, end = Offset(size.width * 0.6f, size.height * 0.6f)))
-            }
-        }
-        Box(Modifier.fillMaxHeight(0.78f).aspectRatio(0.8f).shadow(10.dp, RectangleShape), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.matchParentSize()) {
-                // A plain sample print: a sky backdrop and the outline of a head and shoulders.
-                drawRect(Color(0xFF9CC3E8))
-                drawOval(Color(0xFF3A3A44), topLeft = Offset(size.width * 0.12f, size.height * 0.62f), size = Size(size.width * 0.76f, size.height * 0.7f))
-                drawOval(Color(0xFFC99A7C), topLeft = Offset(size.width * 0.3f, size.height * 0.16f), size = Size(size.width * 0.4f, size.height * 0.5f))
-            }
+private fun StyleTiles(look: StageLook, onChoose: (StageStyle) -> Unit) = BoxWithConstraints {
+    val styles = StageStyle.entries
+    val across = if (maxWidth >= TILE_MIN * styles.size + 12.dp * (styles.size - 1)) styles.size else 3
+    val sample = remember { samplePortrait() }
+    FlowRow(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        maxItemsInEachRow = across,
+    ) {
+        for (style in styles) {
+            val chosen = style == look.style
+            StyleTile(style, if (chosen) look.shownColour else style.defaultColour, chosen, sample, { onChoose(style) }, Modifier.weight(1f))
         }
     }
 }
+
+@Composable
+private fun StyleTile(style: StageStyle, argb: Long, selected: Boolean, sample: ImageBitmap, onClick: () -> Unit, modifier: Modifier) {
+    val c = StudioTheme.colors
+    val shape = RoundedCornerShape(17.dp)
+    val source = remember { MutableInteractionSource() }
+    val on by animateFloatAsState(if (selected) 1f else 0f, tween(200), label = "chosen")
+    val colour = Color(argb.toInt())
+    Column(
+        modifier
+            .pressScale(source)
+            .clickable(interactionSource = source, indication = null, role = Role.RadioButton, onClick = onClick)
+            .semantics { this.selected = selected },
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1.25f)
+                .glow(c.accentGlow, shape, radius = 14.dp, amount = on * 0.7f)
+                // A ring with a gap round the chosen one, as round a chosen photo.
+                .border(2.dp, c.accent.copy(alpha = on), shape)
+                .padding(5.dp),
+        ) {
+            GreyStage(Modifier.matchParentSize(), shape = RoundedCornerShape(12.dp), colour = colour) {
+                CropEditor(
+                    image = sample,
+                    preset = PhotoSizePreset.STUDIO_SLOT,
+                    crop = SAMPLE_CROP,
+                    onCropChange = {},
+                    onCommit = {},
+                    modifier = Modifier.fillMaxSize().padding(vertical = 14.dp),
+                    showGuide = false,
+                    frost = rememberFrost(sample, Color.White, style.colourFrost).takeIf { style.frost },
+                    frostVeil = colour,
+                    frostVeilAlpha = style.veil,
+                    glass = style.glass,
+                    interactive = false,
+                    frostBlur = 6.dp,
+                )
+            }
+        }
+        Text(
+            style.label,
+            style = MaterialTheme.typography.labelLarge,
+            color = lerp(c.text, c.accentText, on),
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** The sample photo framed as a print would be: head and shoulders. */
+private val SAMPLE_CROP = CropConfig(centerY = 0.4, scale = 1.6)
