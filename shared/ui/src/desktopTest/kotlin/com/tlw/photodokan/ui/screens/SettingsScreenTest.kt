@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasClickAction
@@ -98,6 +99,7 @@ class SettingsScreenTest {
         nav("Settings").performClick()
         onNodeWithText("Version $APP_VERSION").performScrollTo().assertExists()
         onNodeWithText("Ashif Ali").assertExists()
+        onNodeWithText("View portfolio").assertHasClickAction()
         onNodeWithText("Show the intro again").assertExists()
     }
 

@@ -19,6 +19,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tlw.photodokan.core.model.SheetTemplate
@@ -99,6 +100,8 @@ private fun Section(index: Int, content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
+private const val PORTFOLIO = "https://ashifali3147.github.io/"
+
 /** The app, its version and who made it, with the intro to show again. */
 @Composable
 private fun About() {
@@ -116,9 +119,14 @@ private fun About() {
         color = c.textMuted,
     )
     HorizontalDivider(color = c.line)
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text("Made by", style = MaterialTheme.typography.labelMedium, color = c.textMuted)
-        Text("Ashif Ali", style = MaterialTheme.typography.titleMedium, color = c.text)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("Made by", style = MaterialTheme.typography.labelMedium, color = c.textMuted)
+            Text("Ashif Ali", style = MaterialTheme.typography.titleMedium, color = c.text)
+        }
+        // Opens in the phone's or PC's own browser; with no browser nothing happens here.
+        val browser = LocalUriHandler.current
+        QuietButton({ runCatching { browser.openUri(PORTFOLIO) } }) { Text("View portfolio") }
     }
     IntroReplayButton()
 }
