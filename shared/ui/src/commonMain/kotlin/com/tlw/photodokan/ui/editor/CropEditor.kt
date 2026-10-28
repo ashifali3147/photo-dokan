@@ -45,6 +45,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tlw.photodokan.core.imaging.ColorAdjustment
 import com.tlw.photodokan.ui.components.FROST_PAD
@@ -80,6 +81,7 @@ class TouchUpBrush(val mode: BrushMode, val size: Double, val onStroke: (MaskStr
  * [showGuide] draws where the head and chin go; off, the face is seen without lines over it.
  * A [frost] (a tiny black-and-white copy of [image]) is drawn behind the frame exactly where the rest of the photo
  * lies, blurred and veiled in [frostVeil], so the print seems to lie on frosted glass over itself.
+ * Not [interactive], it only shows the photo, e.g. as a small sample; [frostBlur] then suits its size.
  */
 @Composable
 fun CropEditor(
@@ -98,6 +100,8 @@ fun CropEditor(
     frostVeil: Color = Color.Gray,
     frostVeilAlpha: Float = FROST_VEIL,
     glass: Boolean = frost != null,
+    interactive: Boolean = true,
+    frostBlur: Dp = FROST_BLUR,
 ) {
     val change by rememberUpdatedState(onCropChange)
     val commit by rememberUpdatedState(onCommit)
@@ -106,7 +110,7 @@ fun CropEditor(
     var painting by remember { mutableStateOf<List<Offset>>(emptyList()) }
     Box(modifier, contentAlignment = Alignment.Center) {
         if (glass) {
-            Canvas(Modifier.matchParentSize().blur(FROST_BLUR, BlurredEdgeTreatment.Unbounded)) {
+            Canvas(Modifier.matchParentSize().blur(frostBlur, BlurredEdgeTreatment.Unbounded)) {
                 // Where the frame sits: as large as fits, in the middle, as the Canvas below.
                 val aspect = preset.aspect.toFloat()
                 val frameWidth = minOf(size.width, size.height * aspect)
@@ -150,8 +154,13 @@ fun CropEditor(
                 // The print lifted a little off the stage, as a photo lies on glass.
                 .shadow(14.dp, RectangleShape, clip = false)
                 .clipToBounds() // the photo extends past the frame; only the framed part shows
-                .semantics { contentDescription = "Crop frame" }
-                .then(if (brush != null) Modifier.paintStrokes(brush, image, rect) { painting = it } else Modifier.moveAndZoom(image, { change(it) }, { commit() })),
+                .then(
+                    when {
+                        !interactive -> Modifier
+                        brush != null -> Modifier.semantics { contentDescription = "Crop frame" }.paintStrokes(brush, image, rect) { painting = it }
+                        else -> Modifier.semantics { contentDescription = "Crop frame" }.moveAndZoom(image, { change(it) }, { commit() })
+                    },
+                ),
         ) {
             drawCrop(image, rect, colorMatrix, backdrop, border)
             if (showGuide) drawFaceGuide(preset.guide)
